@@ -158,14 +158,42 @@ function posCatalog(ctx, warehouseId) {
   for (const u of units) { if (!byItem.has(u.item_id)) byItem.set(u.item_id, []); byItem.get(u.item_id).push(present(u)); }
   return {
     generated_at: ctx.now(), warehouse_id: warehouseId || null,
+    scale: { prefix: ctx.setting('scale_prefix') || '', plu: Number(ctx.setting('scale_plu_digits') || 5), val: Number(ctx.setting('scale_value_digits') || 5), mode: ctx.setting('scale_mode') || 'weight' },
     items: items.map((i) => ({ ...present(i), sellable_qty: i.sellable / 1000, units: byItem.get(i.id) || [] })),
   };
+}
+
+/**
+ * باركود الميزان: بادئة + كود الصنف (PLU) + الوزن بالجرام أو السعر + رقم تحقق.
+ * يعيد {code, qty} أو null. الإعدادات: scale_prefix، scale_plu_digits، scale_value_digits، scale_mode (weight|price).
+ */
+function parseScaleBarcode(ctx, code) {
+  const s = ctx.settings();
+  const prefix = s.scale_prefix || '';
+  const plu = Number(s.scale_plu_digits || 5), val = Number(s.scale_value_digits || 5);
+  if (!prefix || !/^\d+$/.test(code) || !code.startsWith(prefix) || code.length !== prefix.length + plu + val + 1) return null;
+  const pluCode = code.slice(prefix.length, prefix.length + plu);
+  const raw = Number(code.slice(prefix.length + plu, prefix.length + plu + val));
+  return { code: pluCode.replace(/^0+(?=\d)/, ''), pluRaw: pluCode, raw, mode: s.scale_mode === 'price' ? 'price' : 'weight' };
 }
 
 function lookupItem(ctx, q, warehouseId) {
   ctx.require('items.view');
   const { sellableQty } = require('./inventory');
   const res = [];
+  const scale = parseScaleBarcode(ctx, String(q || '').trim());
+  if (scale) {
+    const it = ctx.db.prepare('SELECT id FROM items WHERE active=1 AND (code=? OR code=?)').get(scale.code, scale.pluRaw);
+    if (it) {
+      const full = getItemFull(ctx, it.id);
+      const base = full.units.find((u) => u.is_base);
+      full.selected_unit_id = base.id;
+      // الوزن بالجرام ← كجم؛ أو السعر ← الكمية = السعر ÷ سعر وحدة الأساس
+      full.scale_qty = scale.mode === 'weight' ? scale.raw / 1000 : (base.sell_price ? Number((scale.raw / 10 ** require('../lib/money').getMoneyDecimals() / base.sell_price).toFixed(full.qty_decimals)) : 0);
+      if (warehouseId) full.sellable_qty = sellableQty(ctx, it.id, warehouseId) / 1000;
+      return [full];
+    }
+  }
   const byBarcode = ctx.db.prepare(`SELECT u.*, i.name item_name, i.active item_active FROM item_units u JOIN items i ON i.id=u.item_id
     WHERE u.barcode=? AND u.active=1`).get(String(q || '').trim());
   let items;

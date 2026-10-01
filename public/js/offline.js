@@ -35,6 +35,17 @@ export function searchCatalog(q) {
   if (!c) return [];
   const term = String(q || '').trim();
   if (!term) return [];
+  const sc = c.scale || {};
+  if (sc.prefix && /^\d+$/.test(term) && term.startsWith(sc.prefix) && term.length === sc.prefix.length + sc.plu + sc.val + 1) {
+    const plu = term.slice(sc.prefix.length, sc.prefix.length + sc.plu);
+    const raw = Number(term.slice(sc.prefix.length + sc.plu, sc.prefix.length + sc.plu + sc.val));
+    const it = c.items.find((x) => x.code === plu || x.code === plu.replace(/^0+(?=\d)/, ''));
+    if (it) {
+      const base = it.units.find((u) => u.is_base) || it.units[0];
+      const dec = 10 ** (Number((window.__moneyDecimals ?? 2)));
+      return [{ ...it, selected_unit_id: base.id, scale_qty: sc.mode === 'price' ? (base.sell_price ? Number((raw / dec / base.sell_price).toFixed(it.qty_decimals)) : 0) : raw / 1000 }];
+    }
+  }
   for (const it of c.items) {
     const u = it.units.find((x) => x.barcode === term);
     if (u) return [{ ...it, selected_unit_id: u.id }];

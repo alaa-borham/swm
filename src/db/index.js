@@ -49,7 +49,11 @@ const DEFAULT_SETTINGS = {
   backup_retention: '30',
   invoice_footer: 'شكرًا لتعاملكم معنا',
   receipt_width_mm: '80',
-  einvoice_qr: '0',                  // رمز QR للفاتورة المبسطة (TLV)
+  einvoice_qr: '0',
+  scale_prefix: '',                  // باركود الميزان: البادئة (مثل 2 أو 21)، فارغ = غير مفعّل
+  scale_plu_digits: '5',
+  scale_value_digits: '5',
+  scale_mode: 'weight',              // weight: الوزن بالجرام، price: السعر                  // رمز QR للفاتورة المبسطة (TLV)
 };
 
 const DOC_PREFIXES = {

@@ -277,3 +277,18 @@ test('رمز QR للفاتورة المبسطة بصيغة TLV', async () => {
   assert.equal(f[5], '30.00');
   assert.ok(svg.startsWith('<svg'));
 });
+
+test('باركود الميزان: كود الصنف والوزن داخل الباركود', () => {
+  const e = setup();
+  const M2 = require('../src/core/masters');
+  e.db.prepare("UPDATE settings SET value='21' WHERE key='scale_prefix'").run();
+  e.admin.invalidateSettings();
+  const cheese = M2.createItem(e.admin, { code: '01234', name: 'جبن أبيض', base_unit: 'كجم', qty_decimals: 3, sell_price: 40, track_expiry: 0 });
+  const r = M2.lookupItem(e.admin, '2101234012508', 1); // 1.250 كجم
+  assert.equal(r.length, 1);
+  assert.equal(r[0].id, cheese.id);
+  assert.equal(r[0].scale_qty, 1.25);
+  e.db.prepare("UPDATE settings SET value='price' WHERE key='scale_mode'").run();
+  e.admin.invalidateSettings();
+  assert.equal(M2.lookupItem(e.admin, '2101234050003', 1)[0].scale_qty, 1.25, 'السعر 50.00 ÷ 40 = 1.25 كجم');
+});

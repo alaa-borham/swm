@@ -51,8 +51,12 @@ async function posView({ el, q }) {
   const taxOf = (it) => (it.tax_rate_bp != null ? it.tax_rate_bp : s.default_tax_rate) || 0;
   const picker = itemPicker({ autofocus: true, warehouseId: () => whSel.value, onPick: (it) => {
     const unitId = it.selected_unit_id;
-    const ex = cart.find((l) => l.item.id === it.id && l.unit_id === unitId);
+    const ex = it.scale_qty ? null : cart.find((l) => l.item.id === it.id && l.unit_id === unitId);
     if (ex) ex.qty = Number(ex.qty) + 1;
+    else if (it.scale_qty) {
+      const u = it.units.find((x) => x.id === unitId);
+      cart.push({ item: it, unit_id: unitId, qty: it.scale_qty, price: u.sell_price, discount_pct: '' });
+    }
     else {
       const u = it.units.find((x) => x.id === unitId);
       cart.push({ item: it, unit_id: unitId, qty: 1, price: u.sell_price, discount_pct: '' });

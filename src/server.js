@@ -150,7 +150,7 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
     currency: 'settings.manage', timezone: 'settings.manage', expiry_block_days: 'settings.manage', expiry_alert_days: 'settings.manage',
     cashier_max_discount_pct: 'settings.manage', extra_cost_basis: 'settings.manage', session_timeout_minutes: 'settings.manage', backup_hour: 'backup.manage',
     backup_retention: 'backup.manage', invoice_footer: 'settings.manage', receipt_width_mm: 'settings.manage', money_decimals: 'settings.manage',
-    default_tax_rate_pct: 'tax.manage', prices_include_tax: 'tax.manage', tax_recoverable: 'tax.manage', einvoice_qr: 'tax.manage',
+    default_tax_rate_pct: 'tax.manage', prices_include_tax: 'tax.manage', tax_recoverable: 'tax.manage', einvoice_qr: 'tax.manage', scale_prefix: 'settings.manage', scale_plu_digits: 'settings.manage', scale_value_digits: 'settings.manage', scale_mode: 'settings.manage',
   };
   api.get('/settings', h((ctx) => {
     ctx.require('settings.manage');

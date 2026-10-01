@@ -8,6 +8,8 @@ export async function settings({ el }) {
   const chk = (key, label) => { const c = h('input', { type: 'checkbox', checked: s[key] === '1' }); c.dataset.key = key; return h('label', { class: 'check' }, c, label); };
   const basis = sel([{ value: 'value', label: 'بنسبة قيمة البند' }, { value: 'qty', label: 'بنسبة الكمية' }], s.extra_cost_basis);
   basis.dataset.key = 'extra_cost_basis';
+  const scaleMode = sel([{ value: 'weight', label: 'الوزن بالجرام' }, { value: 'price', label: 'السعر' }], s.scale_mode || 'weight');
+  scaleMode.dataset.key = 'scale_mode';
   const form = h('div', null,
     h('div', { class: 'card' }, h('h3', null, 'بيانات المؤسسة'), h('div', { class: 'grid' }, F('org_name', 'اسم المؤسسة'), F('org_address', 'العنوان'), F('org_phone', 'الهاتف'),
       F('org_tax_number', 'الرقم الضريبي'), F('country', 'بلد التشغيل'), F('currency', 'العملة'), F('money_decimals', 'منازل العملة', { type: 'number' }), F('timezone', 'المنطقة الزمنية'))),
@@ -16,7 +18,9 @@ export async function settings({ el }) {
         chk('einvoice_qr', 'طباعة رمز QR للفاتورة الضريبية المبسطة (TLV) — يتطلب الرقم الضريبي')),
       h('p', { class: 'small muted' }, 'تحدد المؤسسة الضريبة حسب بلد التشغيل بالتنسيق مع محاسبها. تغيير الإعداد يسري على المستندات الجديدة فقط.')) : null,
     h('div', { class: 'card' }, h('h3', null, 'البيع والمخزون'), h('div', { class: 'grid' }, F('cashier_max_discount_pct', 'حد الخصم الافتراضي %', { type: 'number' }),
-      F('expiry_block_days', 'منع البيع قبل الانتهاء بـ (أيام)', { type: 'number' }), F('expiry_alert_days', 'تنبيه الصلاحية (أيام)', { type: 'number' }), field('توزيع تكاليف الشراء', basis))),
+      F('expiry_block_days', 'منع البيع قبل الانتهاء بـ (أيام)', { type: 'number' }),
+      F('scale_prefix', 'بادئة باركود الميزان (فارغ = غير مفعّل)'), F('scale_plu_digits', 'خانات كود الصنف في باركود الميزان', { type: 'number' }),
+      F('scale_value_digits', 'خانات الوزن/السعر', { type: 'number' }), F('expiry_alert_days', 'تنبيه الصلاحية (أيام)', { type: 'number' }), field('توزيع تكاليف الشراء', basis), field('باركود الميزان يحمل', scaleMode))),
     h('div', { class: 'card' }, h('h3', null, 'الطباعة والجلسات والنسخ'), h('div', { class: 'grid' }, F('invoice_footer', 'تذييل الفاتورة'), F('receipt_width_mm', 'عرض الإيصال الحراري (مم)', { type: 'number' }),
       F('session_timeout_minutes', 'انتهاء الجلسة عند الخمول (دقيقة)', { type: 'number' }), F('backup_hour', 'ساعة النسخ اليومي (0-23)', { type: 'number' }), F('backup_retention', 'عدد النسخ المحفوظة', { type: 'number' }))));
   el.append(form, h('button', { class: 'btn ok', onclick: async () => {

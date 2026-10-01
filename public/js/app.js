@@ -182,6 +182,7 @@ async function refreshMe() {
   state.rep = me.rep;
   state.branch = me.branch;
   state.branchesCount = me.branches_count;
+  window.__moneyDecimals = me.settings.money_decimals;
   Offline.saveMe(me);
   return me;
 }
