@@ -126,6 +126,14 @@ export async function view({ el, params }) {
     }, 'primary');
     if (d.status === 'approved' && can('docs.reverse')) reverse(`/expenses/${d.id}/reverse`, 'إلغاء المصروف');
   }
+  if (d.type === 'transfer' && d.status === 'approved' && d.data?.transit === 'in_transit' && can('stock.transfer')) A('استلام التحويل', async () => {
+    const rows = d.lines.map((l) => ({ l, i: inp({ type: 'number', value: l.qty, style: { width: '90px' } }) }));
+    const reason = inp({ placeholder: 'سبب النقص إن وجد' });
+    const m = modal('استلام التحويل في ' + d.to_warehouse_name, h('div', null, table({ columns: [{ key: 'n', label: 'الصنف', render: (r) => r.l.item_name }, { key: 'u', label: 'الوحدة', render: (r) => r.l.unit_name },
+      { key: 's', label: 'المرسل', render: (r) => Q(r.l.qty) }, { key: 'r', label: 'المستلم فعليًا', render: (r) => r.i }], rows }), h('div', { style: { marginTop: '8px' } }, field('السبب', reason))),
+    [{ label: 'تأكيد الاستلام', class: 'primary', onClick: async () => !!(await run(() => api('POST', `/transfers/${d.id}/receive`, { received: rows.map((r) => ({ line_id: r.l.id, qty: num(r.i.value) })), reason: reason.value || null }), 'تم الاستلام')) }]);
+    if (await m.done) reload();
+  }, 'ok');
   if (d.type === 'transfer' && d.status === 'approved' && can('docs.reverse')) reverse(`/transfers/${d.id}/reverse`, 'إلغاء التحويل');
   if (d.type === 'stock_count') L('فتح الجرد', `#/count/${d.id}`, 'primary');
   if (d.type === 'damage' && d.status === 'draft' && can('stock.damage.approve')) A('اعتماد التالف', async () => { if (await run(() => api('POST', `/damages/${d.id}/approve`, {}), 'تم')) reload(); }, 'ok');
@@ -138,6 +146,8 @@ export async function view({ el, params }) {
     d.warehouse_name ? ['المستودع', d.warehouse_name] : null, d.to_warehouse_name ? ['إلى مستودع', d.to_warehouse_name] : null,
     d.cash_account_name ? ['الحساب', d.cash_account_name] : null, d.to_cash_account_name ? ['إلى حساب', d.to_cash_account_name] : null,
     d.rep_name ? ['المندوب', d.rep_name] : null, d.supplier_invoice_no ? ['رقم فاتورة المورد', d.supplier_invoice_no] : null,
+    d.type === 'transfer' && d.data?.transit ? ['حالة النقل', { in_transit: h('span', { class: 'badge warn' }, 'بالطريق'), received: h('span', { class: 'badge ok' }, 'مستلم'), cancelled: h('span', { class: 'badge bad' }, 'ملغي') }[d.data.transit]] : null,
+    d.data?.shortages ? ['نقص الاستلام', d.data.shortages.join('، ')] : null,
     d.ref_doc_id ? ['المستند الأصلي', h('a', { href: '#/doc/' + d.ref_doc_id }, d.ref_doc_number)] : null,
     d.due_date ? ['الاستحقاق', d.due_date] : null, d.expense_category_name ? ['التصنيف', d.expense_category_name] : null,
     d.payment_status ? ['السداد', badge(PAY_STATUS, d.payment_status)] : null,

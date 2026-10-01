@@ -213,7 +213,7 @@ export function table({ columns, rows, totals, onRow, empty = 'لا توجد ب�
 export async function lookup(name, force) {
   if (!force && state.cache.has(name)) return state.cache.get(name);
   const urls = {
-    warehouses: '/warehouses', cash: '/cash-accounts', categories: '/categories', expcats: '/expense-categories', reps: '/reps',
+    warehouses: '/warehouses', allWarehouses: '/warehouses?all=1', cash: '/cash-accounts', categories: '/categories', expcats: '/expense-categories', reps: '/reps',
     customers: '/parties?type=customer&active=1&limit=1000', suppliers: '/parties?type=supplier&active=1&limit=1000', branches: '/branches',
   };
   let data = await get(urls[name]);
@@ -234,8 +234,8 @@ export async function branchFilter(value) {
   const list = (await lookup('branches')).filter((b) => b.active);
   return sel([{ value: '', label: 'كل الفروع' }, ...list.map((b) => ({ value: b.id, label: b.name }))], value || '');
 }
-export async function warehouseSelect(value, attrs = {}, { all = false } = {}) {
-  const list = (await lookup('warehouses')).filter((w) => w.active);
+export async function warehouseSelect(value, attrs = {}, { all = false, any = false } = {}) {
+  const list = (await lookup(any ? 'allWarehouses' : 'warehouses')).filter((w) => w.active);
   return sel([...(all ? [{ value: '', label: 'كل المستودعات' }] : []), ...list.map((w) => ({ value: w.id, label: w.name }))], value, attrs);
 }
 export async function cashSelect(value, attrs = {}, filter = () => true, { empty } = {}) {

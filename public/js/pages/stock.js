@@ -39,6 +39,8 @@ export async function alerts({ el }) {
     sec('أصناف وصلت حد إعادة الطلب', [{ key: 'code', label: 'الكود' }, { key: 'name', label: 'الصنف' }, { key: 'sellable', label: 'الصالح', type: 'qty' }, { key: 'reorder_level', label: 'حد الطلب', type: 'qty' }, { key: 'base_unit', label: 'الوحدة' }], a.low_stock, 'bad'),
     sec('قريبة الانتهاء', [{ key: 'name', label: 'الصنف' }, { key: 'warehouse', label: 'المستودع' }, { key: 'batch_no', label: 'الدفعة' }, { key: 'expiry_date', label: 'الانتهاء' }, { key: 'days_left', label: 'أيام متبقية' }, { key: 'qty', label: 'الكمية', type: 'qty' }], a.near_expiry, 'warn'),
     sec('منتهية (لا تُباع)', [{ key: 'name', label: 'الصنف' }, { key: 'warehouse', label: 'المستودع' }, { key: 'batch_no', label: 'الدفعة' }, { key: 'expiry_date', label: 'الانتهاء' }, { key: 'qty', label: 'الكمية', type: 'qty' }, can('cost.view') ? { key: 'cost', label: 'القيمة', type: 'money' } : null].filter(Boolean), a.expired, 'bad'),
+    sec('تحويلات بالطريق (بانتظار الاستلام)', [{ key: 'number', label: 'التحويل', render: (r) => h('a', { href: '#/doc/' + r.id }, r.number) }, { key: 'date', label: 'التاريخ' },
+      { key: 'from_name', label: 'من' }, { key: 'to_name', label: 'إلى' }, can('cost.view') ? { key: 'cost', label: 'القيمة', type: 'money' } : null].filter(Boolean), a.in_transit, 'warn'),
     sec('معزولة أو قيد الفحص', [{ key: 'name', label: 'الصنف' }, { key: 'warehouse', label: 'المستودع' }, { key: 'batch_no', label: 'الدفعة' }, { key: 'status', label: 'الحالة', render: (r) => (r.status === 'pending' ? 'قيد الفحص' : 'معزول') }, { key: 'qty', label: 'الكمية', type: 'qty' }], a.isolated));
 }
 
@@ -46,8 +48,9 @@ export async function alerts({ el }) {
 export async function transfer({ el }) {
   pageHead('تحويل بين المستودعات / تسليم عهدة مندوب');
   const from = await warehouseSelect('');
-  const to = await warehouseSelect('');
+  const to = await warehouseSelect('', {}, { any: true });
   const notes = inp({ placeholder: 'ملاحظات' });
+  const transit = h('input', { type: 'checkbox' });
   const cart = [];
   const tbody = h('tbody');
   const picker = itemPicker({ warehouseId: () => from.value, onPick: (it) => { cart.push({ item: it, unit_id: it.selected_unit_id, qty: 1 }); draw(); } });
@@ -61,11 +64,12 @@ export async function transfer({ el }) {
   };
   const send = submitter();
   el.append(h('div', { class: 'note' }, 'يُصرف بالأقرب انتهاءً من الرصيد الصالح ويدخل الوجهة بنفس الدفعات والتكلفة. لا يغير إجمالي المخزون ولا يُعد بيعًا.'),
-    h('div', { class: 'card' }, h('div', { class: 'grid' }, field('من مستودع', from, { req: true }), field('إلى مستودع', to, { req: true }), field('ملاحظات', notes))),
+    h('div', { class: 'card' }, h('div', { class: 'grid' }, field('من مستودع', from, { req: true }), field('إلى مستودع', to, { req: true }), field('ملاحظات', notes)),
+      h('label', { class: 'check', style: { marginTop: '10px' } }, transit, 'نقل على مراحل: تبقى البضاعة "بالطريق" غير متاحة في الطرفين حتى تستلمها الوجهة')),
     h('div', { class: 'card' }, picker.el, h('div', { class: 'table-wrap', style: { marginTop: '10px' } }, h('table', null, h('thead', null, h('tr', null, ['الصنف', 'الوحدة', 'الكمية', ''].map((x) => h('th', null, x)))), tbody))),
     h('button', { class: 'btn ok', onclick: async () => {
       if (!cart.length) return toast('أضف صنفًا', 'bad');
-      const d = await run(() => send('POST', '/transfers', { from_warehouse_id: Number(from.value), to_warehouse_id: Number(to.value), notes: notes.value || null, lines: cart.map((l) => ({ item_id: l.item.id, unit_id: l.unit_id, qty: num(l.qty) })) }), 'تم التحويل');
+      const d = await run(() => send('POST', '/transfers', { from_warehouse_id: Number(from.value), to_warehouse_id: Number(to.value), in_transit: transit.checked, notes: notes.value || null, lines: cart.map((l) => ({ item_id: l.item.id, unit_id: l.unit_id, qty: num(l.qty) })) }), 'تم التحويل');
       if (d) location.hash = '#/doc/' + d.id;
     } }, 'اعتماد التحويل'));
   draw();

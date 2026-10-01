@@ -34,9 +34,11 @@ function createTransfer(ctx, input) {
     const date = checkDate(input.date || ctx.today());
     ctx.checkPeriod(date);
     if (!Array.isArray(input.lines) || !input.lines.length) fail('VALIDATION', 'أضف بندًا واحدًا على الأقل');
+    // النقل على مراحل: يخرج من المصدر الآن ويبقى "بالطريق" غير متاح في الطرفين حتى استلام الوجهة
+    const transit = !!input.in_transit;
     const doc = D.insertDoc(ctx, 'transfer', {
       date, warehouse_id: from.id, to_warehouse_id: to.id, rep_id: to.rep_id || from.rep_id || null, notes: input.notes || null,
-      data: { custody: to.kind === 'rep' ? 'تسليم عهدة' : from.kind === 'rep' ? 'إعادة عهدة' : null },
+      data: { custody: to.kind === 'rep' ? 'تسليم عهدة' : from.kind === 'rep' ? 'إعادة عهدة' : null, transit: transit ? 'in_transit' : null },
     });
     let total = 0;
     input.lines.forEach((l, i) => {
@@ -57,19 +59,20 @@ function createTransfer(ctx, input) {
       }
       let cost = 0;
       for (const t of takes) {
-        inv.receiveLike(ctx, { doc, lineId, origin: t.batch, warehouseId: to.id, status: t.batch.status, qty: t.qty, cost: t.cost });
+        if (!transit) inv.receiveLike(ctx, { doc, lineId, origin: t.batch, warehouseId: to.id, status: t.batch.status, qty: t.qty, cost: t.cost });
         cost += t.cost;
       }
-      ctx.db.prepare('UPDATE doc_lines SET cost=? WHERE id=?').run(cost, lineId);
+      ctx.db.prepare('UPDATE doc_lines SET cost=?, data=? WHERE id=?').run(cost, transit ? JSON.stringify({ takes: takes.map((t) => ({ batch_id: t.batch_id, qty: t.qty, cost: t.cost })) }) : null, lineId);
       total += cost;
     });
     D.updateDoc(ctx, doc.id, { cost: total });
     D.markApproved(ctx, doc);
+    // المخزون بالطريق: حساب المخزون بلا مستودع حتى الاستلام
     ledger.post(ctx, D.getDocRow(ctx, doc.id), [
-      { account: 'INVENTORY', warehouse_id: to.id, debit: total },
+      { account: 'INVENTORY', warehouse_id: transit ? null : to.id, debit: total },
       { account: 'INVENTORY', warehouse_id: from.id, credit: total },
-    ], 'تحويل مخزون');
-    ctx.audit('transfer.create', { entity: 'doc', entity_id: doc.id, doc_number: doc.number, after: { from: from.name, to: to.name, cost: fromMinor(total) } });
+    ], transit ? 'تحويل بالطريق' : 'تحويل مخزون');
+    ctx.audit(transit ? 'transfer.ship' : 'transfer.create', { entity: 'doc', entity_id: doc.id, doc_number: doc.number, after: { from: from.name, to: to.name, cost: fromMinor(total) } });
     return D.fullDoc(ctx, doc.id);
   });
 }
@@ -313,6 +316,61 @@ function changeBatchStatus(ctx, { batch_id, qty, to_status, reason }) {
   });
 }
 
+/**
+ * استلام تحويل بالطريق في الوجهة: الكميات المستلمة تدخل بنفس الدفعات والتكلفة،
+ * والنقص (إن وجد) يُثبت خسارة بسبب موثق.
+ * received: [{line_id, qty}] بوحدة البند؛ بدونها يُستلم كل شيء.
+ */
+function receiveTransfer(ctx, id, { received, reason, date } = {}) {
+  ctx.require('stock.transfer');
+  return ctx.tx(() => {
+    const doc = D.loadDoc(ctx, id, 'transfer');
+    const data = D.docData(doc);
+    if (doc.status !== 'approved' || data.transit !== 'in_transit') fail('INVALID_STATE', 'التحويل ليس بالطريق');
+    const to = getWarehouse(ctx, doc.to_warehouse_id);
+    ctx.checkBranch(to.branch_id);
+    const d = checkDate(date || ctx.today());
+    ctx.checkPeriod(d);
+    let got = 0, lost = 0;
+    const shortages = [];
+    for (const l of D.docLines(ctx, id)) {
+      const item = D.getItem(ctx, l.item_id);
+      const r = (received || []).find((x) => Number(x.line_id) === l.id);
+      let qty = l.base_qty;
+      if (r && r.qty !== undefined && r.qty !== null && r.qty !== '') {
+        qty = r.qty === 0 || r.qty === '0' ? 0 : D.toBaseQty(item, { factor: l.factor }, r.qty, item.name).base;
+      }
+      if (qty > l.base_qty) fail('VALIDATION', `الكمية المستلمة من ${item.name} أكبر من المرسلة`);
+      let rem = qty;
+      const takes = JSON.parse(l.data).takes;
+      for (const t of takes) {
+        const origin = getBatch(ctx, t.batch_id);
+        const q = Math.min(rem, t.qty);
+        rem -= q;
+        const c = q === t.qty ? t.cost : mulDiv(t.cost, q, t.qty);
+        if (q > 0) inv.receiveLike(ctx, { doc, lineId: l.id, origin, warehouseId: to.id, status: origin.status, qty: q, cost: c });
+        got += c;
+        lost += t.cost - c;
+      }
+      ctx.db.prepare('UPDATE doc_lines SET received_qty=? WHERE id=?').run(qty, l.id);
+      if (qty < l.base_qty) shortages.push(`${item.name}: ${fromQty(l.base_qty - qty)}`);
+    }
+    const r = shortages.length ? ctx.requireReason(reason, 'نقص الاستلام') : reason || null;
+    data.transit = 'received';
+    data.received_at = d;
+    data.received_by = ctx.userId;
+    if (shortages.length) data.shortages = shortages;
+    D.updateDoc(ctx, id, { data });
+    ledger.post(ctx, doc, [
+      { account: 'INVENTORY', warehouse_id: to.id, debit: got },
+      { account: 'INV_LOSS', debit: lost },
+      { account: 'INVENTORY', warehouse_id: null, credit: got + lost },
+    ], 'استلام تحويل', d);
+    ctx.audit('transfer.receive', { entity: 'doc', entity_id: id, doc_number: doc.number, reason: r, after: { received_cost: fromMinor(got), shortage_cost: fromMinor(lost), shortages } });
+    return D.fullDoc(ctx, id);
+  });
+}
+
 function reverseTransfer(ctx, id, reason) {
   ctx.require('docs.reverse');
   return ctx.tx(() => {
@@ -324,11 +382,13 @@ function reverseTransfer(ctx, id, reason) {
     inv.reverseMoves(ctx, doc);
     D.markReversed(ctx, doc, r);
     ledger.reverseEntries(ctx, doc, ctx.today(), 'إلغاء ' + doc.number);
+    const data = D.docData(doc);
+    if (data.transit === 'in_transit') { data.transit = 'cancelled'; D.updateDoc(ctx, id, { data }); }
     ctx.audit('transfer.reverse', { entity: 'doc', entity_id: id, doc_number: doc.number, reason: r });
     return D.fullDoc(ctx, id);
   });
 }
 
 module.exports = {
-  createTransfer, reverseTransfer, createDamage, approveDamage, createCount, enterCounts, approveCount, createOpeningStock, changeBatchStatus,
+  createTransfer, receiveTransfer, reverseTransfer, createDamage, approveDamage, createCount, enterCounts, approveCount, createOpeningStock, changeBatchStatus,
 };

@@ -37,6 +37,7 @@ function view(d) {
     kpi('دفعات منتهية', String(a.expired), '#/alerts', a.expired ? 'bad' : ''),
     kpi('معزول/قيد الفحص', String(a.isolated), '#/alerts'),
     kpi('فواتير متأخرة', String(a.overdue_customers), '#/reports?tab=aging', a.overdue_customers ? 'bad' : ''),
+    kpi('تحويلات بالطريق', String(a.in_transit), '#/alerts', a.in_transit ? 'bad' : ''),
     kpi('مستندات مسودة', String(a.drafts), '#/sales?status=draft'),
     kpi('ورديات مفتوحة', String(a.open_sessions), '#/sessions'),
     kpi('فروق ورديات بانتظار الاعتماد', String(a.pending_sessions), '#/sessions', a.pending_sessions ? 'bad' : ''));

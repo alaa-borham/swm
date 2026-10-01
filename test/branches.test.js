@@ -55,3 +55,26 @@ test('ترقية قاعدة من الإصدار 1 تضيف الأعمدة وتم
   assert.ok(db.prepare('PRAGMA table_info(doc_lines)').all().some((c) => c.name === 'received_qty'));
   db.close();
 });
+
+test('النقل على مراحل: غير متاح في الطرفين حتى الاستلام، والنقص خسارة موثقة', () => {
+  const e = setup();
+  const b2 = M.saveBranch(e.admin, { name: 'فرع الجنوب' });
+  const wh2 = e.db.prepare('SELECT id FROM warehouses WHERE branch_id=?').get(b2.id).id;
+  const item = e.item({ price: 10 });
+  e.stock(item, 20, 5);
+  const t = S.createTransfer(e.admin, { from_warehouse_id: 1, to_warehouse_id: wh2, in_transit: true, lines: [{ item_id: item.id, qty: 10 }] });
+  assert.equal(e.sellable(item.id, 1), 10, 'خرج من المصدر');
+  assert.equal(e.sellable(item.id, wh2), 0, 'غير متاح في الوجهة');
+  assert.equal(e.bal('INVENTORY'), 100, 'القيمة الإجمالية ثابتة');
+  assert.equal(e.bal('INVENTORY', { warehouse_id: null }), 50, 'بالطريق 50');
+  assert.equal(R.alerts(e.admin).in_transit.length, 1);
+  const south = e.makeUser('south', ['storekeeper'], { branch_id: b2.id });
+  assert.equal(R.listDocs(south, { type: 'transfer' }).total, 1, 'فرع الوجهة يرى التحويل الوارد');
+  assert.throws(() => S.receiveTransfer(south, t.id, { received: [{ line_id: t.lines[0].id, qty: 9 }] }), (err) => err.code === 'REASON_REQUIRED');
+  S.receiveTransfer(south, t.id, { received: [{ line_id: t.lines[0].id, qty: 9 }], reason: 'حبة مكسورة أثناء النقل' });
+  assert.equal(e.sellable(item.id, wh2), 9);
+  assert.equal(e.bal('INVENTORY', { warehouse_id: null }), 0);
+  assert.equal(e.bal('INV_LOSS'), 5);
+  assert.equal(e.bal('INVENTORY'), 95);
+  assert.throws(() => S.receiveTransfer(e.admin, t.id, {}), (err) => err.code === 'INVALID_STATE', 'لا يُستلم مرتين');
+});

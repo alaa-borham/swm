@@ -257,8 +257,9 @@ function simpleList(ctx, table, perm) {
   return ctx.db.prepare(`SELECT * FROM ${table} ORDER BY active DESC, name`).all();
 }
 
-function listWarehouses(ctx) {
-  const scope = ctx.branchScope;
+function listWarehouses(ctx, { all } = {}) {
+  // all: كل المستودعات (لاختيار وجهة تحويل لفرع آخر)
+  const scope = all ? null : ctx.branchScope;
   return ctx.db.prepare(`SELECT w.*, b.name branch_name, r.name rep_name FROM warehouses w JOIN branches b ON b.id=w.branch_id
     LEFT JOIN reps r ON r.id=w.rep_id ${scope ? 'WHERE w.branch_id=' + Number(scope) : ''} ORDER BY w.active DESC, w.kind, w.name`).all();
 }

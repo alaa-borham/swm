@@ -77,7 +77,7 @@ function dashboard(ctx, opts = {}) {
   const a = alerts(ctx, { branch_id: p.branch_id });
   out.alerts = {
     low_stock: a.low_stock.length, near_expiry: a.near_expiry.length, expired: a.expired.length, isolated: a.isolated.length,
-    overdue_customers: a.overdue.length, drafts: a.drafts, open_sessions: a.open_sessions, pending_sessions: a.pending_sessions,
+    overdue_customers: a.overdue.length, in_transit: a.in_transit.length, drafts: a.drafts, open_sessions: a.open_sessions, pending_sessions: a.pending_sessions,
   };
   out.daily = ctx.db.prepare(`SELECT date, SUM(CASE WHEN type='sale' THEN net ELSE -net END) v FROM docs
     WHERE type IN ('sale','sale_return') AND status='approved' AND date BETWEEN ? AND ?${bw(p.branch_id, 'branch_id')} GROUP BY date ORDER BY date`).all(p.from, p.to).map((r) => ({ date: r.date, net_sales: m(r.v) }));
@@ -109,10 +109,15 @@ function alerts(ctx, opts = {}) {
   const overdue = ctx.db.prepare(`SELECT d.id, d.number, d.date, d.due_date, d.total, p.name party FROM docs d JOIN parties p ON p.id=d.party_id
     WHERE d.status='approved' AND d.ledger_account='AR' AND d.ledger_side='D' AND d.due_date < ?${bw(br)}`).all(today)
     .map((d) => ({ ...d, open: D.openAmount(ctx, d.id) })).filter((d) => d.open > 0).map((d) => ({ ...d, total: m(d.total), open: m(d.open) }));
+  const transit = ctx.db.prepare(`SELECT d.id, d.number, d.date, d.cost, fw.name from_name, tw.name to_name FROM docs d
+      JOIN warehouses fw ON fw.id=d.warehouse_id JOIN warehouses tw ON tw.id=d.to_warehouse_id
+    WHERE d.type='transfer' AND d.status='approved' AND json_extract(d.data,'$.transit')='in_transit'
+      ${br ? `AND (fw.branch_id=${Number(br)} OR tw.branch_id=${Number(br)})` : ''} ORDER BY d.date`).all()
+    .map((r) => ({ ...r, cost: ctx.has('cost.view') ? m(r.cost) : undefined }));
   const drafts = ctx.db.prepare(`SELECT COUNT(*) n FROM docs d WHERE status='draft'${bw(br)}`).get().n;
   const openSessions = ctx.db.prepare("SELECT COUNT(*) n FROM cash_sessions WHERE status='open'").get().n;
   const pendingSessions = ctx.db.prepare("SELECT COUNT(*) n FROM cash_sessions WHERE status='closing'").get().n;
-  return { low_stock: low, near_expiry: near, expired, isolated, overdue, drafts, open_sessions: openSessions, pending_sessions: pendingSessions };
+  return { low_stock: low, near_expiry: near, expired, isolated, overdue, in_transit: transit, drafts, open_sessions: openSessions, pending_sessions: pendingSessions };
 }
 
 // ===================== المبيعات =====================
@@ -429,7 +434,8 @@ function listDocs(ctx, opts = {}) {
   if (opts.q) { w.push('(d.number LIKE ? OR p.name LIKE ? OR d.supplier_invoice_no LIKE ? OR d.notes LIKE ?)'); p.push(`%${opts.q}%`, `%${opts.q}%`, `%${opts.q}%`, `%${opts.q}%`); }
   if (ctx.repScope) { w.push('d.rep_id=?'); p.push(ctx.repScope); }
   const br = branchOf(ctx, opts);
-  if (br) { w.push('d.branch_id=?'); p.push(br); }
+  if (br) { w.push('(d.branch_id=? OR d.to_warehouse_id IN (SELECT id FROM warehouses WHERE branch_id=?))'); p.push(br, br); }
+  if (opts.transit) w.push("json_extract(d.data,'$.transit')='in_transit'");
   if (opts.mine) { w.push('d.created_by=?'); p.push(ctx.userId); }
   const limit = Math.min(Number(opts.limit) || 50, 500);
   const offset = Number(opts.offset) || 0;

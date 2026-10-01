@@ -203,7 +203,7 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
   api.get('/parties/:id', h((ctx, req) => M.getParty(ctx, id(req))));
   api.post('/parties', h((ctx, req) => M.createParty(ctx, req.body)));
   api.put('/parties/:id', h((ctx, req) => M.updateParty(ctx, id(req), req.body)));
-  api.get('/warehouses', h((ctx) => M.listWarehouses(ctx)));
+  api.get('/warehouses', h((ctx, req) => M.listWarehouses(ctx, { all: req.query.all === '1' })));
   api.post('/warehouses', h((ctx, req) => M.saveWarehouse(ctx, req.body)));
   api.put('/warehouses/:id', h((ctx, req) => M.saveWarehouse(ctx, req.body, id(req))));
   api.get('/cash-accounts', h((ctx) => M.listCashAccounts(ctx)));
@@ -225,7 +225,9 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
     const perm = D.DOC_VIEW_PERM[doc.type];
     if (perm) ctx.require(perm);
     if (ctx.repScope && doc.rep_id !== ctx.repScope) fail('FORBIDDEN', 'المستند خارج نطاقك', 403);
-    ctx.checkBranch(doc.branch_id);
+    // التحويل الوارد يراه فرع الوجهة أيضًا
+    const toBranch = doc.to_warehouse_id ? db.prepare('SELECT branch_id FROM warehouses WHERE id=?').get(doc.to_warehouse_id).branch_id : null;
+    if (!(ctx.branchScope && toBranch === ctx.branchScope)) ctx.checkBranch(doc.branch_id);
   };
   api.get('/docs', h((ctx, req) => R.listDocs(ctx, req.query)));
   api.get('/docs/:id', h((ctx, req) => {
@@ -292,6 +294,7 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
   api.post('/expenses/:id/reverse', h((ctx, req) => F.reverseExpense(ctx, id(req), req.body.reason)));
   // المخزون
   api.post('/transfers', h((ctx, req) => S.createTransfer(ctx, req.body)));
+  api.post('/transfers/:id/receive', h((ctx, req) => S.receiveTransfer(ctx, id(req), req.body)));
   api.post('/transfers/:id/reverse', h((ctx, req) => S.reverseTransfer(ctx, id(req), req.body.reason)));
   api.post('/damages', h((ctx, req) => S.createDamage(ctx, req.body)));
   api.post('/damages/:id/approve', h((ctx, req) => S.approveDamage(ctx, id(req))));
