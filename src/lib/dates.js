@@ -4,9 +4,15 @@ const { AppError } = require('./errors');
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** تاريخ اليوم YYYY-MM-DD في المنطقة الزمنية المحددة */
+const formatters = new Map();
 function todayIn(timeZone) {
-  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: timeZone || 'UTC', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
-  return parts;
+  const tz = timeZone || 'UTC';
+  let f = formatters.get(tz);
+  if (!f) {
+    f = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' });
+    formatters.set(tz, f);
+  }
+  return f.format(new Date());
 }
 
 function checkDate(d, field = 'التاريخ', required = true) {

@@ -231,6 +231,9 @@ CREATE TABLE IF NOT EXISTS docs (
 CREATE INDEX IF NOT EXISTS docs_type_date ON docs(type, date);
 CREATE INDEX IF NOT EXISTS docs_party ON docs(party_id);
 CREATE INDEX IF NOT EXISTS docs_ref ON docs(ref_doc_id);
+CREATE INDEX IF NOT EXISTS docs_reversal ON docs(reversal_of);
+CREATE INDEX IF NOT EXISTS docs_session ON docs(session_id);
+CREATE INDEX IF NOT EXISTS docs_rep ON docs(rep_id, type);
 CREATE INDEX IF NOT EXISTS docs_supplier_invoice ON docs(party_id, supplier_invoice_no);
 
 CREATE TABLE IF NOT EXISTS doc_lines (

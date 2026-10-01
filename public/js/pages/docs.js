@@ -246,7 +246,9 @@ export async function printDoc(id, format = 'a4') {
     clear(area);
     area.append(format === 'thermal' ? thermal(d, s, p.copy) : a4(d, s, p.copy));
     document.body.classList.add('printing');
-    const done = () => { document.body.classList.remove('printing'); clear(area); window.removeEventListener('afterprint', done); };
+    const page = h('style', null, format === 'thermal' ? `@page { size: ${s.receipt_width_mm || 80}mm auto; margin: 2mm; }` : '@page { size: A4; margin: 10mm; }');
+    document.head.appendChild(page);
+    const done = () => { document.body.classList.remove('printing'); clear(area); page.remove(); window.removeEventListener('afterprint', done); };
     window.addEventListener('afterprint', done);
     setTimeout(() => window.print(), 50);
   } catch (e) { toast(e.message, 'bad'); }

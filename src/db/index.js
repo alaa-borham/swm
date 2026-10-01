@@ -41,6 +41,18 @@ const DOC_PREFIXES = {
 function openDb(file, { readonly = false } = {}) {
   if (file !== ':memory:') fs.mkdirSync(path.dirname(path.resolve(file)), { recursive: true });
   const db = new Database(file, { readonly });
+  // ذاكرة للجمل المُعدّة: إعادة إعداد نفس الجملة في كل عملية مكلفة
+  const prepare = db.prepare.bind(db);
+  const cache = new Map();
+  db.prepare = (sql) => {
+    let st = cache.get(sql);
+    if (!st) {
+      if (cache.size > 2000) cache.clear();
+      st = prepare(sql);
+      cache.set(sql, st);
+    }
+    return st;
+  };
   db.pragma('foreign_keys = ON');
   if (!readonly) {
     if (file !== ':memory:') db.pragma('journal_mode = WAL');

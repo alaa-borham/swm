@@ -72,7 +72,8 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
   app.post('/api/auth/login', (req, res) => {
     const r = users.login(db, { username: req.body.username, password: req.body.password, ip: req.ip }, timeout());
     const secure = req.secure || process.env.COOKIE_SECURE === '1';
-    res.cookie('sid', r.token, { httpOnly: true, sameSite: 'strict', secure, path: '/', maxAge: timeout() * 60000 });
+    // كوكي جلسة المتصفح؛ انتهاء الخمول يُفرض في الخادم
+    res.cookie('sid', r.token, { httpOnly: true, sameSite: 'strict', secure, path: '/' });
     res.json({ user: r.user });
   });
   app.post('/api/auth/logout', (req, res) => {

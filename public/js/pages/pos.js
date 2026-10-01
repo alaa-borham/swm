@@ -83,16 +83,18 @@ async function posView({ el, q }) {
     return { lines, subtotal: sub / md, discount: dsc / md, net: net / md, tax: tax / md, total: (net + tax) / md };
   }
 
+  let pending = false;
+  const redraw = () => { if (!pending) { pending = true; setTimeout(() => { pending = false; draw(); }, 0); } };
   function draw() {
     const c = calc();
     clear(tbody);
     cart.forEach((l, i) => {
       const units = l.item.units.filter((u) => u.for_sale && u.active);
       const unitSel = sel(units.map((u) => ({ value: u.id, label: `${u.name}${u.factor !== 1 ? ' (' + u.factor + ')' : ''}` })), l.unit_id, {
-        onchange: () => { l.unit_id = Number(unitSel.value); l.price = units.find((u) => u.id === l.unit_id).sell_price; draw(); } });
-      const qIn = inp({ type: 'number', value: l.qty, style: { width: '80px' }, onchange: () => { l.qty = qIn.value; draw(); } });
-      const pIn = inp({ type: 'number', value: l.price, style: { width: '90px' }, onchange: () => { l.price = pIn.value; draw(); } });
-      const dIn = inp({ type: 'number', value: l.discount_pct, placeholder: '%', style: { width: '64px' }, onchange: () => { l.discount_pct = dIn.value; draw(); } });
+        onchange: () => { l.unit_id = Number(unitSel.value); l.price = units.find((u) => u.id === l.unit_id).sell_price; redraw(); } });
+      const qIn = inp({ type: 'number', value: l.qty, style: { width: '80px' }, onchange: () => { l.qty = qIn.value; redraw(); } });
+      const pIn = inp({ type: 'number', value: l.price, style: { width: '90px' }, onchange: () => { l.price = pIn.value; redraw(); } });
+      const dIn = inp({ type: 'number', value: l.discount_pct, placeholder: '%', style: { width: '64px' }, onchange: () => { l.discount_pct = dIn.value; redraw(); } });
       tbody.append(h('tr', null,
         h('td', null, l.item.name, l.item.sellable_qty != null ? h('div', { class: 'small muted' }, 'متاح ', Q(l.item.sellable_qty), ' ', l.item.base_unit) : null),
         h('td', null, unitSel), h('td', null, qIn), h('td', null, pIn), h('td', null, dIn), h('td', { class: 'n' }, M(c.lines[i].total)),

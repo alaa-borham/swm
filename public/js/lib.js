@@ -32,7 +32,13 @@ function append(el, kids) {
     else el.appendChild(k instanceof Node ? k : document.createTextNode(String(k)));
   }
 }
-export function clear(el) { el.replaceChildren(); return el; }
+export function clear(el) {
+  // إزالة حقل عليه التركيز تطلق blur/change أثناء الحذف؛ نطلقها قبل الحذف لتجنب التداخل
+  const a = document.activeElement;
+  if (a && a !== document.body && el.contains(a)) a.blur();
+  el.replaceChildren();
+  return el;
+}
 
 export const can = (p) => state.perms.has(p);
 

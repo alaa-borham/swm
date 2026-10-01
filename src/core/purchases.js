@@ -183,8 +183,6 @@ function reversePurchase(ctx, id, reason) {
     if (ctx.db.prepare('SELECT 1 FROM allocations WHERE target_doc_id=? AND reversed=0').get(id)) {
       fail('HAS_DEPENDENTS', 'الفاتورة مرتبطة بسداد أو مرتجع؛ ألغِ السداد أولاً أو استخدم المرتجع', 409);
     }
-    const data = D.docData(doc);
-    for (const e of (data.extras || []).filter((x) => x.cash_account_id)) void e; // تُعكس ضمن القيد
     inv.reverseMoves(ctx, doc);
     D.markReversed(ctx, doc, r);
     ledger.reverseEntries(ctx, doc, ctx.today(), 'إلغاء ' + doc.number);
