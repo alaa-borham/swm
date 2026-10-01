@@ -332,9 +332,14 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
   api.post('/commissions/:id/cancel', h((ctx, req) => Reps.cancelCommissionDraft(ctx, id(req), req.body.reason)));
 
   // ---------- التقارير ----------
+  const A = require('./core/accounting');
+  api.get('/accounts', h((ctx) => { ctx.requireAny(['reports.finance', 'journal.manual']); return { all: Object.entries(A.ACCOUNTS).map(([code, a]) => ({ code, ...a })), manual: A.manualAccounts() }; }));
+  api.post('/journals', h((ctx, req) => A.createJournal(ctx, req.body)));
+  api.post('/journals/:id/reverse', h((ctx, req) => A.reverseJournal(ctx, id(req), req.body.reason)));
+  api.get('/reports/balance-sheet', h((ctx, req) => A.balanceSheet(ctx, req.query)));
   const REPORTS = {
     sales: R.salesReport, purchases: R.purchasesReport, statement: R.partyStatement, aging: R.aging, stock: R.stockReport,
-    'item-card': R.itemCard, expenses: R.expensesReport, cash: R.cashReport, reps: R.repsReport,
+    'item-card': R.itemCard, 'trial-balance': A.trialBalance, ledger: A.generalLedger, expenses: R.expensesReport, cash: R.cashReport, reps: R.repsReport,
   };
   api.get('/reports/dashboard', h((ctx, req) => R.dashboard(ctx, req.query)));
   api.get('/reports/alerts', h((ctx) => { ctx.requireAny(['stock.view', 'dashboard.view']); return R.alerts(ctx); }));

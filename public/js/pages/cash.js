@@ -204,3 +204,49 @@ export async function expenseForm({ el }) {
     } }, 'حفظ'))));
   void modal;
 }
+
+// ===================== القيد اليدوي =====================
+export async function journal({ el }) {
+  pageHead('قيد يدوي');
+  const accs = (await get('/accounts')).manual;
+  const cashList = (await lookup('cash')).filter((c) => c.active);
+  const cats = await lookup('expcats');
+  const date = inp({ type: 'date', value: today() });
+  const reason = inp({ placeholder: 'سبب القيد (مطلوب)' });
+  const rows = [{ account: accs[0].code, debit: '', credit: '' }, { account: accs[0].code, debit: '', credit: '' }];
+  const tbody = h('tbody');
+  const totals = h('div', { class: 'total-box' });
+  const sums = () => {
+    const d = rows.reduce((a, r) => a + (num(r.debit) || 0), 0), c = rows.reduce((a, r) => a + (num(r.credit) || 0), 0);
+    totals.replaceChildren(h('div', { class: 'line' }, h('span', null, 'إجمالي المدين'), M(d)), h('div', { class: 'line' }, h('span', null, 'إجمالي الدائن'), M(c)),
+      h('div', { class: 'line', style: { color: Math.abs(d - c) < 0.0001 ? 'var(--ok)' : 'var(--bad)' } }, h('span', null, 'الفرق'), M(d - c)));
+  };
+  const draw = () => {
+    clear(tbody);
+    rows.forEach((r, i) => {
+      const extra = r.account === 'CASH' ? sel(cashList.map((c) => ({ value: c.id, label: c.name })), r.cash_account_id || '', { onchange: (e) => { r.cash_account_id = Number(e.target.value); } })
+        : r.account === 'EXPENSES' ? sel([{ value: '', label: '—' }, ...cats.map((c) => ({ value: c.id, label: c.name }))], r.expense_category_id || '', { onchange: (e) => { r.expense_category_id = e.target.value ? Number(e.target.value) : null; } }) : '';
+      if (r.account === 'CASH' && !r.cash_account_id) r.cash_account_id = cashList[0]?.id;
+      tbody.append(h('tr', null,
+        h('td', null, sel(accs.map((a) => ({ value: a.code, label: a.name })), r.account, { onchange: (e) => { r.account = e.target.value; draw(); } })),
+        h('td', null, extra),
+        h('td', null, inp({ placeholder: 'البيان', value: r.description || '', oninput: (e) => { r.description = e.target.value; } })),
+        h('td', null, inp({ type: 'number', value: r.debit, style: { width: '110px' }, oninput: (e) => { r.debit = e.target.value; sums(); } })),
+        h('td', null, inp({ type: 'number', value: r.credit, style: { width: '110px' }, oninput: (e) => { r.credit = e.target.value; sums(); } })),
+        h('td', null, rows.length > 2 ? h('button', { class: 'btn small danger', onclick: () => { rows.splice(i, 1); draw(); } }, '×') : '')));
+    });
+    sums();
+  };
+  const send = submitter();
+  el.append(h('div', { class: 'note' }, 'القيد اليدوي للتسويات المحاسبية (الأصول الثابتة، رأس المال، الإيرادات والالتزامات الأخرى، تصحيح الضرائب…). لا يُسمح على المخزون أو ذمم العملاء والموردين أو العمولات؛ تلك تُعدل بمستنداتها.'),
+    h('div', { class: 'card' }, h('div', { class: 'row' }, field('التاريخ', date), field('السبب', reason, { req: true })),
+      h('div', { class: 'table-wrap', style: { marginTop: '10px' } }, h('table', null, h('thead', null, h('tr', null, ['الحساب', 'التفصيل', 'البيان', 'مدين', 'دائن', ''].map((x) => h('th', null, x)))), tbody)),
+      h('button', { class: 'btn small', style: { marginTop: '8px' }, onclick: () => { rows.push({ account: accs[0].code, debit: '', credit: '' }); draw(); } }, '+ سطر'),
+      h('div', { style: { maxWidth: '360px', marginTop: '10px' } }, totals)),
+    h('button', { class: 'btn ok', onclick: async () => {
+      const body = { date: date.value, reason: reason.value, lines: rows.map((r) => ({ account: r.account, debit: num(r.debit) || 0, credit: num(r.credit) || 0, cash_account_id: r.cash_account_id, expense_category_id: r.expense_category_id, description: r.description })) };
+      const d = await run(() => send('POST', '/journals', body), 'سُجل القيد');
+      if (d) location.hash = '#/doc/' + d.id;
+    } }, 'اعتماد القيد'));
+  draw();
+}

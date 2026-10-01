@@ -60,7 +60,7 @@ const DOC_PREFIXES = {
   sale: 'INV', sale_return: 'SRT', purchase: 'PUR', purchase_return: 'PRT', receipt: 'RCV', payment: 'PAY',
   expense: 'EXP', transfer: 'TRF', stock_count: 'CNT', damage: 'DMG', opening_stock: 'OST', opening_balance: 'OBL',
   cash_transfer: 'CTR', session_variance: 'SVR', custody_settlement: 'CST', commission: 'COM', batch_status: 'BST',
-  session: 'SES', purchase_order: 'PO',
+  session: 'SES', purchase_order: 'PO', journal: 'JV',
 };
 
 function openDb(file, { readonly = false } = {}) {

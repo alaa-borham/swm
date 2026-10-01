@@ -146,6 +146,7 @@ export async function view({ el, params }) {
     if (await m.done) reload();
   }, 'ok');
   if (d.type === 'transfer' && d.status === 'approved' && can('docs.reverse')) reverse(`/transfers/${d.id}/reverse`, 'إلغاء التحويل');
+  if (d.type === 'journal' && d.status === 'approved' && can('journal.manual')) reverse(`/journals/${d.id}/reverse`, 'عكس القيد');
   if (d.type === 'stock_count') L('فتح الجرد', `#/count/${d.id}`, 'primary');
   if (d.type === 'damage' && d.status === 'draft' && can('stock.damage.approve')) A('اعتماد التالف', async () => { if (await run(() => api('POST', `/damages/${d.id}/approve`, {}), 'تم')) reload(); }, 'ok');
   if (d.type === 'commission') L('صفحة العمولات', `#/commissions?rep=${d.rep_id}`);
@@ -216,6 +217,9 @@ function linesTable(d) {
     cols = [{ key: 'item_name', label: 'الصنف' }, { key: 'batch_no', label: 'الدفعة' }, { key: 'expiry_date', label: 'الانتهاء' }, { key: 'system_qty', label: 'المرجعي', type: 'qty' },
       { key: 'counted_qty', label: 'المعدود', type: 'qty' }, { key: 'base_qty', label: 'الفرق', type: 'qty' }];
     if (can('cost.view')) cols.push({ key: 'amount', label: 'قيمة التسوية', type: 'money' });
+  } else if (t === 'journal') {
+    cols = [{ key: 'acc', label: 'الحساب', render: (l) => l.data?.account_name }, { key: 'description', label: 'البيان' },
+      { key: 'd', label: 'مدين', render: (l) => M(l.data?.debit) }, { key: 'c', label: 'دائن', render: (l) => M(l.data?.credit) }];
   } else if (['expense'].includes(t)) {
     cols = [{ key: 'description', label: 'البيان' }, { key: 'amount', label: 'المبلغ', type: 'money' }, { key: 'tax', label: 'الضريبة', type: 'money' }, { key: 'total', label: 'الإجمالي', type: 'money' }];
   } else {

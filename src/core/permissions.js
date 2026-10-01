@@ -58,6 +58,7 @@ const PERMISSIONS = {
   'sessions.own': 'فتح وإغلاق ورديته',
   'sessions.manage': 'اعتماد الورديات وإعادة فتحها',
   'docs.reverse': 'إلغاء مستند معتمد (قبض/صرف/مصروف/تحويل)',
+  'journal.manual': 'القيود اليدوية',
 
   'reps.view': 'عرض المناديب والعهد',
   'reps.custody': 'تسوية العهد',
@@ -94,7 +95,7 @@ const ROLES = {
     name: 'المحاسب',
     permissions: ['dashboard.view', 'items.view', 'cost.view', 'profit.view', 'parties.view', 'parties.all', 'parties.manage', 'sales.view', 'purchases.view',
       'cash.view', 'cash.receipt', 'cash.payment', 'cash.transfer', 'expenses.create', 'expenses.approve', 'reps.view', 'reps.custody',
-      'commissions.manage', 'commissions.pay', 'stock.view', 'reports.sales', 'reports.purchases', 'reports.stock', 'reports.finance',
+      'commissions.manage', 'commissions.pay', 'journal.manual', 'stock.view', 'reports.sales', 'reports.purchases', 'reports.stock', 'reports.finance',
       'reports.export', 'sales.print', 'sale_returns.approve'],
   },
   rep: {

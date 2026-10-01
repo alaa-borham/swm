@@ -292,3 +292,27 @@ test('باركود الميزان: كود الصنف والوزن داخل ال�
   e.admin.invalidateSettings();
   assert.equal(M2.lookupItem(e.admin, '2101234050003', 1)[0].scale_qty, 1.25, 'السعر 50.00 ÷ 40 = 1.25 كجم');
 });
+
+test('القيد اليدوي وميزان المراجعة والمركز المالي', () => {
+  const e = setup();
+  const A = require('../src/core/accounting');
+  e.fundCash(1000);
+  const item = e.item({ price: 25 });
+  e.stock(item, 10, 10);
+  Sales.createSale(e.admin, { lines: [{ item_id: item.id, qty: 4 }], payments: [{ cash_account_id: 1, amount: 100 }] });
+  assert.throws(() => A.createJournal(e.admin, { reason: 'تسوية', lines: [{ account: 'INVENTORY', debit: 5 }, { account: 'EQUITY', credit: 5 }] }), /لا يُسمح/);
+  assert.throws(() => A.createJournal(e.admin, { reason: 'تسوية', lines: [{ account: 'FIXED_ASSETS', debit: 5 }, { account: 'EQUITY', credit: 4 }] }), (err) => err.code === 'UNBALANCED');
+  const j = A.createJournal(e.admin, { reason: 'شراء ثلاجة من مال المالك', lines: [{ account: 'FIXED_ASSETS', debit: 500 }, { account: 'EQUITY', credit: 500 }] });
+  assert.equal(j.status, 'approved');
+  const cashier = e.makeUser('cashier9', ['cashier']);
+  assert.throws(() => A.createJournal(cashier, { reason: 'x1x', lines: [] }), (err) => err.status === 403);
+  const tb = A.trialBalance(e.admin, { from: '2026-01-01', to: '2026-12-31' });
+  assert.ok(tb.balanced, 'ميزان المراجعة متوازن');
+  const bs = A.balanceSheet(e.admin, {});
+  assert.ok(bs.balanced, 'الأصول = الالتزامات + حقوق الملكية');
+  assert.equal(bs.equity.find((x) => x.code === 'RETAINED').amount, 60, 'ربح 100 - 40');
+  const gl = A.generalLedger(e.admin, { account: 'CASH', from: '2026-01-01', to: '2026-12-31' });
+  assert.equal(gl.closing, 1100);
+  A.reverseJournal(e.admin, j.id, 'خطأ في التصنيف');
+  assert.equal(e.bal('FIXED_ASSETS'), 0);
+});

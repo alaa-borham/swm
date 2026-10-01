@@ -3,23 +3,28 @@
 const { AppError } = require('../lib/errors');
 
 const ACCOUNTS = {
-  CASH: { name: 'النقد والبنوك', type: 'asset' },
+  CASH: { name: 'النقد والبنوك', type: 'asset', manual: true },
   AR: { name: 'ذمم العملاء', type: 'asset' },
   INVENTORY: { name: 'المخزون', type: 'asset' },
-  TAX_IN: { name: 'ضريبة المشتريات القابلة للاسترداد', type: 'asset' },
+  TAX_IN: { name: 'ضريبة المشتريات القابلة للاسترداد', type: 'asset', manual: true },
   AP: { name: 'ذمم الموردين والمستحقات', type: 'liability' },
-  TAX_OUT: { name: 'ضريبة المبيعات المستحقة', type: 'liability' },
+  TAX_OUT: { name: 'ضريبة المبيعات المستحقة', type: 'liability', manual: true },
   COMMISSION_PAYABLE: { name: 'عمولات مستحقة للمناديب', type: 'liability' },
-  OPENING_EQUITY: { name: 'أرصدة افتتاحية', type: 'equity' },
+  OPENING_EQUITY: { name: 'أرصدة افتتاحية', type: 'equity', manual: true },
+  FIXED_ASSETS: { name: 'الأصول الثابتة', type: 'asset', manual: true },
+  OTHER_RECEIVABLE: { name: 'مدينون آخرون', type: 'asset', manual: true },
+  OTHER_PAYABLE: { name: 'دائنون والتزامات أخرى', type: 'liability', manual: true },
+  EQUITY: { name: 'رأس المال وجاري المالك', type: 'equity', manual: true },
+  OTHER_INCOME: { name: 'إيرادات أخرى', type: 'revenue', manual: true },
   SALES: { name: 'المبيعات', type: 'revenue' },
   SALES_RETURNS: { name: 'مرتجعات المبيعات', type: 'contra_revenue' },
   INV_GAIN: { name: 'زيادة جرد', type: 'revenue' },
   PURCHASE_RETURN_DIFF: { name: 'فروق مرتجع المشتريات', type: 'revenue' },
   COGS: { name: 'تكلفة البضاعة المباعة', type: 'cogs' },
-  EXPENSES: { name: 'المصروفات', type: 'expense' },
+  EXPENSES: { name: 'المصروفات', type: 'expense', manual: true },
   INV_LOSS: { name: 'خسائر الجرد والتالف', type: 'expense' },
   COMMISSION_EXP: { name: 'مصروف العمولات', type: 'expense' },
-  CASH_OVER_SHORT: { name: 'فروق الصندوق والعهد', type: 'expense' },
+  CASH_OVER_SHORT: { name: 'فروق الصندوق والعهد', type: 'expense', manual: true },
 };
 
 /**
