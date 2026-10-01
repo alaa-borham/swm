@@ -145,6 +145,23 @@ function listItems(ctx, { q, active, category_id, limit = 200, offset = 0 } = {}
 }
 
 /** بحث نقطة البيع: بالباركود (يحدد الوحدة) أو الاسم */
+/** كتالوج مختصر للأصناف النشطة ووحداتها وأرصدتها لنقطة البيع دون اتصال */
+function posCatalog(ctx, warehouseId) {
+  ctx.require('sales.create');
+  const { minSellableExpiry } = require('./inventory');
+  const minExp = minSellableExpiry(ctx);
+  const items = ctx.db.prepare(`SELECT i.id, i.code, i.name, i.base_unit, i.qty_decimals, i.tax_rate_bp,
+      COALESCE((SELECT SUM(qty) FROM batches b WHERE b.item_id=i.id AND b.warehouse_id=? AND b.status='ok' AND (b.expiry_date IS NULL OR b.expiry_date>=?)),0) sellable
+    FROM items i WHERE i.active=1 ORDER BY i.name`).all(warehouseId || 0, minExp);
+  const units = ctx.db.prepare('SELECT id, item_id, name, factor, barcode, sell_price, is_base, for_sale, active FROM item_units WHERE active=1').all();
+  const byItem = new Map();
+  for (const u of units) { if (!byItem.has(u.item_id)) byItem.set(u.item_id, []); byItem.get(u.item_id).push(present(u)); }
+  return {
+    generated_at: ctx.now(), warehouse_id: warehouseId || null,
+    items: items.map((i) => ({ ...present(i), sellable_qty: i.sellable / 1000, units: byItem.get(i.id) || [] })),
+  };
+}
+
 function lookupItem(ctx, q, warehouseId) {
   ctx.require('items.view');
   const { sellableQty } = require('./inventory');
@@ -431,6 +448,6 @@ function listReps(ctx) {
 }
 
 module.exports = {
-  createItem, updateItem, getItemFull, listItems, lookupItem, createParty, updateParty, getParty, getPartyRow, listParties,
+  createItem, updateItem, getItemFull, listItems, lookupItem, posCatalog, createParty, updateParty, getParty, getPartyRow, listParties,
   simpleList, listWarehouses, listBranches, saveBranch, saveWarehouse, listCashAccounts, saveCashAccount, saveCategory, createRep, updateRep, getRep, listReps, addCommissionPlan,
 };

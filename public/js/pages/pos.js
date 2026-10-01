@@ -1,6 +1,7 @@
 // نقطة البيع: بحث بالباركود أو الاسم، وحدات وكميات، خصم وضريبة، سداد نقدي/شبكة/آجل جزئي.
 import { h, clear, state, get, api, submitter, toast, M, money, Q, inp, sel, field, num, itemPicker, partySelect, warehouseSelect, cashSelect, pageHead, can, askReason, today, modal, lookup } from '../lib.js';
 import { printDoc } from './docs.js';
+import { enqueue, refreshCatalog } from '../offline.js';
 
 export async function render(c) {
   const { el } = c;
@@ -131,9 +132,13 @@ async function posView({ el, q }) {
   async function submit(approve, print) {
     if (!cart.length) return toast('أضف صنفًا أولاً', 'bad');
     let body = payload(approve);
+    const paidNow = body.payments.reduce((a, p) => a + p.amount, 0);
+    if (approve && !body.party_id && paidNow + 0.0001 < calc().total) return toast('البيع الآجل يتطلب اختيار العميل؛ أو أدخل المبلغ المدفوع كاملًا', 'bad');
+    // معرف العملية ثابت لهذه الفاتورة: إعادة الإرسال أو المزامنة لاحقًا لا تكررها
+    const key = crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2);
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const doc = await send('POST', '/sales', body);
+        const doc = await api('POST', '/sales', body, { idem: key });
         toast(approve ? `تم اعتماد الفاتورة ${doc.number}` : `حُفظت المسودة ${doc.number}`, 'ok');
         cart.length = 0; cashIn.value = ''; cardIn.value = ''; invDiscPct.value = ''; invDiscAmt.value = ''; notes.value = '';
         send = submitter();
@@ -142,6 +147,16 @@ async function posView({ el, q }) {
         picker.input.focus();
         return;
       } catch (e) {
+        if (e.code === 'NETWORK' && approve) {
+          try {
+            enqueue({ key, url: '/sales', body, label: `بيع ${cart.length} بند`, total: calc().total });
+          } catch (x) { toast('تعذر الحفظ دون اتصال: ' + x.message, 'bad'); return; }
+          toast('لا يوجد اتصال: حُفظت الفاتورة على الجهاز وستُرسل تلقائيًا عند عودة الاتصال', 'ok');
+          cart.length = 0; cashIn.value = ''; cardIn.value = ''; invDiscPct.value = ''; invDiscAmt.value = ''; notes.value = '';
+          draw();
+          picker.input.focus();
+          return;
+        }
         if (e.code === 'REASON_REQUIRED' && attempt === 0) {
           const reason = await askReason('تجاوز الحدود يحتاج سببًا موثقًا', e.message);
           if (!reason) return;
@@ -194,5 +209,6 @@ async function posView({ el, q }) {
           h('button', { class: 'btn primary', onclick: () => submit(true, 'thermal') }, 'اعتماد وطباعة'),
           h('button', { class: 'btn', onclick: () => submit(false) }, 'حفظ مسودة'))))));
   draw();
-  void lookup;
+  if (navigator.onLine) refreshCatalog(whSel.value);
+  void lookup; void send;
 }

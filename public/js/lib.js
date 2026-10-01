@@ -216,8 +216,19 @@ export async function lookup(name, force) {
     warehouses: '/warehouses', allWarehouses: '/warehouses?all=1', cash: '/cash-accounts', categories: '/categories', expcats: '/expense-categories', reps: '/reps',
     customers: '/parties?type=customer&active=1&limit=1000', suppliers: '/parties?type=supplier&active=1&limit=1000', branches: '/branches',
   };
-  let data = await get(urls[name]);
-  if (data && data.rows) data = data.rows;
+  let data;
+  const key = 'frs-lookup-' + name;
+  try {
+    data = await get(urls[name]);
+    if (data && data.rows) data = data.rows;
+    try { localStorage.setItem(key, JSON.stringify(data)); } catch (_) { /* ignore */ }
+  } catch (e) {
+    // دون اتصال: آخر نسخة محفوظة على الجهاز
+    let cached = null;
+    try { cached = JSON.parse(localStorage.getItem(key) || 'null'); } catch (_) { /* ignore */ }
+    if (e.code !== 'NETWORK' || !cached) throw e;
+    data = cached;
+  }
   state.cache.set(name, data);
   return data;
 }
@@ -264,7 +275,12 @@ export function itemPicker({ onPick, warehouseId, placeholder = 'ابحث بال
     if (!q) { results = []; render(); return; }
     try {
       const wid = typeof warehouseId === 'function' ? warehouseId() : warehouseId;
-      results = await get('/items/lookup', { q, warehouse_id: wid });
+      try {
+        results = await get('/items/lookup', { q, warehouse_id: wid });
+      } catch (e) {
+        if (e.code !== 'NETWORK') throw e;
+        results = (await import('./offline.js')).searchCatalog(q);
+      }
       idx = 0;
       if (exact && results.length === 1) return pick(0);
       if (exact && !results.length) toast('لا يوجد صنف بهذا الاسم أو الباركود', 'bad');

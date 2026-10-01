@@ -10,6 +10,8 @@ import * as Reps from './pages/reps.js';
 import * as Masters from './pages/masters.js';
 import * as Reports from './pages/reports.js';
 import * as Admin from './pages/admin.js';
+import * as Offline from './offline.js';
+import { table, badge, M, dt, run, confirmBox } from './lib.js';
 
 const app = document.getElementById('app');
 
@@ -61,11 +63,12 @@ const ROUTES = [
   ['opening', Admin.opening, 'opening.manage'],
   ['period', Admin.period, 'period.lock'],
   ['password', Admin.password, null],
+  ['offline-queue', queuePage, 'sales.create'],
 ];
 
 const NAV = [
   ['', [['dashboard', 'لوحة الإدارة']]],
-  ['المبيعات', [['pos', 'نقطة البيع'], ['sales', 'فواتير البيع'], ['sale-returns', 'مرتجعات المبيعات'], ['sessions', 'الورديات']]],
+  ['المبيعات', [['pos', 'نقطة البيع'], ['sales', 'فواتير البيع'], ['sale-returns', 'مرتجعات المبيعات'], ['sessions', 'الورديات'], ['offline-queue', 'العمليات دون اتصال']]],
   ['المشتريات', [['purchase-order', 'طلب شراء جديد'], ['purchase-orders', 'طلبات الشراء'], ['purchase', 'فاتورة شراء جديدة'], ['purchases', 'فواتير الشراء']]],
   ['المخزون', [['stock', 'رصيد المخزون'], ['alerts', 'تنبيهات المخزون'], ['transfer', 'تحويل / تسليم عهدة'], ['transfers', 'سجل التحويلات'], ['counts', 'الجرد'], ['damage', 'تسجيل تالف'], ['item-card', 'بطاقة صنف']]],
   ['المالية', [['receipt', 'سند قبض'], ['payment', 'سند صرف'], ['expenses', 'المصروفات'], ['cash', 'الصناديق والبنوك'], ['cash-transfer', 'تحويل نقدي / توريد'], ['cash-docs', 'سجل السندات']]],
@@ -113,14 +116,27 @@ function layout() {
     if (group) side.appendChild(h('div', { class: 'nav-group' }, group));
     for (const [r, label] of vis) side.appendChild(h('a', { class: 'nav', href: '#/' + r, 'data-route': r, onclick: () => side.classList.remove('open') }, label));
   }
+  const net = h('a', { href: '#/offline-queue', class: 'badge hidden' });
+  const updateNet = () => {
+    const n = Offline.pendingCount();
+    net.className = 'badge ' + (navigator.onLine ? (n ? 'warn' : 'hidden') : 'bad');
+    net.textContent = navigator.onLine ? `${n} عملية بانتظار الإرسال` : `غير متصل${n ? ` — ${n} بانتظار الإرسال` : ''}`;
+  };
+  updateNet();
+  window.addEventListener('online', updateNet);
+  window.addEventListener('offline', updateNet);
+  window.addEventListener('queue-changed', updateNet);
   const sessionBadge = h('span', { class: 'who' });
   if (state.session) sessionBadge.append(h('a', { href: '#/sessions', class: 'badge ok' }, 'وردية مفتوحة ' + state.session.number));
   const top = h('header', { class: 'top' },
     h('button', { class: 'btn small menu-btn', 'aria-label': 'القائمة', onclick: () => side.classList.toggle('open') }, '☰'),
-    h('div', { class: 'title' }, ''), sessionBadge,
+    h('div', { class: 'title' }, ''), net, sessionBadge,
     h('span', { class: 'who' }, state.me.full_name),
     h('a', { class: 'btn small', href: '#/password' }, 'كلمة المرور'),
-    h('button', { class: 'btn small', onclick: async () => { await api('POST', '/auth/logout', {}); loginView(); } }, 'خروج'));
+    h('button', { class: 'btn small', onclick: async () => {
+      if (Offline.pendingCount() && !(await confirmBox('عمليات غير مرسلة', 'توجد مبيعات محفوظة على الجهاز لم تُرسل بعد. ستبقى على الجهاز وتُرسل عند الدخول مجددًا. متابعة الخروج؟'))) return;
+      await api('POST', '/auth/logout', {}).catch(() => null); Offline.clearMe(); state.me = null; loginView();
+    } }, 'خروج'));
   const content = h('main', { class: 'content', id: 'content' });
   app.appendChild(h('div', { class: 'layout' }, side, h('div', { class: 'main' }, top, content)));
 }
@@ -166,7 +182,13 @@ async function refreshMe() {
   state.rep = me.rep;
   state.branch = me.branch;
   state.branchesCount = me.branches_count;
+  Offline.saveMe(me);
   return me;
+}
+
+function applyMe(me) {
+  state.me = me.user; state.perms = new Set(me.permissions); state.settings = me.settings; state.session = me.session;
+  state.rep = me.rep; state.branch = me.branch; state.branchesCount = me.branches_count;
 }
 
 async function boot() {
@@ -174,7 +196,14 @@ async function boot() {
     await refreshMe();
   } catch (e) {
     if (e.status === 401) return loginView();
-    clear(app).appendChild(h('div', { class: 'boot' }, 'تعذر الاتصال بالخادم: ' + e.message));
+    // دون اتصال: نقطة البيع تعمل بآخر بيانات دخول محفوظة على هذا الجهاز
+    const cached = e.code === 'NETWORK' ? Offline.loadMe() : null;
+    if (!cached) { clear(app).appendChild(h('div', { class: 'boot' }, 'تعذر الاتصال بالخادم: ' + e.message)); return; }
+    applyMe(cached);
+    layout();
+    toast('تعمل دون اتصال: البيع يُحفظ على الجهاز ويُرسل عند عودة الاتصال');
+    if (!location.hash || !location.hash.startsWith('#/pos')) location.hash = '#/pos';
+    await route();
     return;
   }
   state.cache.clear();
@@ -183,6 +212,30 @@ async function boot() {
   await route();
 }
 
+// صفحة العمليات المحفوظة دون اتصال
+async function queuePage({ el }) {
+  document.querySelector('.top .title').textContent = 'العمليات المحفوظة دون اتصال';
+  const draw = () => {
+    const q = Offline.queue().slice().reverse();
+    const states = { pending: ['بانتظار الإرسال', 'warn'], failed: ['مرفوضة — تحتاج مراجعة', 'bad'], synced: ['أُرسلت', 'ok'] };
+    el.replaceChildren(
+      h('div', { class: 'note' }, 'المبيعات المحفوظة دون اتصال تُرسل تلقائيًا بنفس معرف العملية فلا تتكرر. يعيد الخادم فحص الرصيد والصلاحيات؛ المرفوضة تبقى هنا حتى تعالجها (مثلًا بتعديل المخزون ثم إعادة المحاولة، أو حذفها بعد إصدار فاتورة بديلة).'),
+      h('div', { class: 'actions', style: { marginBottom: '12px' } },
+        h('button', { class: 'btn primary', onclick: async () => { await Offline.sync({ includeFailed: true }); draw(); } }, 'إرسال / إعادة المحاولة الآن')),
+      table({ columns: [
+        { key: 'created_at', label: 'وقت الحفظ', render: (x) => dt(x.created_at) }, { key: 'label', label: 'العملية' }, { key: 'total', label: 'الإجمالي', type: 'money' },
+        { key: 'state', label: 'الحالة', render: (x) => badge(states, x.state) },
+        { key: 'r', label: 'النتيجة', render: (x) => (x.doc_id ? h('a', { href: '#/doc/' + x.doc_id }, x.number) : x.error || '') },
+        { key: 'a', label: '', render: (x) => (x.state === 'failed' ? h('button', { class: 'btn small danger', onclick: async () => {
+          if (await confirmBox('حذف عملية مرفوضة', 'ستُحذف هذه الفاتورة من الجهاز نهائيًا ولن تُرسل. تأكد من معالجتها بفاتورة بديلة إن لزم.')) { Offline.removeFromQueue(x.key); draw(); }
+        } }, 'حذف') : '') }], rows: q, empty: 'لا توجد عمليات محفوظة' }));
+  };
+  draw();
+  void M; void run;
+}
+
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => null);
+Offline.startAutoSync();
 window.addEventListener('hashchange', route);
 window.addEventListener('auth-required', () => { if (state.me) { state.me = null; loginView('انتهت الجلسة؛ سجّل الدخول مجددًا'); } });
 window.addEventListener('session-changed', async () => { await refreshMe(); layout(); route(); });
