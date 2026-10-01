@@ -134,6 +134,7 @@ export async function view({ el, params }) {
   const info = [
     ['الرقم', d.number], ['التاريخ', d.date], ['الحالة', badge(STATUS, d.status)],
     d.party_name ? ['الطرف', d.party_id ? h('a', { href: '#/party/' + d.party_id }, d.party_name) : d.party_name] : null,
+    d.branch_name && (state.branchesCount || 1) > 1 ? ['الفرع', d.branch_name] : null,
     d.warehouse_name ? ['المستودع', d.warehouse_name] : null, d.to_warehouse_name ? ['إلى مستودع', d.to_warehouse_name] : null,
     d.cash_account_name ? ['الحساب', d.cash_account_name] : null, d.to_cash_account_name ? ['إلى حساب', d.to_cash_account_name] : null,
     d.rep_name ? ['المندوب', d.rep_name] : null, d.supplier_invoice_no ? ['رقم فاتورة المورد', d.supplier_invoice_no] : null,
@@ -258,7 +259,7 @@ function a4(d, s, copy) {
   const isItems = d.lines.some((l) => l.item_name);
   return h('div', { class: 'print-a4' },
     h('div', { class: 'head' },
-      h('div', null, h('h1', null, s.org_name), h('div', null, s.org_address), h('div', null, s.org_phone), s.org_tax_number ? h('div', null, 'الرقم الضريبي: ', s.org_tax_number) : null),
+      h('div', null, h('h1', null, s.org_name), d.branch_name && (d.branch_address || d.branch_phone) ? h('div', null, d.branch_name) : null, h('div', null, d.branch_address || s.org_address), h('div', null, d.branch_phone || s.org_phone), s.org_tax_number ? h('div', null, 'الرقم الضريبي: ', s.org_tax_number) : null),
       h('div', { style: { textAlign: 'left' } }, h('h1', null, d.label), h('div', null, 'رقم: ', N(d.number)), h('div', null, 'التاريخ: ', N(d.date)),
         d.due_date ? h('div', null, 'الاستحقاق: ', N(d.due_date)) : null, copy ? h('div', { class: 'copy-mark' }, 'نسخة') : null)),
     d.party_name ? h('p', null, h('b', null, 'العميل/المورد: '), d.party_name) : null,
@@ -274,7 +275,7 @@ function a4(d, s, copy) {
 
 function thermal(d, s, copy) {
   return h('div', { class: 'print-thermal', style: { width: `${(s.receipt_width_mm || 80) - 8}mm` } },
-    h('div', { class: 'c' }, h('b', null, s.org_name)), h('div', { class: 'c' }, s.org_phone || ''),
+    h('div', { class: 'c' }, h('b', null, s.org_name)), h('div', { class: 'c' }, d.branch_phone || s.org_phone || ''),
     s.org_tax_number ? h('div', { class: 'c' }, 'ر.ض: ', s.org_tax_number) : null,
     h('div', { class: 'c' }, d.label, ' ', N(d.number)), h('div', { class: 'c' }, N(d.date), copy ? ' — نسخة' : ''),
     d.party_name ? h('div', null, d.party_name) : null,

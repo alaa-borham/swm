@@ -258,8 +258,46 @@ function simpleList(ctx, table, perm) {
 }
 
 function listWarehouses(ctx) {
+  const scope = ctx.branchScope;
   return ctx.db.prepare(`SELECT w.*, b.name branch_name, r.name rep_name FROM warehouses w JOIN branches b ON b.id=w.branch_id
-    LEFT JOIN reps r ON r.id=w.rep_id ORDER BY w.active DESC, w.kind, w.name`).all();
+    LEFT JOIN reps r ON r.id=w.rep_id ${scope ? 'WHERE w.branch_id=' + Number(scope) : ''} ORDER BY w.active DESC, w.kind, w.name`).all();
+}
+
+// ================= الفروع =================
+function listBranches(ctx) {
+  const scope = ctx.branchScope;
+  return ctx.db.prepare(`SELECT b.*, (SELECT COUNT(*) FROM warehouses WHERE branch_id=b.id) warehouses,
+      (SELECT COUNT(*) FROM users WHERE branch_id=b.id) users FROM branches b ${scope ? 'WHERE b.id=' + Number(scope) : ''} ORDER BY b.id`).all();
+}
+
+function saveBranch(ctx, input, id) {
+  ctx.require('warehouses.manage');
+  return ctx.tx(() => uniqueGuard(() => {
+    const name = s(input.name);
+    if (!name) fail('VALIDATION', 'اسم الفرع مطلوب');
+    if (id) {
+      const ex = ctx.db.prepare('SELECT * FROM branches WHERE id=?').get(id);
+      if (!ex) notFound('الفرع');
+      const active = input.active !== undefined ? bool(input.active, 1) : ex.active;
+      if (!active && ctx.db.prepare('SELECT 1 FROM batches b JOIN warehouses w ON w.id=b.warehouse_id WHERE w.branch_id=? AND b.qty>0').get(id)) fail('IN_USE', 'لا يمكن إيقاف فرع في مستودعاته رصيد');
+      ctx.db.prepare('UPDATE branches SET name=?, address=?, phone=?, active=? WHERE id=?')
+        .run(name, input.address !== undefined ? s(input.address) : ex.address, input.phone !== undefined ? s(input.phone) : ex.phone, active, id);
+      ctx.audit('branch.update', { entity: 'branch', entity_id: id, before: ex, after: input });
+      return ctx.db.prepare('SELECT * FROM branches WHERE id=?').get(id);
+    }
+    const nid = ctx.db.prepare('INSERT INTO branches(name,address,phone) VALUES(?,?,?)').run(name, s(input.address), s(input.phone)).lastInsertRowid;
+    // كل فرع جديد يبدأ بمستودع وصندوق
+    ctx.db.prepare("INSERT INTO warehouses(branch_id,name,kind) VALUES(?,?,'main')").run(nid, `مستودع ${name}`);
+    ctx.db.prepare("INSERT INTO cash_accounts(name,kind,branch_id) VALUES(?,'cash',?)").run(`صندوق ${name}`, nid);
+    ctx.audit('branch.create', { entity: 'branch', entity_id: nid, after: input });
+    return ctx.db.prepare('SELECT * FROM branches WHERE id=?').get(nid);
+  }, 'اسم الفرع أو مستودعه أو صندوقه مستخدم مسبقًا'));
+}
+
+function branchOf(ctx, id) {
+  const b = ctx.db.prepare('SELECT * FROM branches WHERE id=? AND active=1').get(id);
+  if (!b) fail('VALIDATION', 'الفرع غير صحيح');
+  return b.id;
 }
 
 function saveWarehouse(ctx, input, id) {
@@ -267,7 +305,8 @@ function saveWarehouse(ctx, input, id) {
   return ctx.tx(() => {
     const name = s(input.name);
     if (!name) fail('VALIDATION', 'اسم المستودع مطلوب');
-    const branch = input.branch_id || ctx.db.prepare('SELECT id FROM branches ORDER BY id LIMIT 1').get().id;
+    const branch = input.branch_id ? branchOf(ctx, input.branch_id) : (ctx.branchScope || ctx.db.prepare('SELECT id FROM branches ORDER BY id LIMIT 1').get().id);
+    ctx.checkBranch(branch);
     return uniqueGuard(() => {
       if (id) {
         const ex = ctx.db.prepare('SELECT * FROM warehouses WHERE id=?').get(id);
@@ -288,7 +327,7 @@ function saveWarehouse(ctx, input, id) {
 function listCashAccounts(ctx) {
   const rows = ctx.db.prepare(`SELECT c.*, r.name rep_name,
       (SELECT COALESCE(SUM(debit-credit),0) FROM journal_lines WHERE account='CASH' AND cash_account_id=c.id) bal
-    FROM cash_accounts c LEFT JOIN reps r ON r.id=c.rep_id ORDER BY c.active DESC, c.kind, c.name`).all();
+    FROM cash_accounts c LEFT JOIN reps r ON r.id=c.rep_id ${ctx.branchScope ? 'WHERE c.branch_id=' + Number(ctx.branchScope) : ''} ORDER BY c.active DESC, c.kind, c.name`).all();
   const { fromMinor } = require('../lib/money');
   const showBal = ctx.has('cash.view');
   return rows.map((r) => ({ ...r, balance: showBal ? fromMinor(r.bal) : undefined, bal: undefined }));
@@ -308,8 +347,9 @@ function saveCashAccount(ctx, input, id) {
         return ctx.db.prepare('SELECT * FROM cash_accounts WHERE id=?').get(id);
       }
       const kind = input.kind === 'bank' ? 'bank' : 'cash';
-      const nid = ctx.db.prepare('INSERT INTO cash_accounts(name,kind,branch_id) VALUES(?,?,?)')
-        .run(name, kind, ctx.db.prepare('SELECT id FROM branches ORDER BY id LIMIT 1').get().id).lastInsertRowid;
+      const branch = input.branch_id ? branchOf(ctx, input.branch_id) : (ctx.branchScope || ctx.db.prepare('SELECT id FROM branches ORDER BY id LIMIT 1').get().id);
+      ctx.checkBranch(branch);
+      const nid = ctx.db.prepare('INSERT INTO cash_accounts(name,kind,branch_id) VALUES(?,?,?)').run(name, kind, branch).lastInsertRowid;
       ctx.audit('cash_account.create', { entity: 'cash_account', entity_id: nid, after: input });
       return ctx.db.prepare('SELECT * FROM cash_accounts WHERE id=?').get(nid);
     }, 'اسم الحساب مستخدم');
@@ -336,7 +376,7 @@ function createRep(ctx, input) {
   return ctx.tx(() => {
     const name = s(input.name);
     if (!name) fail('VALIDATION', 'اسم المندوب مطلوب');
-    const branch = ctx.db.prepare('SELECT id FROM branches ORDER BY id LIMIT 1').get().id;
+    const branch = input.branch_id ? branchOf(ctx, input.branch_id) : (ctx.branchScope || ctx.db.prepare('SELECT id FROM branches ORDER BY id LIMIT 1').get().id);
     const repId = ctx.db.prepare('INSERT INTO reps(name,phone,area) VALUES(?,?,?)').run(name, s(input.phone), s(input.area)).lastInsertRowid;
     const wh = uniqueGuard(() => ctx.db.prepare("INSERT INTO warehouses(branch_id,name,kind,rep_id) VALUES(?,?,'rep',?)").run(branch, `مخزون المندوب ${name}`, repId).lastInsertRowid, 'يوجد مستودع بنفس اسم المندوب');
     const ca = uniqueGuard(() => ctx.db.prepare("INSERT INTO cash_accounts(name,kind,branch_id,rep_id) VALUES(?,'rep_custody',?,?)").run(`عهدة المندوب ${name}`, branch, repId).lastInsertRowid, 'يوجد حساب عهدة بنفس الاسم');
@@ -391,5 +431,5 @@ function listReps(ctx) {
 
 module.exports = {
   createItem, updateItem, getItemFull, listItems, lookupItem, createParty, updateParty, getParty, getPartyRow, listParties,
-  simpleList, listWarehouses, saveWarehouse, listCashAccounts, saveCashAccount, saveCategory, createRep, updateRep, getRep, listReps, addCommissionPlan,
+  simpleList, listWarehouses, listBranches, saveBranch, saveWarehouse, listCashAccounts, saveCashAccount, saveCategory, createRep, updateRep, getRep, listReps, addCommissionPlan,
 };

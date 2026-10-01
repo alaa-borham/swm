@@ -69,6 +69,7 @@ function balance(db, account, f = {}) {
   for (const k of ['party_id', 'cash_account_id', 'warehouse_id', 'rep_id', 'expense_category_id']) {
     if (f[k] !== undefined) { if (f[k] === null) w.push(`${k} IS NULL`); else { w.push(`${k} = ?`); p.push(f[k]); } }
   }
+  if (f.branch_id) { w.push('doc_id IN (SELECT id FROM docs WHERE branch_id = ?)'); p.push(f.branch_id); }
   if (f.from) { w.push('date >= ?'); p.push(f.from); }
   if (f.to) { w.push('date <= ?'); p.push(f.to); }
   const r = db.prepare(`SELECT COALESCE(SUM(debit),0) d, COALESCE(SUM(credit),0) c FROM journal_lines WHERE ${w.join(' AND ')}`).get(...p);

@@ -49,6 +49,16 @@ class Ctx {
     if (!this.db.inTransaction) this.flushDenied();
   }
 
+  /** المستخدم المرتبط بفرع لا يتعامل إلا مع مستودعات وصناديق ومستندات فرعه */
+  get branchScope() { return this.user && this.user.branch_id ? this.user.branch_id : null; }
+
+  checkBranch(branchId) {
+    if (this.branchScope && branchId && branchId !== this.branchScope) {
+      this.deny('branch.scope', 'branch');
+      fail('FORBIDDEN', 'العملية خارج فرعك', 403);
+    }
+  }
+
   /** المستخدم مندوب مقيد بنطاقه */
   get repScope() {
     if (!this.user || !this.user.rep_id) return null;

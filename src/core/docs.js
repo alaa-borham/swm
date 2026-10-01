@@ -26,7 +26,7 @@ function nextNumber(ctx, type) {
 }
 
 const DOC_COLS = ['date', 'status', 'party_id', 'warehouse_id', 'to_warehouse_id', 'cash_account_id', 'to_cash_account_id', 'rep_id',
-  'session_id', 'expense_category_id', 'ref_doc_id', 'reversal_of', 'supplier_invoice_no', 'due_date', 'method', 'ledger_account',
+  'session_id', 'branch_id', 'expense_category_id', 'ref_doc_id', 'reversal_of', 'supplier_invoice_no', 'due_date', 'method', 'ledger_account',
   'ledger_side', 'subtotal', 'discount', 'net', 'tax', 'extra_cost', 'total', 'cost', 'prices_include_tax', 'invoice_discount_bp',
   'invoice_discount_amount', 'data', 'notes', 'reason', 'approved_by', 'approved_at'];
 
@@ -34,6 +34,13 @@ function insertDoc(ctx, type, fields) {
   const date = checkDate(fields.date || ctx.today());
   const number = nextNumber(ctx, type);
   const f = { status: 'draft', ...fields, date };
+  // فرع المستند: من المستودع ثم الحساب النقدي ثم فرع المستخدم
+  if (!f.branch_id) {
+    const w = f.warehouse_id ? ctx.db.prepare('SELECT branch_id FROM warehouses WHERE id=?').get(f.warehouse_id) : null;
+    const c = !w && f.cash_account_id ? ctx.db.prepare('SELECT branch_id FROM cash_accounts WHERE id=?').get(f.cash_account_id) : null;
+    f.branch_id = (w && w.branch_id) || (c && c.branch_id) || ctx.branchScope || null;
+  }
+  ctx.checkBranch(f.branch_id);
   if (f.data && typeof f.data !== 'string') f.data = JSON.stringify(f.data);
   const cols = DOC_COLS.filter((c) => f[c] !== undefined);
   const id = ctx.db.prepare(`INSERT INTO docs(type,number,created_by,created_at,${cols.join(',')}) VALUES(?,?,?,?,${cols.map(() => '?').join(',')})`)
@@ -241,8 +248,11 @@ function fullDoc(ctx, id) {
       (SELECT full_name FROM users WHERE id=?) created_by_name,
       (SELECT full_name FROM users WHERE id=?) approved_by_name,
       (SELECT number FROM docs WHERE id=?) ref_doc_number,
+      (SELECT name FROM branches WHERE id=?) branch_name,
+      (SELECT address FROM branches WHERE id=?) branch_address,
+      (SELECT phone FROM branches WHERE id=?) branch_phone,
       (SELECT name FROM expense_categories WHERE id=?) expense_category_name`)
-    .get(d.party_id, d.warehouse_id, d.to_warehouse_id, d.cash_account_id, d.to_cash_account_id, d.rep_id, d.created_by, d.approved_by, d.ref_doc_id, d.expense_category_id);
+    .get(d.party_id, d.warehouse_id, d.to_warehouse_id, d.cash_account_id, d.to_cash_account_id, d.rep_id, d.created_by, d.approved_by, d.ref_doc_id, d.branch_id, d.branch_id, d.branch_id, d.expense_category_id);
   Object.assign(out, names);
   out.attachments = ctx.db.prepare('SELECT id,file_name,mime,size,created_at FROM attachments WHERE doc_id=?').all(id);
   return out;

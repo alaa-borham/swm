@@ -1,5 +1,5 @@
 // البيانات الأساسية: الأصناف والوحدات والباركود، العملاء والموردون، المستودعات والحسابات، التصنيفات.
-import { h, clear, get, api, submitter, toast, run, M, inp, sel, field, num, table, pageHead, can, lookup, invalidate, today, download } from '../lib.js';
+import { h, clear, state, get, api, submitter, toast, run, M, inp, sel, field, num, table, pageHead, can, lookup, invalidate, today, download } from '../lib.js';
 
 // ===================== الأصناف =====================
 export async function items({ el, q, isCurrent }) {
@@ -165,20 +165,46 @@ export async function party({ el, params, q }) {
 
 // ===================== المستودعات والحسابات =====================
 export async function warehouses({ el }) {
-  pageHead('المستودعات والصناديق والبنوك');
+  pageHead('الفروع والمستودعات والصناديق');
+  const branches = await lookup('branches', true);
   const whs = await lookup('warehouses', true);
   const cash = await lookup('cash', true);
+  const multi = branches.length > 1;
+  const brSel = () => sel(branches.filter((b) => b.active).map((b) => ({ value: b.id, label: b.name })), state.branch?.id || branches[0]?.id);
+  const reload = (...c) => { invalidate(...c); location.reload(); };
   const whName = inp({ placeholder: 'اسم المستودع' });
+  const whBranch = brSel();
   const caName = inp({ placeholder: 'اسم الحساب' });
+  const caBranch = brSel();
   const caKind = sel([{ value: 'cash', label: 'صندوق نقدي' }, { value: 'bank', label: 'بنك / شبكة' }], 'cash');
-  const toggle = (url, row) => h('button', { class: 'btn small', onclick: async () => { if (await run(() => api('PUT', url, { name: row.name, active: row.active ? 0 : 1 }), 'تم')) { invalidate('warehouses', 'cash'); location.reload(); } } }, row.active ? 'إيقاف' : 'تفعيل');
+  const toggle = (url, row) => h('button', { class: 'btn small', onclick: async () => { if (await run(() => api('PUT', url, { name: row.name, branch_id: row.branch_id, active: row.active ? 0 : 1 }), 'تم')) reload('warehouses', 'cash', 'branches'); } }, row.active ? 'إيقاف' : 'تفعيل');
+  const editBranch = async (b) => {
+    const { modal } = await import('../lib.js');
+    const n = inp({ value: b?.name || '' }), a = inp({ value: b?.address || '' }), p = inp({ value: b?.phone || '' });
+    modal(b ? 'تعديل الفرع' : 'فرع جديد', h('div', null, h('div', { class: 'grid' }, field('الاسم', n, { req: true }), field('العنوان', a), field('الهاتف', p)),
+      b ? null : h('p', { class: 'small muted' }, 'يُنشأ للفرع مستودع وصندوق تلقائيًا. العنوان والهاتف يظهران في فواتير الفرع.')),
+    [{ label: 'حفظ', class: 'primary', onClick: async () => {
+      const body = { name: n.value, address: a.value, phone: p.value };
+      const r = await run(() => (b ? api('PUT', '/branches/' + b.id, body) : api('POST', '/branches', body)), 'تم الحفظ');
+      if (r) reload('warehouses', 'cash', 'branches');
+      return !!r;
+    } }]);
+  };
   el.append(
+    can('warehouses.manage') && !state.branch ? h('div', { class: 'card' }, h('h3', null, 'الفروع'), table({ columns: [{ key: 'name', label: 'الفرع' }, { key: 'address', label: 'العنوان' }, { key: 'phone', label: 'الهاتف' },
+      { key: 'warehouses', label: 'المستودعات', type: 'int' }, { key: 'users', label: 'المستخدمون المقيدون', type: 'int' }, { key: 'active', label: 'الحالة', render: (b) => (b.active ? 'نشط' : 'موقوف') },
+      { key: 'a', label: '', render: (b) => [h('button', { class: 'btn small', onclick: () => editBranch(b) }, 'تعديل'), ' ', toggle('/branches/' + b.id, b)] }], rows: branches }),
+    h('button', { class: 'btn primary', style: { marginTop: '10px' }, onclick: () => editBranch() }, 'فرع جديد'),
+    h('p', { class: 'small muted' }, 'المستخدم المرتبط بفرع (من صفحة المستخدمين) لا يرى ولا يستخدم إلا مستودعات فرعه وصناديقه ومستنداته. المدير والمستخدم غير المرتبط يرون كل الفروع ويمكنهم تصفية التقارير حسب الفرع.')) : null,
     h('div', { class: 'card' }, h('h3', null, 'المستودعات'), table({ columns: [{ key: 'name', label: 'الاسم' }, { key: 'branch_name', label: 'الفرع' }, { key: 'kind', label: 'النوع', render: (w) => (w.kind === 'rep' ? 'مخزون مندوب' : 'مستودع') },
       { key: 'active', label: 'الحالة', render: (w) => (w.active ? 'نشط' : 'موقوف') }, { key: 'a', label: '', render: (w) => (w.kind === 'main' ? toggle('/warehouses/' + w.id, w) : '') }], rows: whs }),
-    h('div', { class: 'row', style: { marginTop: '10px' } }, field('مستودع جديد', whName), h('button', { class: 'btn primary', onclick: async () => { if (await run(() => api('POST', '/warehouses', { name: whName.value }), 'أُضيف')) { invalidate('warehouses'); location.reload(); } } }, 'إضافة'))),
+    h('div', { class: 'row', style: { marginTop: '10px' } }, field('مستودع جديد', whName), multi ? field('الفرع', whBranch) : null,
+      h('button', { class: 'btn primary', onclick: async () => { if (await run(() => api('POST', '/warehouses', { name: whName.value, branch_id: Number(whBranch.value) }), 'أُضيف')) reload('warehouses'); } }, 'إضافة'))),
     h('div', { class: 'card' }, h('h3', null, 'الصناديق والبنوك وعهد المناديب'), table({ columns: [{ key: 'name', label: 'الاسم' }, { key: 'kind', label: 'النوع', render: (c) => ({ cash: 'صندوق', bank: 'بنك', rep_custody: 'عهدة مندوب' }[c.kind]) },
-      { key: 'balance', label: 'الرصيد', type: 'money' }, { key: 'active', label: 'الحالة', render: (c) => (c.active ? 'نشط' : 'موقوف') }, { key: 'a', label: '', render: (c) => (c.kind !== 'rep_custody' ? toggle('/cash-accounts/' + c.id, c) : '') }], rows: cash }),
-    h('div', { class: 'row', style: { marginTop: '10px' } }, field('حساب جديد', caName), field('النوع', caKind), h('button', { class: 'btn primary', onclick: async () => { if (await run(() => api('POST', '/cash-accounts', { name: caName.value, kind: caKind.value }), 'أُضيف')) { invalidate('cash'); location.reload(); } } }, 'إضافة'))));
+      multi ? { key: 'branch_id', label: 'الفرع', render: (c) => (branches.find((b) => b.id === c.branch_id) || {}).name || '' } : null,
+      { key: 'balance', label: 'الرصيد', type: 'money' }, { key: 'active', label: 'الحالة', render: (c) => (c.active ? 'نشط' : 'موقوف') }, { key: 'a', label: '', render: (c) => (c.kind !== 'rep_custody' ? toggle('/cash-accounts/' + c.id, c) : '') }].filter(Boolean), rows: cash }),
+    h('div', { class: 'row', style: { marginTop: '10px' } }, field('حساب جديد', caName), field('النوع', caKind), multi ? field('الفرع', caBranch) : null,
+      h('button', { class: 'btn primary', onclick: async () => { if (await run(() => api('POST', '/cash-accounts', { name: caName.value, kind: caKind.value, branch_id: Number(caBranch.value) }), 'أُضيف')) reload('cash'); } }, 'إضافة'))));
 }
 
 export async function categories({ el }) {

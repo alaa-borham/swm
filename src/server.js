@@ -132,6 +132,8 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
     return {
       user: ctx.user, permissions: [...permissionsFor(ctx.user.roles)], session,
       rep: ctx.user.rep_id ? M.getRep(ctx, ctx.user.rep_id) : null,
+      branch: ctx.user.branch_id ? db.prepare('SELECT id,name FROM branches WHERE id=?').get(ctx.user.branch_id) : null,
+      branches_count: db.prepare('SELECT COUNT(*) n FROM branches WHERE active=1').get().n,
       settings: {
         org_name: s.org_name, org_address: s.org_address, org_phone: s.org_phone, org_tax_number: s.org_tax_number, currency: s.currency,
         money_decimals: getMoneyDecimals(), prices_include_tax: s.prices_include_tax === '1', default_tax_rate: fromBp(Number(s.default_tax_rate_bp)),
@@ -207,7 +209,9 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
   api.get('/cash-accounts', h((ctx) => M.listCashAccounts(ctx)));
   api.post('/cash-accounts', h((ctx, req) => M.saveCashAccount(ctx, req.body)));
   api.put('/cash-accounts/:id', h((ctx, req) => M.saveCashAccount(ctx, req.body, id(req))));
-  api.get('/branches', h(() => db.prepare('SELECT * FROM branches').all()));
+  api.get('/branches', h((ctx) => M.listBranches(ctx)));
+  api.post('/branches', h((ctx, req) => M.saveBranch(ctx, req.body)));
+  api.put('/branches/:id', h((ctx, req) => M.saveBranch(ctx, req.body, id(req))));
   api.get('/reps', h((ctx) => M.listReps(ctx)));
   api.get('/reps/:id', h((ctx, req) => M.getRep(ctx, id(req))));
   api.post('/reps', h((ctx, req) => M.createRep(ctx, req.body)));
@@ -221,6 +225,7 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
     const perm = D.DOC_VIEW_PERM[doc.type];
     if (perm) ctx.require(perm);
     if (ctx.repScope && doc.rep_id !== ctx.repScope) fail('FORBIDDEN', 'المستند خارج نطاقك', 403);
+    ctx.checkBranch(doc.branch_id);
   };
   api.get('/docs', h((ctx, req) => R.listDocs(ctx, req.query)));
   api.get('/docs/:id', h((ctx, req) => {

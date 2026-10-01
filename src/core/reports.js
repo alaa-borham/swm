@@ -9,13 +9,20 @@ const D = require('./docs');
 const m = fromMinor;
 const q = fromQty;
 
-function period(ctx, { from, to } = {}) {
+/** الفرع المطلوب: فرع المستخدم المقيد دائمًا، أو الفرع المختار في التقرير */
+function branchOf(ctx, opts = {}) {
+  if (ctx.branchScope) return ctx.branchScope;
+  return opts.branch_id ? Number(opts.branch_id) : null;
+}
+const bw = (b, col = 'd.branch_id') => (b ? ` AND ${col}=${Number(b)}` : '');
+
+function period(ctx, { from, to, branch_id } = {}) {
   const t = to ? checkDate(to, 'إلى') : ctx.today();
   const f = from ? checkDate(from, 'من') : t.slice(0, 8) + '01';
-  return { from: f, to: t };
+  return { from: f, to: t, branch_id: branchOf(ctx, { branch_id }) };
 }
 
-function sumAcc(ctx, account, p, f = {}) { return ledger.balance(ctx.db, account, { ...f, from: p.from, to: p.to }); }
+function sumAcc(ctx, account, p, f = {}) { return ledger.balance(ctx.db, account, { ...f, from: p.from, to: p.to, branch_id: p.branch_id || undefined }); }
 
 // ===================== الأرباح =====================
 function profitLoss(ctx, opts = {}) {
@@ -55,51 +62,54 @@ function dashboard(ctx, opts = {}) {
     Object.assign(out, { cogs: pl.cogs, gross_profit: pl.gross_profit, expenses: pl.expenses, operating_profit: pl.operating_profit, commissions: pl.commissions, inventory_losses: pl.inventory_losses });
   }
   // التحصيلات: سندات القبض المعتمدة من العملاء في الفترة (تشمل السداد عند البيع)
-  out.collections = m(ctx.db.prepare(`SELECT COALESCE(SUM(total),0) v FROM docs WHERE type='receipt' AND ledger_account='AR' AND status='approved' AND date BETWEEN ? AND ?`).get(p.from, p.to).v);
-  out.receivables = m(ledger.balance(ctx.db, 'AR', {}));
-  out.payables = m(-ledger.balance(ctx.db, 'AP', {}));
+  out.collections = m(ctx.db.prepare(`SELECT COALESCE(SUM(total),0) v FROM docs d WHERE type='receipt' AND ledger_account='AR' AND status='approved' AND date BETWEEN ? AND ?${bw(p.branch_id)}`).get(p.from, p.to).v);
+  out.receivables = m(ledger.balance(ctx.db, 'AR', { branch_id: p.branch_id || undefined }));
+  out.payables = m(-ledger.balance(ctx.db, 'AP', { branch_id: p.branch_id || undefined }));
+  const wb = p.branch_id ? ` AND warehouse_id IN (SELECT id FROM warehouses WHERE branch_id=${Number(p.branch_id)})` : '';
   const minExp = inv.minSellableExpiry(ctx);
   if (ctx.has('cost.view')) {
-    out.stock_value = m(ctx.db.prepare(`SELECT COALESCE(SUM(cost),0) v FROM batches WHERE status='ok' AND (expiry_date IS NULL OR expiry_date>=?)`).get(minExp).v);
-    out.blocked_stock_value = m(ctx.db.prepare(`SELECT COALESCE(SUM(cost),0) v FROM batches WHERE NOT (status='ok' AND (expiry_date IS NULL OR expiry_date>=?))`).get(minExp).v);
+    out.stock_value = m(ctx.db.prepare(`SELECT COALESCE(SUM(cost),0) v FROM batches WHERE status='ok' AND (expiry_date IS NULL OR expiry_date>=?)${wb}`).get(minExp).v);
+    out.blocked_stock_value = m(ctx.db.prepare(`SELECT COALESCE(SUM(cost),0) v FROM batches WHERE NOT (status='ok' AND (expiry_date IS NULL OR expiry_date>=?))${wb}`).get(minExp).v);
   }
   out.cash = ctx.has('cash.view') ? ctx.db.prepare(`SELECT c.id, c.name, c.kind, COALESCE(SUM(jl.debit-jl.credit),0) v FROM cash_accounts c
-      LEFT JOIN journal_lines jl ON jl.cash_account_id=c.id AND jl.account='CASH' WHERE c.active=1 GROUP BY c.id ORDER BY c.kind, c.name`).all()
+      LEFT JOIN journal_lines jl ON jl.cash_account_id=c.id AND jl.account='CASH' WHERE c.active=1${bw(p.branch_id, 'c.branch_id')} GROUP BY c.id ORDER BY c.kind, c.name`).all()
     .map((r) => ({ id: r.id, name: r.name, kind: r.kind, balance: m(r.v) })) : [];
-  const a = alerts(ctx);
+  const a = alerts(ctx, { branch_id: p.branch_id });
   out.alerts = {
     low_stock: a.low_stock.length, near_expiry: a.near_expiry.length, expired: a.expired.length, isolated: a.isolated.length,
     overdue_customers: a.overdue.length, drafts: a.drafts, open_sessions: a.open_sessions, pending_sessions: a.pending_sessions,
   };
   out.daily = ctx.db.prepare(`SELECT date, SUM(CASE WHEN type='sale' THEN net ELSE -net END) v FROM docs
-    WHERE type IN ('sale','sale_return') AND status='approved' AND date BETWEEN ? AND ? GROUP BY date ORDER BY date`).all(p.from, p.to).map((r) => ({ date: r.date, net_sales: m(r.v) }));
+    WHERE type IN ('sale','sale_return') AND status='approved' AND date BETWEEN ? AND ?${bw(p.branch_id, 'branch_id')} GROUP BY date ORDER BY date`).all(p.from, p.to).map((r) => ({ date: r.date, net_sales: m(r.v) }));
   return out;
 }
 
-function alerts(ctx) {
+function alerts(ctx, opts = {}) {
+  const br = branchOf(ctx, opts);
+  const wbr = br ? ` AND b.warehouse_id IN (SELECT id FROM warehouses WHERE branch_id=${Number(br)})` : '';
   const minExp = inv.minSellableExpiry(ctx);
   const today = ctx.today();
   const defDays = ctx.settingInt('expiry_alert_days') || 30;
   const low = ctx.db.prepare(`SELECT i.id, i.code, i.name, i.base_unit, i.reorder_level,
-      COALESCE((SELECT SUM(qty) FROM batches b WHERE b.item_id=i.id AND b.status='ok' AND (b.expiry_date IS NULL OR b.expiry_date>=?)),0) sellable
+      COALESCE((SELECT SUM(qty) FROM batches b WHERE b.item_id=i.id AND b.status='ok' AND (b.expiry_date IS NULL OR b.expiry_date>=?)${wbr}),0) sellable
     FROM items i WHERE i.active=1 AND i.reorder_level>0`).all(minExp).filter((r) => r.sellable <= r.reorder_level)
     .map((r) => ({ ...r, sellable: q(r.sellable), reorder_level: q(r.reorder_level) }));
   const near = ctx.db.prepare(`SELECT b.id batch_id, b.batch_no, b.expiry_date, b.qty, i.name, i.base_unit, w.name warehouse,
       CAST(julianday(b.expiry_date)-julianday(?) AS INTEGER) days_left
     FROM batches b JOIN items i ON i.id=b.item_id JOIN warehouses w ON w.id=b.warehouse_id
-    WHERE b.qty>0 AND b.status='ok' AND b.expiry_date IS NOT NULL AND b.expiry_date>=? AND b.expiry_date<=date(?, '+' || COALESCE(i.expiry_alert_days, ?) || ' days')
+    WHERE b.qty>0 AND b.status='ok'${wbr} AND b.expiry_date IS NOT NULL AND b.expiry_date>=? AND b.expiry_date<=date(?, '+' || COALESCE(i.expiry_alert_days, ?) || ' days')
     ORDER BY b.expiry_date`).all(today, minExp, today, defDays).map((r) => ({ ...r, qty: q(r.qty) }));
   const expired = ctx.db.prepare(`SELECT b.id batch_id, b.batch_no, b.expiry_date, b.qty, b.cost, i.name, i.base_unit, w.name warehouse FROM batches b
     JOIN items i ON i.id=b.item_id JOIN warehouses w ON w.id=b.warehouse_id
-    WHERE b.qty>0 AND b.status='ok' AND b.expiry_date IS NOT NULL AND b.expiry_date<? ORDER BY b.expiry_date`).all(minExp)
+    WHERE b.qty>0 AND b.status='ok'${wbr} AND b.expiry_date IS NOT NULL AND b.expiry_date<? ORDER BY b.expiry_date`).all(minExp)
     .map((r) => ({ ...r, qty: q(r.qty), cost: ctx.has('cost.view') ? m(r.cost) : undefined }));
   const isolated = ctx.db.prepare(`SELECT b.id batch_id, b.batch_no, b.expiry_date, b.qty, b.status, i.name, i.base_unit, w.name warehouse FROM batches b
-    JOIN items i ON i.id=b.item_id JOIN warehouses w ON w.id=b.warehouse_id WHERE b.qty>0 AND b.status IN ('isolated','pending') ORDER BY b.id`).all()
+    JOIN items i ON i.id=b.item_id JOIN warehouses w ON w.id=b.warehouse_id WHERE b.qty>0 AND b.status IN ('isolated','pending')${wbr} ORDER BY b.id`).all()
     .map((r) => ({ ...r, qty: q(r.qty) }));
   const overdue = ctx.db.prepare(`SELECT d.id, d.number, d.date, d.due_date, d.total, p.name party FROM docs d JOIN parties p ON p.id=d.party_id
-    WHERE d.status='approved' AND d.ledger_account='AR' AND d.ledger_side='D' AND d.due_date < ?`).all(today)
+    WHERE d.status='approved' AND d.ledger_account='AR' AND d.ledger_side='D' AND d.due_date < ?${bw(br)}`).all(today)
     .map((d) => ({ ...d, open: D.openAmount(ctx, d.id) })).filter((d) => d.open > 0).map((d) => ({ ...d, total: m(d.total), open: m(d.open) }));
-  const drafts = ctx.db.prepare("SELECT COUNT(*) n FROM docs WHERE status='draft'").get().n;
+  const drafts = ctx.db.prepare(`SELECT COUNT(*) n FROM docs d WHERE status='draft'${bw(br)}`).get().n;
   const openSessions = ctx.db.prepare("SELECT COUNT(*) n FROM cash_sessions WHERE status='open'").get().n;
   const pendingSessions = ctx.db.prepare("SELECT COUNT(*) n FROM cash_sessions WHERE status='closing'").get().n;
   return { low_stock: low, near_expiry: near, expired, isolated, overdue, drafts, open_sessions: openSessions, pending_sessions: pendingSessions };
@@ -108,6 +118,7 @@ function alerts(ctx) {
 // ===================== المبيعات =====================
 const SALE_GROUPS = {
   item: { label: 'الصنف', key: 'l.item_id', name: 'l.item_name' },
+  branch: { label: 'الفرع', key: 'd.branch_id', name: "COALESCE((SELECT name FROM branches WHERE id=d.branch_id),'-')" },
   customer: { label: 'العميل', key: 'd.party_id', name: "COALESCE(p.name,'عميل نقدي')" },
   rep: { label: 'المندوب', key: 'd.rep_id', name: "COALESCE(r.name,'بدون مندوب')" },
   day: { label: 'اليوم', key: 'd.date', name: 'd.date' },
@@ -127,6 +138,7 @@ function salesReport(ctx, opts = {}) {
   if (opts.party_id) { w.push('d.party_id=?'); params.push(Number(opts.party_id)); }
   if (opts.item_id) { w.push('l.item_id=?'); params.push(Number(opts.item_id)); }
   if (ctx.repScope) { w.push('d.rep_id=?'); params.push(ctx.repScope); }
+  if (p.branch_id) { w.push('d.branch_id=?'); params.push(p.branch_id); }
   const rows = ctx.db.prepare(`SELECT ${g.key} k, ${g.name} name,
       SUM(CASE WHEN d.type='sale' THEN l.base_qty ELSE 0 END) sold_qty,
       SUM(CASE WHEN d.type='sale_return' THEN l.base_qty ELSE 0 END) returned_qty,
@@ -152,7 +164,7 @@ function salesReport(ctx, opts = {}) {
   // حسب طريقة الدفع
   const methods = ctx.db.prepare(`SELECT c.name, c.kind, SUM(a.amount) v FROM allocations a JOIN docs s ON s.id=a.source_doc_id JOIN docs t ON t.id=a.target_doc_id
       JOIN cash_accounts c ON c.id=s.cash_account_id
-    WHERE s.type='receipt' AND t.type='sale' AND a.reversed=0 AND t.date BETWEEN ? AND ? GROUP BY c.id`).all(p.from, p.to)
+    WHERE s.type='receipt' AND t.type='sale' AND a.reversed=0 AND t.date BETWEEN ? AND ?${bw(p.branch_id, 't.branch_id')} GROUP BY c.id`).all(p.from, p.to)
     .map((r) => ({ name: r.name, kind: r.kind, amount: m(r.v) }));
   return { title: `المبيعات حسب ${g.label}`, ...p, columns: cols, rows: out, totals: totalsOf(out, cols), by_payment: methods };
 }
@@ -171,10 +183,10 @@ function purchasesReport(ctx, opts = {}) {
   const rows = ctx.db.prepare(bySupplier
     ? `SELECT p.name, SUM(CASE WHEN d.type='purchase' THEN d.total ELSE 0 END) purchases, SUM(CASE WHEN d.type='purchase_return' THEN d.total ELSE 0 END) returns,
         COUNT(CASE WHEN d.type='purchase' THEN 1 END) invoices, p.id party_id
-       FROM docs d JOIN parties p ON p.id=d.party_id WHERE d.status='approved' AND d.type IN ('purchase','purchase_return') AND d.date BETWEEN ? AND ? GROUP BY p.id ORDER BY purchases DESC`
+       FROM docs d JOIN parties p ON p.id=d.party_id WHERE d.status='approved' AND d.type IN ('purchase','purchase_return') AND d.date BETWEEN ? AND ?${bw(p.branch_id)} GROUP BY p.id ORDER BY purchases DESC`
     : `SELECT l.item_name name, SUM(CASE WHEN d.type='purchase' THEN l.base_qty ELSE -l.base_qty END) qty, SUM(CASE WHEN d.type='purchase' THEN l.cost ELSE -l.cost END) cost,
         COUNT(DISTINCT d.id) invoices
-       FROM docs d JOIN doc_lines l ON l.doc_id=d.id WHERE d.status='approved' AND d.type IN ('purchase','purchase_return') AND d.date BETWEEN ? AND ? GROUP BY l.item_id ORDER BY cost DESC`)
+       FROM docs d JOIN doc_lines l ON l.doc_id=d.id WHERE d.status='approved' AND d.type IN ('purchase','purchase_return') AND d.date BETWEEN ? AND ?${bw(p.branch_id)} GROUP BY l.item_id ORDER BY cost DESC`)
     .all(p.from, p.to);
   let cols, out;
   if (bySupplier) {
@@ -268,6 +280,8 @@ function stockReport(ctx, opts = {}) {
   if (opts.item_id) { w.push('b.item_id=?'); p.push(Number(opts.item_id)); }
   if (opts.category_id) { w.push('i.category_id=?'); p.push(Number(opts.category_id)); }
   if (ctx.repScope) { w.push('b.warehouse_id=(SELECT warehouse_id FROM reps WHERE id=?)'); p.push(ctx.repScope); }
+  const br = branchOf(ctx, opts);
+  if (br) { w.push('b.warehouse_id IN (SELECT id FROM warehouses WHERE branch_id=?)'); p.push(br); }
   if (opts.by === 'batch') {
     const rows = ctx.db.prepare(`SELECT b.id batch_id, i.code, i.name, i.base_unit, w.name warehouse, b.batch_no, b.prod_date, b.expiry_date, b.status, b.qty, b.cost
       FROM batches b JOIN items i ON i.id=b.item_id JOIN warehouses w ON w.id=b.warehouse_id WHERE ${w.join(' AND ')} ORDER BY i.name, b.expiry_date`).all(...p)
@@ -333,7 +347,7 @@ function expensesReport(ctx, opts = {}) {
   const p = period(ctx, opts);
   const rows = ctx.db.prepare(`SELECT d.id doc_id, d.number, d.date, ec.name category, d.net, d.tax, d.total, d.notes, d.status,
       json_extract(d.data,'$.beneficiary') beneficiary FROM docs d LEFT JOIN expense_categories ec ON ec.id=d.expense_category_id
-    WHERE d.type='expense' AND d.status='approved' AND d.date BETWEEN ? AND ? ORDER BY d.date, d.id`).all(p.from, p.to)
+    WHERE d.type='expense' AND d.status='approved' AND d.date BETWEEN ? AND ?${bw(p.branch_id)} ORDER BY d.date, d.id`).all(p.from, p.to)
     .map((r) => ({ ...r, net: m(r.net), tax: m(r.tax), total: m(r.total), open: m(D.openAmount(ctx, r.doc_id)) }));
   const cols = [{ key: 'date', label: 'التاريخ' }, { key: 'number', label: 'المستند', link: 'doc_id' }, { key: 'category', label: 'التصنيف' }, { key: 'beneficiary', label: 'المستفيد' },
     { key: 'notes', label: 'البيان' }, { key: 'net', label: 'المبلغ', type: 'money' }, { key: 'tax', label: 'الضريبة', type: 'money' }, { key: 'total', label: 'الإجمالي', type: 'money' },
@@ -346,6 +360,8 @@ function cashReport(ctx, opts = {}) {
   const p = period(ctx, opts);
   if (opts.cash_account_id) {
     const acc = ctx.db.prepare('SELECT * FROM cash_accounts WHERE id=?').get(opts.cash_account_id);
+    if (!acc) require('../lib/errors').notFound('الحساب');
+    ctx.checkBranch(acc.branch_id);
     const opening = ledger.balance(ctx.db, 'CASH', { cash_account_id: acc.id, to: addDays(p.from, -1) });
     let run = opening;
     const rows = ctx.db.prepare(`SELECT jl.date, jl.debit, jl.credit, d.id doc_id, d.number, d.type, d.notes, p.name party FROM journal_lines jl JOIN docs d ON d.id=jl.doc_id
@@ -355,7 +371,7 @@ function cashReport(ctx, opts = {}) {
       { key: 'notes', label: 'البيان' }, { key: 'in', label: 'وارد', type: 'money' }, { key: 'out', label: 'صادر', type: 'money' }, { key: 'balance', label: 'الرصيد', type: 'money' }];
     return { title: `حركة ${acc.name}`, ...p, opening: m(opening), closing: m(run), columns: cols, rows, totals: totalsOf(rows, cols.filter((c) => c.key !== 'balance')) };
   }
-  const rows = ctx.db.prepare('SELECT * FROM cash_accounts ORDER BY kind, name').all().map((a) => {
+  const rows = ctx.db.prepare(`SELECT * FROM cash_accounts WHERE 1=1${bw(p.branch_id, 'branch_id')} ORDER BY kind, name`).all().map((a) => {
     const opening = ledger.balance(ctx.db, 'CASH', { cash_account_id: a.id, to: addDays(p.from, -1) });
     const r = ctx.db.prepare(`SELECT COALESCE(SUM(debit),0) d, COALESCE(SUM(credit),0) c FROM journal_lines WHERE account='CASH' AND cash_account_id=? AND date BETWEEN ? AND ?`).get(a.id, p.from, p.to);
     return { id: a.id, name: a.name, kind: { cash: 'صندوق', bank: 'بنك', rep_custody: 'عهدة مندوب' }[a.kind], opening: m(opening), in: m(r.d), out: m(r.c), closing: m(opening + r.d - r.c) };
@@ -412,6 +428,8 @@ function listDocs(ctx, opts = {}) {
   if (opts.rep_id) { w.push('d.rep_id=?'); p.push(Number(opts.rep_id)); }
   if (opts.q) { w.push('(d.number LIKE ? OR p.name LIKE ? OR d.supplier_invoice_no LIKE ? OR d.notes LIKE ?)'); p.push(`%${opts.q}%`, `%${opts.q}%`, `%${opts.q}%`, `%${opts.q}%`); }
   if (ctx.repScope) { w.push('d.rep_id=?'); p.push(ctx.repScope); }
+  const br = branchOf(ctx, opts);
+  if (br) { w.push('d.branch_id=?'); p.push(br); }
   if (opts.mine) { w.push('d.created_by=?'); p.push(ctx.userId); }
   const limit = Math.min(Number(opts.limit) || 50, 500);
   const offset = Number(opts.offset) || 0;

@@ -1,17 +1,18 @@
-import { h, get, M, money, pageHead, inp, field, today, monthStart, can, Q } from '../lib.js';
+import { h, get, M, money, pageHead, inp, field, today, monthStart, can, Q, branchFilter } from '../lib.js';
 
 export async function render({ el, isCurrent }) {
   pageHead('لوحة الإدارة');
   const from = inp({ type: 'date', value: monthStart() });
   const to = inp({ type: 'date', value: today() });
   const body = h('div');
+  const branch = await branchFilter('');
   const load = async () => {
-    const d = await get('/reports/dashboard', { from: from.value, to: to.value });
+    const d = await get('/reports/dashboard', { from: from.value, to: to.value, branch_id: branch ? branch.value : '' });
     if (!isCurrent()) return;
     body.replaceChildren(view(d));
   };
   el.append(h('form', { class: 'row card', style: { padding: '12px' }, onsubmit: (e) => { e.preventDefault(); load(); } },
-    field('من', from), field('إلى', to), h('button', { class: 'btn primary' }, 'عرض')), body);
+    field('من', from), field('إلى', to), branch ? field('الفرع', branch) : null, h('button', { class: 'btn primary' }, 'عرض')), body);
   await load();
 }
 

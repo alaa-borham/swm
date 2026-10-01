@@ -5,7 +5,27 @@ const Database = require('better-sqlite3');
 const { setMoneyDecimals } = require('../lib/money');
 const { nowIso } = require('../lib/dates');
 
-const SCHEMA_VERSION = 1;
+// كل ترقية تُنفذ مرة واحدة بالترتيب على القواعد القائمة والجديدة
+const MIGRATIONS = {
+  2: (db) => {
+    addColumn(db, 'docs', 'branch_id', 'INTEGER REFERENCES branches(id)');
+    addColumn(db, 'users', 'branch_id', 'INTEGER REFERENCES branches(id)');
+    addColumn(db, 'branches', 'address', 'TEXT');
+    addColumn(db, 'branches', 'phone', 'TEXT');
+    addColumn(db, 'doc_lines', 'received_qty', 'INTEGER NOT NULL DEFAULT 0');
+    db.exec(`UPDATE docs SET branch_id = COALESCE(
+        (SELECT branch_id FROM warehouses WHERE id = docs.warehouse_id),
+        (SELECT branch_id FROM cash_accounts WHERE id = docs.cash_account_id))
+      WHERE branch_id IS NULL;
+      CREATE INDEX IF NOT EXISTS docs_branch ON docs(branch_id, type, date);`);
+  },
+};
+const SCHEMA_VERSION = Math.max(1, ...Object.keys(MIGRATIONS).map(Number));
+
+function addColumn(db, table, col, def) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+  if (!cols.includes(col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`);
+}
 
 const DEFAULT_SETTINGS = {
   org_name: 'مؤسسة المواد الغذائية',
@@ -29,13 +49,14 @@ const DEFAULT_SETTINGS = {
   backup_retention: '30',
   invoice_footer: 'شكرًا لتعاملكم معنا',
   receipt_width_mm: '80',
+  einvoice_qr: '0',                  // رمز QR للفاتورة المبسطة (TLV)
 };
 
 const DOC_PREFIXES = {
   sale: 'INV', sale_return: 'SRT', purchase: 'PUR', purchase_return: 'PRT', receipt: 'RCV', payment: 'PAY',
   expense: 'EXP', transfer: 'TRF', stock_count: 'CNT', damage: 'DMG', opening_stock: 'OST', opening_balance: 'OBL',
   cash_transfer: 'CTR', session_variance: 'SVR', custody_settlement: 'CST', commission: 'COM', batch_status: 'BST',
-  session: 'SES',
+  session: 'SES', purchase_order: 'PO',
 };
 
 function openDb(file, { readonly = false } = {}) {
@@ -68,11 +89,23 @@ function openDb(file, { readonly = false } = {}) {
 function migrate(db) {
   const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
   db.exec(schema);
-  const ver = db.prepare("SELECT value FROM meta WHERE key='schema_version'").get();
+  let ver = db.prepare("SELECT value FROM meta WHERE key='schema_version'").get();
   if (!ver) {
     seed(db);
-    db.prepare("INSERT INTO meta(key,value) VALUES('schema_version',?)").run(String(SCHEMA_VERSION));
+    db.prepare("INSERT INTO meta(key,value) VALUES('schema_version','1')").run();
+    ver = { value: '1' };
   }
+  for (let v = Number(ver.value) + 1; v <= SCHEMA_VERSION; v++) {
+    db.transaction(() => {
+      MIGRATIONS[v](db);
+      db.prepare("UPDATE meta SET value=? WHERE key='schema_version'").run(String(v));
+    })();
+  }
+  // إعدادات وتسلسلات جديدة تُضاف دون المساس بالقيم الحالية
+  const insS = db.prepare('INSERT OR IGNORE INTO settings(key,value) VALUES(?,?)');
+  for (const [k, val] of Object.entries(DEFAULT_SETTINGS)) insS.run(k, val);
+  const insSeq = db.prepare('INSERT OR IGNORE INTO doc_sequences(type,prefix,next) VALUES(?,?,1)');
+  for (const [t, p] of Object.entries(DOC_PREFIXES)) insSeq.run(t, p);
 }
 
 function seed(db) {
@@ -95,4 +128,4 @@ function seed(db) {
   tx();
 }
 
-module.exports = { openDb, DEFAULT_SETTINGS, DOC_PREFIXES };
+module.exports = { SCHEMA_VERSION, openDb, DEFAULT_SETTINGS, DOC_PREFIXES };

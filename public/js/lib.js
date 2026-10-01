@@ -228,6 +228,12 @@ export async function partySelect(kind, value, attrs = {}) {
   const list = await lookup(kind === 'supplier' ? 'suppliers' : 'customers');
   return sel([{ value: '', label: kind === 'supplier' ? '— اختر المورد —' : '— عميل نقدي —' }, ...list.map((p) => ({ value: p.id, label: p.name + (p.phone ? ' — ' + p.phone : '') }))], value, attrs);
 }
+/** اختيار الفرع للتقارير (يظهر فقط عند تعدد الفروع ولمستخدم غير مقيد بفرع) */
+export async function branchFilter(value) {
+  if (state.branch || (state.branchesCount || 1) < 2) return null;
+  const list = (await lookup('branches')).filter((b) => b.active);
+  return sel([{ value: '', label: 'كل الفروع' }, ...list.map((b) => ({ value: b.id, label: b.name }))], value || '');
+}
 export async function warehouseSelect(value, attrs = {}, { all = false } = {}) {
   const list = (await lookup('warehouses')).filter((w) => w.active);
   return sel([...(all ? [{ value: '', label: 'كل المستودعات' }] : []), ...list.map((w) => ({ value: w.id, label: w.name }))], value, attrs);

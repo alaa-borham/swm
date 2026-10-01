@@ -32,7 +32,7 @@ function publicUser(u) {
   if (!u) return null;
   let roles = u.roles;
   if (typeof roles === 'string') roles = JSON.parse(roles);
-  return { id: u.id, username: u.username, full_name: u.full_name, roles, rep_id: u.rep_id, active: u.active, must_change_password: u.must_change_password, created_at: u.created_at };
+  return { id: u.id, username: u.username, full_name: u.full_name, roles, rep_id: u.rep_id, branch_id: u.branch_id ?? null, active: u.active, must_change_password: u.must_change_password, created_at: u.created_at };
 }
 
 function validRoles(roles) {
@@ -41,7 +41,7 @@ function validRoles(roles) {
   return roles;
 }
 
-function createUser(ctx, { username, full_name, password, roles, rep_id }) {
+function createUser(ctx, { username, full_name, password, roles, rep_id, branch_id }) {
   ctx.require('users.manage');
   return ctx.tx(() => {
     const un = String(username || '').trim();
@@ -51,15 +51,16 @@ function createUser(ctx, { username, full_name, password, roles, rep_id }) {
     validRoles(roles);
     if (roles.includes('rep') && !rep_id) fail('VALIDATION', 'حدد المندوب المرتبط بالمستخدم');
     if (ctx.db.prepare('SELECT 1 FROM users WHERE username=?').get(un)) fail('DUPLICATE', 'اسم المستخدم مستخدم', 409);
-    const id = ctx.db.prepare('INSERT INTO users(username,full_name,password_hash,roles,rep_id,must_change_password,created_at) VALUES(?,?,?,?,?,1,?)')
-      .run(un, full_name, hashPassword(password), JSON.stringify(roles), rep_id || null, ctx.now()).lastInsertRowid;
-    ctx.audit('user.create', { entity: 'user', entity_id: id, after: { username: un, full_name, roles, rep_id } });
+    if (branch_id && !ctx.db.prepare('SELECT 1 FROM branches WHERE id=?').get(branch_id)) fail('VALIDATION', 'الفرع غير موجود');
+    const id = ctx.db.prepare('INSERT INTO users(username,full_name,password_hash,roles,rep_id,branch_id,must_change_password,created_at) VALUES(?,?,?,?,?,?,1,?)')
+      .run(un, full_name, hashPassword(password), JSON.stringify(roles), rep_id || null, branch_id || null, ctx.now()).lastInsertRowid;
+    ctx.audit('user.create', { entity: 'user', entity_id: id, after: { username: un, full_name, roles, rep_id, branch_id } });
     return publicUser(ctx.db.prepare('SELECT * FROM users WHERE id=?').get(id));
   });
 }
 
 /** تعديل الدور يسري على الطلبات اللاحقة مباشرة لأن الصلاحيات تُقرأ من القاعدة مع كل طلب */
-function updateUser(ctx, id, { full_name, roles, rep_id, active, password }) {
+function updateUser(ctx, id, { full_name, roles, rep_id, branch_id, active, password }) {
   ctx.require('users.manage');
   return ctx.tx(() => {
     const u = ctx.db.prepare('SELECT * FROM users WHERE id=?').get(id);
@@ -69,9 +70,9 @@ function updateUser(ctx, id, { full_name, roles, rep_id, active, password }) {
     if (u.id === ctx.userId && ((active !== undefined && !active) || (roles && !roles.includes('admin') && JSON.parse(u.roles).includes('admin')))) {
       fail('VALIDATION', 'لا يمكنك إيقاف حسابك أو إزالة دور المدير عن نفسك');
     }
-    ctx.db.prepare('UPDATE users SET full_name=?, roles=?, rep_id=?, active=? WHERE id=?').run(
+    ctx.db.prepare('UPDATE users SET full_name=?, roles=?, rep_id=?, branch_id=?, active=? WHERE id=?').run(
       full_name || u.full_name, roles ? JSON.stringify(roles) : u.roles, rep_id !== undefined ? rep_id || null : u.rep_id,
-      active !== undefined ? (active ? 1 : 0) : u.active, id);
+      branch_id !== undefined ? branch_id || null : u.branch_id, active !== undefined ? (active ? 1 : 0) : u.active, id);
     if (password) {
       checkPasswordPolicy(password);
       ctx.db.prepare('UPDATE users SET password_hash=?, must_change_password=1 WHERE id=?').run(hashPassword(password), id);
@@ -85,8 +86,8 @@ function updateUser(ctx, id, { full_name, roles, rep_id, active, password }) {
 
 function listUsers(ctx) {
   ctx.require('users.manage');
-  return ctx.db.prepare('SELECT u.*, r.name rep_name FROM users u LEFT JOIN reps r ON r.id=u.rep_id ORDER BY u.active DESC, u.username').all()
-    .map((u) => ({ ...publicUser(u), rep_name: u.rep_name }));
+  return ctx.db.prepare('SELECT u.*, r.name rep_name, b.name branch_name FROM users u LEFT JOIN reps r ON r.id=u.rep_id LEFT JOIN branches b ON b.id=u.branch_id ORDER BY u.active DESC, u.username').all()
+    .map((u) => ({ ...publicUser(u), rep_name: u.rep_name, branch_name: u.branch_name }));
 }
 
 function changeOwnPassword(ctx, { current, password }) {

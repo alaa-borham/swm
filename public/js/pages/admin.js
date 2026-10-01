@@ -35,19 +35,21 @@ export async function users({ el }) {
   const meta = await get('/meta');
   const list = await get('/users');
   const reps = await lookup('reps');
+  const branches = await lookup('branches');
   const roleBoxes = (sel0 = []) => Object.entries(meta.roles).map(([k, r]) => { const c = h('input', { type: 'checkbox', value: k, checked: sel0.includes(k) }); return h('label', { class: 'check' }, c, r.name); });
   const form = (u) => {
     const un = inp({ value: u?.username || '', disabled: u ? true : null });
     const fn = inp({ value: u?.full_name || '' });
     const pw = inp({ type: 'password', placeholder: u ? 'اتركها فارغة دون تغيير' : '8 أحرف على الأقل بأرقام وحروف', autocomplete: 'new-password' });
     const rep = sel([{ value: '', label: '—' }, ...reps.map((r) => ({ value: r.id, label: r.name }))], u?.rep_id || '');
+    const branch = sel([{ value: '', label: 'كل الفروع (غير مقيد)' }, ...branches.map((b) => ({ value: b.id, label: b.name }))], u?.branch_id || '');
     const active = h('input', { type: 'checkbox', checked: u ? !!u.active : true });
     const roles = h('div', { class: 'row' }, roleBoxes(u?.roles || []));
-    const m = modal(u ? `تعديل ${u.username}` : 'مستخدم جديد', h('div', null, h('div', { class: 'grid' }, field('اسم المستخدم', un), field('الاسم الكامل', fn), field('كلمة المرور', pw), field('المندوب المرتبط (لدور المندوب)', rep)),
+    const m = modal(u ? `تعديل ${u.username}` : 'مستخدم جديد', h('div', null, h('div', { class: 'grid' }, field('اسم المستخدم', un), field('الاسم الكامل', fn), field('كلمة المرور', pw), field('المندوب المرتبط (لدور المندوب)', rep), field('الفرع', branch)),
       h('h4', null, 'الأدوار (يمكن الجمع)'), roles, h('label', { class: 'check', style: { marginTop: '8px' } }, active, 'الحساب نشط'),
       h('p', { class: 'small muted' }, 'تعديل الدور يسري على الطلبات اللاحقة مباشرة. إيقاف الحساب أو تغيير كلمة المرور ينهي جلساته.')),
     [{ label: 'حفظ', class: 'primary', onClick: async () => {
-      const body = { full_name: fn.value, roles: [...roles.querySelectorAll('input:checked')].map((c) => c.value), rep_id: rep.value ? Number(rep.value) : null, active: active.checked ? 1 : 0 };
+      const body = { full_name: fn.value, roles: [...roles.querySelectorAll('input:checked')].map((c) => c.value), rep_id: rep.value ? Number(rep.value) : null, branch_id: branch.value ? Number(branch.value) : null, active: active.checked ? 1 : 0 };
       if (pw.value) body.password = pw.value;
       if (!u) { body.username = un.value; body.password = pw.value; }
       const r = await run(() => (u ? api('PUT', '/users/' + u.id, body) : api('POST', '/users', body)), 'تم الحفظ');
@@ -58,7 +60,7 @@ export async function users({ el }) {
   };
   el.append(h('button', { class: 'btn primary', style: { marginBottom: '12px' }, onclick: () => form() }, 'مستخدم جديد'),
     table({ columns: [{ key: 'username', label: 'المستخدم' }, { key: 'full_name', label: 'الاسم' }, { key: 'roles', label: 'الأدوار', render: (u) => u.roles.map((r) => meta.roles[r]?.name || r).join('، ') },
-      { key: 'rep_name', label: 'المندوب' }, { key: 'active', label: 'الحالة', render: (u) => (u.active ? h('span', { class: 'badge ok' }, 'نشط') : h('span', { class: 'badge bad' }, 'موقوف')) },
+      { key: 'rep_name', label: 'المندوب' }, { key: 'branch_name', label: 'الفرع' }, { key: 'active', label: 'الحالة', render: (u) => (u.active ? h('span', { class: 'badge ok' }, 'نشط') : h('span', { class: 'badge bad' }, 'موقوف')) },
       { key: 'a', label: '', render: (u) => h('button', { class: 'btn small', onclick: () => form(u) }, 'تعديل') }], rows: list }),
     h('div', { class: 'card', style: { marginTop: '16px' } }, h('h3', null, 'مصفوفة الصلاحيات المبدئية'), permMatrix(meta)));
 }

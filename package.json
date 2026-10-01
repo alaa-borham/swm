@@ -5,7 +5,7 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "test": "node --test test/",
+    "test": "node --test test/*.test.js",
     "backup": "node scripts/backup.js",
     "verify-backup": "node scripts/verify-backup.js",
     "restore": "node scripts/restore.js",

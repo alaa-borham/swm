@@ -68,7 +68,7 @@ const NAV = [
   ['المخزون', [['stock', 'رصيد المخزون'], ['alerts', 'تنبيهات المخزون'], ['transfer', 'تحويل / تسليم عهدة'], ['transfers', 'سجل التحويلات'], ['counts', 'الجرد'], ['damage', 'تسجيل تالف'], ['item-card', 'بطاقة صنف']]],
   ['المالية', [['receipt', 'سند قبض'], ['payment', 'سند صرف'], ['expenses', 'المصروفات'], ['cash', 'الصناديق والبنوك'], ['cash-transfer', 'تحويل نقدي / توريد'], ['cash-docs', 'سجل السندات']]],
   ['المناديب', [['reps', 'المناديب والعهد'], ['commissions', 'العمولات']]],
-  ['البيانات الأساسية', [['items', 'الأصناف والباركود'], ['parties', 'العملاء والموردون'], ['warehouses', 'المستودعات والحسابات'], ['categories', 'التصنيفات']]],
+  ['البيانات الأساسية', [['items', 'الأصناف والباركود'], ['parties', 'العملاء والموردون'], ['warehouses', 'الفروع والمستودعات والحسابات'], ['categories', 'التصنيفات']]],
   ['المراجعة', [['reports', 'التقارير'], ['import', 'الاستيراد'], ['backup', 'النسخ الاحتياطي'], ['audit', 'سجل التدقيق']]],
   ['الإدارة', [['settings', 'الإعدادات'], ['users', 'المستخدمون والأدوار'], ['opening', 'الأرصدة الافتتاحية'], ['period', 'إقفال الفترات']]],
 ];
@@ -104,7 +104,7 @@ function loginView(msg) {
 function layout() {
   clear(app);
   const side = h('nav', { class: 'side', 'aria-label': 'القائمة' },
-    h('div', { class: 'org' }, state.settings.org_name, h('small', null, state.me.full_name)));
+    h('div', { class: 'org' }, state.settings.org_name, h('small', null, state.me.full_name, state.branch ? ' — ' + state.branch.name : '')));
   for (const [group, items] of NAV) {
     const vis = items.filter(([r]) => allowed(r));
     if (!vis.length) continue;
@@ -162,6 +162,8 @@ async function refreshMe() {
   state.settings = me.settings;
   state.session = me.session;
   state.rep = me.rep;
+  state.branch = me.branch;
+  state.branchesCount = me.branches_count;
   return me;
 }
 

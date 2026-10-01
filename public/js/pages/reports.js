@@ -1,5 +1,5 @@
 // التقارير: عرض، تصفية، تصدير Excel/CSV، وطباعة (PDF من نافذة الطباعة).
-import { h, get, M, inp, sel, field, table, pageHead, can, today, monthStart, download, lookup, qs, partySelect } from '../lib.js';
+import { h, get, M, inp, sel, field, table, pageHead, can, today, monthStart, download, lookup, qs, partySelect, branchFilter } from '../lib.js';
 
 const TABS = [
   ['sales', 'المبيعات', 'reports.sales'], ['profit', 'الأرباح', 'profit.view'], ['purchases', 'المشتريات', 'reports.purchases'], ['aging', 'أعمار الديون', null],
@@ -45,6 +45,8 @@ export async function render({ el, q, isCurrent }) {
     await setParty();
     extra.push(['_wrap', { value: undefined, el: wrap }]);
   }
+  if (!['statement', 'aging', 'reps', 'cash'].includes(tab)) { const b = await branchFilter(q.branch_id); if (b) extra.push(['branch_id', b]); }
+  if (tab === 'sales') extra[0][1].append(new Option('حسب الفرع', 'branch'));
   const noDates = ['aging', 'stock'].includes(tab);
   const load = async () => {
     const p = params();
@@ -70,7 +72,7 @@ export async function render({ el, q, isCurrent }) {
   for (const [k, e] of extra) {
     if (k === '_wrap') fields.push(e.el);
     else if (k === 'party_id') continue;
-    else fields.push(field({ group: 'التجميع', account: 'الحساب', warehouse_id: 'المستودع', by: 'العرض', cash_account_id: 'الحساب' }[k] || k, e));
+    else fields.push(field({ group: 'التجميع', account: 'الحساب', warehouse_id: 'المستودع', by: 'العرض', cash_account_id: 'الحساب', branch_id: 'الفرع' }[k] || k, e));
   }
   el.append(h('form', { class: 'row card', style: { padding: '12px' }, onsubmit: (e) => { e.preventDefault(); load(); } }, ...fields, h('button', { class: 'btn primary' }, 'عرض')), body);
   await load();

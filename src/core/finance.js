@@ -100,6 +100,7 @@ function openSession(ctx, { cash_account_id, card_account_id, opening_amount, wa
     if (P.openSessionFor(ctx, ctx.userId)) fail('SESSION_OPEN', 'لديك وردية مفتوحة بالفعل', 409);
     const acc = P.getCashAccount(ctx, cash_account_id);
     if (acc.kind !== 'cash') fail('VALIDATION', 'الوردية تكون على صندوق نقدي');
+    ctx.checkBranch(acc.branch_id);
     const busy = ctx.db.prepare("SELECT s.number, u.full_name FROM cash_sessions s JOIN users u ON u.id=s.user_id WHERE s.cash_account_id=? AND s.status<>'closed'").get(acc.id);
     if (busy) fail('SESSION_OPEN', `الصندوق مستخدم في الوردية ${busy.number} (${busy.full_name})`, 409);
     if (card_account_id) { const c = P.getCashAccount(ctx, card_account_id); if (c.kind !== 'bank') fail('VALIDATION', 'حساب الشبكة يجب أن يكون بنكيًا'); }
@@ -129,6 +130,7 @@ function getSession(ctx, id) {
     JOIN users u ON u.id=s.user_id JOIN cash_accounts c ON c.id=s.cash_account_id LEFT JOIN cash_accounts b ON b.id=s.card_account_id WHERE s.id=?`).get(id);
   if (!s) notFound('الوردية');
   if (s.user_id !== ctx.userId) ctx.require('sessions.manage');
+  ctx.checkBranch(ctx.db.prepare('SELECT branch_id FROM cash_accounts WHERE id=?').get(s.cash_account_id).branch_id);
   const e = sessionExpected(ctx, s);
   const out = D.present(s);
   out.live_expected = fromMinor(e.expected);
@@ -208,6 +210,7 @@ function listSessions(ctx, { status, user_id } = {}) {
   const p = [];
   if (!ctx.has('sessions.manage')) { w.push('s.user_id=?'); p.push(ctx.userId); } else if (user_id) { w.push('s.user_id=?'); p.push(user_id); }
   if (status) { w.push('s.status=?'); p.push(status); }
+  if (ctx.branchScope) { w.push('c.branch_id=?'); p.push(ctx.branchScope); }
   return ctx.db.prepare(`SELECT s.*, u.full_name user_name, c.name cash_account_name FROM cash_sessions s JOIN users u ON u.id=s.user_id
     JOIN cash_accounts c ON c.id=s.cash_account_id WHERE ${w.join(' AND ')} ORDER BY s.id DESC LIMIT 200`).all(...p).map(D.present);
 }
