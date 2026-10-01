@@ -24,6 +24,8 @@ const ROUTES = [
   ['purchase-return', Purchases.purchaseReturn, 'purchase_returns.create'],
   ['purchases', (c) => Docs.list(c, 'purchase'), 'purchases.view'],
   ['purchase', Purchases.form, 'purchases.create'],
+  ['purchase-order', Purchases.orderForm, 'purchases.create'],
+  ['purchase-orders', (c) => Docs.list(c, 'purchase_order'), 'purchases.view'],
   ['receipt', (c) => Cash.cashDoc(c, 'receipt'), 'cash.receipt'],
   ['payment', (c) => Cash.cashDoc(c, 'payment'), 'cash.payment'],
   ['cash-docs', (c) => Docs.list(c, 'receipt,payment,cash_transfer'), 'cash.view'],
@@ -64,7 +66,7 @@ const ROUTES = [
 const NAV = [
   ['', [['dashboard', 'لوحة الإدارة']]],
   ['المبيعات', [['pos', 'نقطة البيع'], ['sales', 'فواتير البيع'], ['sale-returns', 'مرتجعات المبيعات'], ['sessions', 'الورديات']]],
-  ['المشتريات', [['purchase', 'فاتورة شراء جديدة'], ['purchases', 'فواتير الشراء']]],
+  ['المشتريات', [['purchase-order', 'طلب شراء جديد'], ['purchase-orders', 'طلبات الشراء'], ['purchase', 'فاتورة شراء جديدة'], ['purchases', 'فواتير الشراء']]],
   ['المخزون', [['stock', 'رصيد المخزون'], ['alerts', 'تنبيهات المخزون'], ['transfer', 'تحويل / تسليم عهدة'], ['transfers', 'سجل التحويلات'], ['counts', 'الجرد'], ['damage', 'تسجيل تالف'], ['item-card', 'بطاقة صنف']]],
   ['المالية', [['receipt', 'سند قبض'], ['payment', 'سند صرف'], ['expenses', 'المصروفات'], ['cash', 'الصناديق والبنوك'], ['cash-transfer', 'تحويل نقدي / توريد'], ['cash-docs', 'سجل السندات']]],
   ['المناديب', [['reps', 'المناديب والعهد'], ['commissions', 'العمولات']]],

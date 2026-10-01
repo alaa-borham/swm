@@ -254,7 +254,7 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
   api.post('/docs/:id/cancel', h((ctx, req) => ctx.tx(() => {
     const doc = D.loadDoc(ctx, id(req));
     if (doc.status !== 'draft') fail('INVALID_STATE', 'هذا المسار لإلغاء المسودات فقط');
-    const createPerm = { sale: 'sales.create', sale_return: 'sale_returns.create', purchase: 'purchases.create', expense: 'expenses.create', stock_count: 'stock.count', damage: 'stock.damage', commission: 'commissions.manage' }[doc.type];
+    const createPerm = { purchase_order: 'purchases.create', sale: 'sales.create', sale_return: 'sale_returns.create', purchase: 'purchases.create', expense: 'expenses.create', stock_count: 'stock.count', damage: 'stock.damage', commission: 'commissions.manage' }[doc.type];
     ctx.require(createPerm || 'docs.reverse');
     if (ctx.repScope && doc.rep_id !== ctx.repScope) fail('FORBIDDEN', 'المستند خارج نطاقك', 403);
     D.markReversed(ctx, doc, ctx.requireReason(req.body.reason, 'إلغاء المسودة'));
@@ -275,6 +275,11 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
   api.put('/purchases/:id', h((ctx, req) => Pur.updatePurchase(ctx, id(req), req.body)));
   api.post('/purchases/:id/approve', h((ctx, req) => Pur.approvePurchase(ctx, id(req), req.body)));
   api.post('/purchases/:id/reverse', h((ctx, req) => Pur.reversePurchase(ctx, id(req), req.body.reason)));
+  api.post('/purchase-orders', h((ctx, req) => Pur.createPurchaseOrder(ctx, req.body)));
+  api.put('/purchase-orders/:id', h((ctx, req) => Pur.updatePurchaseOrder(ctx, id(req), req.body)));
+  api.post('/purchase-orders/:id/approve', h((ctx, req) => Pur.approvePurchaseOrder(ctx, id(req))));
+  api.post('/purchase-orders/:id/close', h((ctx, req) => Pur.closePurchaseOrder(ctx, id(req), req.body.reason)));
+  api.get('/purchase-orders/:id/remaining', h((ctx, req) => Pur.poRemaining(ctx, id(req))));
   api.post('/purchase-returns', h((ctx, req) => Pur.createPurchaseReturn(ctx, req.body)));
   // النقد
   api.post('/receipts', h((ctx, req) => Pay.createReceipt(ctx, req.body)));

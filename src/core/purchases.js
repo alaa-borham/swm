@@ -30,7 +30,7 @@ function buildPurchase(ctx, input) {
     if (prod && expiry && prod > expiry) fail('VALIDATION', `تاريخ الإنتاج بعد تاريخ الانتهاء في البند ${i + 1}`);
     return {
       item, unit, qty, base, price, tax_rate_bp: D.itemTaxBp(ctx, item, l.tax_rate_pct), ...D.parseLineMoney(l, i),
-      batch_no: l.batch_no ? String(l.batch_no).trim() : null, prod_date: prod, expiry_date: expiry,
+      batch_no: l.batch_no ? String(l.batch_no).trim() : null, prod_date: prod, expiry_date: expiry, po_line_id: l.po_line_id ? Number(l.po_line_id) : null,
     };
   });
   const { toBp } = require('../lib/money');
@@ -60,8 +60,28 @@ function buildPurchase(ctx, input) {
   };
 }
 
+/** التحقق من ربط فاتورة الشراء بطلب الشراء */
+function checkPoLink(ctx, input, b) {
+  if (!input.po_id) {
+    if (b.lines.some((l) => l.po_line_id)) fail('VALIDATION', 'بنود طلب الشراء تحتاج تحديد الطلب');
+    return null;
+  }
+  const po = D.loadDoc(ctx, input.po_id, 'purchase_order');
+  if (po.status !== 'approved') fail('INVALID_STATE', 'طلب الشراء غير معتمد');
+  if (D.docData(po).po_state === 'closed') fail('INVALID_STATE', 'طلب الشراء مغلق');
+  if (po.party_id !== b.party.id) fail('VALIDATION', 'المورد يختلف عن مورد طلب الشراء');
+  const poLines = D.docLines(ctx, po.id);
+  for (const l of b.lines) {
+    if (!l.po_line_id) continue;
+    const pl = poLines.find((x) => x.id === l.po_line_id);
+    if (!pl || pl.item_id !== l.item.id) fail('VALIDATION', `البند ${l.item.name} لا يطابق بنود طلب الشراء`);
+  }
+  return po;
+}
+
 function storePurchase(ctx, input, existing) {
   const b = buildPurchase(ctx, input);
+  const po = checkPoLink(ctx, input, b);
   const fields = {
     date: b.date, party_id: b.party.id, warehouse_id: b.warehouseId, supplier_invoice_no: input.supplier_invoice_no ? String(input.supplier_invoice_no).trim() : null,
     ledger_account: 'AP', ledger_side: 'C', subtotal: b.totals.subtotal, discount: b.totals.discount, net: b.totals.net, tax: b.totals.tax,
@@ -69,6 +89,7 @@ function storePurchase(ctx, input, existing) {
     invoice_discount_bp: b.opts.invoiceDiscountBp, invoice_discount_amount: b.opts.invoiceDiscountAmount, notes: input.notes || null,
     due_date: input.due_date ? checkDate(input.due_date, 'تاريخ الاستحقاق') : addDays(b.date, b.party.payment_terms_days || 0),
     data: { extras: b.extras, extra_cost_basis: b.basis, tax_recoverable: b.recoverable, payment: input.payment || null },
+    ref_doc_id: po ? po.id : null,
   };
   let doc;
   if (existing) {
@@ -81,10 +102,127 @@ function storePurchase(ctx, input, existing) {
       line_no: i + 1, item_id: l.item.id, item_name: l.item.name, unit_id: l.unit.id, unit_name: l.unit.name, factor: l.unit.factor,
       qty: l.qty, base_qty: l.base, price: l.price, value: l.value, line_discount: l.line_discount, doc_discount: l.doc_discount, net: l.net,
       tax_rate_bp: l.tax_rate_bp, tax: l.tax, total: l.total, extra_cost: l.extra_cost, cost: l.cost, batch_no: l.batch_no,
-      prod_date: l.prod_date, expiry_date: l.expiry_date,
+      prod_date: l.prod_date, expiry_date: l.expiry_date, ref_line_id: l.po_line_id || null,
     });
   });
   return D.getDocRow(ctx, doc.id);
+}
+
+// ===================== طلبات الشراء والاستلام الجزئي =====================
+function poState(ctx, poId) {
+  const lines = D.docLines(ctx, poId);
+  if (lines.every((l) => l.received_qty >= l.base_qty)) return 'received';
+  if (lines.some((l) => l.received_qty > 0)) return 'partial';
+  return 'open';
+}
+
+function setPoState(ctx, po, state) {
+  const data = D.docData(po);
+  if (data.po_state === 'closed' && state !== 'closed') return;
+  data.po_state = state;
+  D.updateDoc(ctx, po.id, { data });
+}
+
+/** تحديث الكميات المستلمة على طلب الشراء عند اعتماد أو إلغاء فاتورة الشراء المرتبطة */
+function applyPoReceipt(ctx, purchase, sign) {
+  if (!purchase.ref_doc_id) return;
+  const po = D.getDocRow(ctx, purchase.ref_doc_id);
+  if (!po || po.type !== 'purchase_order') return;
+  for (const l of D.docLines(ctx, purchase.id)) {
+    if (!l.ref_line_id) continue;
+    const pl = ctx.db.prepare('SELECT * FROM doc_lines WHERE id=?').get(l.ref_line_id);
+    if (sign > 0 && pl.received_qty + l.base_qty > pl.base_qty) {
+      fail('OVER_RECEIPT', `الكمية المستلمة من ${pl.item_name} تتجاوز المتبقي في طلب الشراء (${fromQty(mulDiv(pl.base_qty - pl.received_qty, 1000, pl.factor))} ${pl.unit_name})`, 409);
+    }
+    ctx.db.prepare('UPDATE doc_lines SET received_qty=received_qty+? WHERE id=?').run(sign * l.base_qty, pl.id);
+  }
+  setPoState(ctx, po, poState(ctx, po.id));
+}
+
+function storePo(ctx, input, existing) {
+  const b = buildPurchase(ctx, { ...input, extra_costs: [] });
+  const fields = {
+    date: b.date, party_id: b.party.id, warehouse_id: b.warehouseId, subtotal: b.totals.subtotal, discount: b.totals.discount, net: b.totals.net,
+    tax: b.totals.tax, total: b.totals.total, prices_include_tax: b.opts.pricesIncludeTax ? 1 : 0, invoice_discount_bp: b.opts.invoiceDiscountBp,
+    invoice_discount_amount: b.opts.invoiceDiscountAmount, notes: input.notes || null,
+    due_date: input.expected_date ? checkDate(input.expected_date, 'تاريخ التوريد المتوقع') : null, data: { po_state: 'draft' },
+  };
+  let doc;
+  if (existing) {
+    D.updateDoc(ctx, existing.id, fields);
+    ctx.db.prepare('DELETE FROM doc_lines WHERE doc_id=?').run(existing.id);
+    doc = D.getDocRow(ctx, existing.id);
+  } else doc = D.insertDoc(ctx, 'purchase_order', fields);
+  b.lines.forEach((l, i) => D.insertLine(ctx, doc.id, {
+    line_no: i + 1, item_id: l.item.id, item_name: l.item.name, unit_id: l.unit.id, unit_name: l.unit.name, factor: l.unit.factor,
+    qty: l.qty, base_qty: l.base, price: l.price, value: l.value, line_discount: l.line_discount, doc_discount: l.doc_discount, net: l.net,
+    tax_rate_bp: l.tax_rate_bp, tax: l.tax, total: l.total,
+  }));
+  return D.getDocRow(ctx, doc.id);
+}
+
+/** طلب الشراء لا يؤثر في المخزون أو الحسابات؛ الاستلام الفعلي يتم بفواتير شراء مرتبطة به (جزئية أو كاملة) */
+function createPurchaseOrder(ctx, input) {
+  ctx.require('purchases.create');
+  return ctx.tx(() => {
+    const doc = storePo(ctx, input);
+    ctx.audit('purchase_order.draft', { entity: 'doc', entity_id: doc.id, doc_number: doc.number });
+    if (input.approve) approvePoInTx(ctx, doc);
+    return D.fullDoc(ctx, doc.id);
+  });
+}
+
+function updatePurchaseOrder(ctx, id, input) {
+  ctx.require('purchases.create');
+  return ctx.tx(() => {
+    const ex = D.loadDoc(ctx, id, 'purchase_order');
+    if (ex.status !== 'draft') fail('INVALID_STATE', 'لا يُعدل طلب الشراء بعد اعتماده');
+    const doc = storePo(ctx, input, ex);
+    if (input.approve) approvePoInTx(ctx, doc);
+    return D.fullDoc(ctx, id);
+  });
+}
+
+function approvePoInTx(ctx, doc) {
+  ctx.require('purchases.approve');
+  if (doc.status !== 'draft') fail('INVALID_STATE', 'طلب الشراء ليس مسودة');
+  D.markApproved(ctx, doc);
+  setPoState(ctx, D.getDocRow(ctx, doc.id), 'open');
+  ctx.audit('purchase_order.approve', { entity: 'doc', entity_id: doc.id, doc_number: doc.number });
+}
+
+function approvePurchaseOrder(ctx, id) {
+  return ctx.tx(() => { approvePoInTx(ctx, D.loadDoc(ctx, id, 'purchase_order')); return D.fullDoc(ctx, id); });
+}
+
+/** إغلاق طلب الشراء بما تبقى منه (لن يُورد) */
+function closePurchaseOrder(ctx, id, reason) {
+  ctx.require('purchases.approve');
+  return ctx.tx(() => {
+    const po = D.loadDoc(ctx, id, 'purchase_order');
+    if (po.status !== 'approved') fail('INVALID_STATE', 'طلب الشراء غير معتمد');
+    const r = ctx.requireReason(reason, 'إغلاق طلب الشراء');
+    const data = D.docData(po);
+    data.po_state = 'closed';
+    data.closed_reason = r;
+    D.updateDoc(ctx, id, { data });
+    ctx.audit('purchase_order.close', { entity: 'doc', entity_id: id, doc_number: po.number, reason: r });
+    return D.fullDoc(ctx, id);
+  });
+}
+
+/** البنود المتبقية للاستلام من طلب شراء (لتعبئة فاتورة الاستلام) */
+function poRemaining(ctx, id) {
+  ctx.require('purchases.view');
+  const po = D.loadDoc(ctx, id, 'purchase_order');
+  return {
+    po: D.present(po),
+    lines: D.docLines(ctx, id).map((l) => ({
+      po_line_id: l.id, item_id: l.item_id, item_name: l.item_name, unit_id: l.unit_id, unit_name: l.unit_name, price: fromMinor(l.price),
+      tax_rate_pct: l.tax_rate_bp / 100, ordered: fromQty(l.qty), received: fromQty(mulDiv(l.received_qty, 1000, l.factor)),
+      remaining: fromQty(mulDiv(Math.max(0, l.base_qty - l.received_qty), 1000, l.factor)),
+    })),
+  };
 }
 
 function createPurchase(ctx, input) {
@@ -167,6 +305,7 @@ function approveInTx(ctx, doc, input = {}) {
       ref_doc_id: doc.id, allocations: [{ doc_id: doc.id, amount: pay.amount }], notes: `سداد ${doc.number}`,
     });
   }
+  applyPoReceipt(ctx, doc, 1);
   ctx.audit('purchase.approve', { entity: 'doc', entity_id: doc.id, doc_number: doc.number, reason: data.duplicate_reason || null, after: { total: fromMinor(doc.total), inventory: fromMinor(invTotal) } });
   return doc;
 }
@@ -184,6 +323,7 @@ function reversePurchase(ctx, id, reason) {
       fail('HAS_DEPENDENTS', 'الفاتورة مرتبطة بسداد أو مرتجع؛ ألغِ السداد أولاً أو استخدم المرتجع', 409);
     }
     inv.reverseMoves(ctx, doc);
+    applyPoReceipt(ctx, doc, -1);
     D.markReversed(ctx, doc, r);
     ledger.reverseEntries(ctx, doc, ctx.today(), 'إلغاء ' + doc.number);
     ctx.audit('purchase.reverse', { entity: 'doc', entity_id: doc.id, doc_number: doc.number, reason: r });
@@ -278,4 +418,7 @@ function createPurchaseReturn(ctx, input) {
   });
 }
 
-module.exports = { createPurchase, updatePurchase, approvePurchase, reversePurchase, createPurchaseReturn };
+module.exports = {
+  createPurchase, updatePurchase, approvePurchase, reversePurchase, createPurchaseReturn, createPurchaseOrder, updatePurchaseOrder, approvePurchaseOrder,
+  closePurchaseOrder, poRemaining,
+};

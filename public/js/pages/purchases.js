@@ -1,16 +1,19 @@
 // فاتورة الشراء والاستلام، ومرتجع المشتريات.
 import { h, clear, state, get, api, submitter, toast, run, M, Q, inp, sel, field, num, itemPicker, partySelect, warehouseSelect, cashSelect, pageHead, can, askReason, today } from '../lib.js';
 
-export async function form({ el, params }) {
+export async function form({ el, params, q }) {
   const editing = params[0] ? await get('/docs/' + params[0]) : null;
   if (editing && editing.status !== 'draft') { location.hash = '#/doc/' + editing.id; return; }
-  pageHead(editing ? `تعديل مسودة ${editing.number}` : 'فاتورة شراء واستلام');
+  // استلام من طلب شراء: تعبئة المتبقي
+  const poId = q.po ? Number(q.po) : (editing?.ref_doc_id && editing.ref_doc_number?.startsWith('PO') ? editing.ref_doc_id : null);
+  const po = poId ? await get(`/purchase-orders/${poId}/remaining`) : null;
+  pageHead(editing ? `تعديل مسودة ${editing.number}` : po ? `استلام من طلب الشراء ${po.po.number}` : 'فاتورة شراء واستلام');
   const data = editing?.data || {};
-  const supplier = await partySelect('supplier', editing?.party_id || '');
+  const supplier = await partySelect('supplier', editing?.party_id || po?.po.party_id || '', po ? { disabled: true } : {});
   const invNo = inp({ value: editing?.supplier_invoice_no || '' });
   const date = inp({ type: 'date', value: editing?.date || today() });
   const due = inp({ type: 'date', value: editing?.due_date || '' });
-  const wh = await warehouseSelect(editing?.warehouse_id || '');
+  const wh = await warehouseSelect(editing?.warehouse_id || po?.po.warehouse_id || '');
   const notes = inp({ value: editing?.notes || '' });
   const invDisc = inp({ type: 'number', placeholder: 'مبلغ', value: editing?.invoice_discount_amount || '' });
   const basis = sel([{ value: 'value', label: 'بنسبة قيمة البند' }, { value: 'qty', label: 'بنسبة الكمية' }], data.extra_cost_basis || 'value');
@@ -21,7 +24,12 @@ export async function form({ el, params }) {
   if (editing) {
     for (const l of editing.lines) {
       const item = await get('/items/' + l.item_id);
-      cart.push({ item, unit_id: l.unit_id, qty: l.qty, price: l.price, discount_amount: l.line_discount || '', tax: l.tax_rate_bp, batch_no: l.batch_no || '', prod_date: l.prod_date || '', expiry_date: l.expiry_date || '' });
+      cart.push({ item, unit_id: l.unit_id, qty: l.qty, price: l.price, discount_amount: l.line_discount || '', tax: l.tax_rate_bp, batch_no: l.batch_no || '', prod_date: l.prod_date || '', expiry_date: l.expiry_date || '', po_line_id: l.ref_line_id || null });
+    }
+  } else if (po) {
+    for (const l of po.lines.filter((x) => x.remaining > 0)) {
+      const item = await get('/items/' + l.item_id);
+      cart.push({ item, unit_id: l.unit_id, qty: l.remaining, price: l.price, discount_amount: '', tax: l.tax_rate_pct, batch_no: '', prod_date: '', expiry_date: '', po_line_id: l.po_line_id });
     }
   }
   const tbody = h('tbody');
@@ -87,7 +95,8 @@ export async function form({ el, params }) {
       extra_costs: extras.filter((e) => num(e.amount)).map((e) => ({ description: e.description || 'تكلفة إضافية', amount: num(e.amount), cash_account_id: e.cash_account_id ? Number(e.cash_account_id) : null })),
       payment: num(payAmt.value) ? { amount: num(payAmt.value), cash_account_id: Number(payAcc.value) } : null,
       lines: cart.map((l) => ({ item_id: l.item.id, unit_id: l.unit_id, qty: num(l.qty), price: num(l.price) ?? 0, discount_amount: l.discount_amount || null,
-        tax_rate_pct: l.tax === '' || l.tax == null ? null : num(l.tax), batch_no: l.batch_no || null, prod_date: l.prod_date || null, expiry_date: l.expiry_date || null })),
+        tax_rate_pct: l.tax === '' || l.tax == null ? null : num(l.tax), batch_no: l.batch_no || null, prod_date: l.prod_date || null, expiry_date: l.expiry_date || null, po_line_id: l.po_line_id || null })),
+      po_id: poId || null,
     };
     let doc;
     try {
@@ -148,4 +157,55 @@ export async function purchaseReturn({ el, params }) {
         const d = await run(() => send('POST', '/purchase-returns', body), 'تم اعتماد مرتجع المشتريات');
         if (d) location.hash = '#/doc/' + d.id;
       } }, 'اعتماد المرتجع'))));
+}
+
+// ===================== طلب الشراء =====================
+export async function orderForm({ el, params }) {
+  const editing = params[0] ? await get('/docs/' + params[0]) : null;
+  if (editing && editing.status !== 'draft') { location.hash = '#/doc/' + editing.id; return; }
+  pageHead(editing ? `تعديل طلب الشراء ${editing.number}` : 'طلب شراء جديد');
+  const supplier = await partySelect('supplier', editing?.party_id || '');
+  const date = inp({ type: 'date', value: editing?.date || today() });
+  const expected = inp({ type: 'date', value: editing?.due_date || '' });
+  const wh = await warehouseSelect(editing?.warehouse_id || '');
+  const notes = inp({ value: editing?.notes || '' });
+  const cart = [];
+  if (editing) for (const l of editing.lines) cart.push({ item: await get('/items/' + l.item_id), unit_id: l.unit_id, qty: l.qty, price: l.price, tax: l.tax_rate_bp });
+  const tbody = h('tbody');
+  const total = h('b');
+  const picker = itemPicker({ placeholder: 'أضف صنفًا', onPick: (it) => {
+    const pu = it.units.find((u) => u.id === it.selected_unit_id && u.for_purchase) || it.units.find((u) => u.for_purchase) || it.units[0];
+    cart.push({ item: it, unit_id: pu.id, qty: 1, price: '', tax: it.tax_rate_bp ?? '' });
+    draw();
+  } });
+  const sum = () => { total.replaceChildren(M(cart.reduce((a, l) => a + (num(l.qty) || 0) * (num(l.price) || 0), 0))); };
+  function draw() {
+    clear(tbody);
+    cart.forEach((l, i) => {
+      const set = (k) => (e) => { l[k] = e.target.value; sum(); };
+      tbody.append(h('tr', null, h('td', null, l.item.name),
+        h('td', null, sel(l.item.units.filter((u) => u.for_purchase).map((u) => ({ value: u.id, label: u.name })), l.unit_id, { onchange: (e) => { l.unit_id = Number(e.target.value); } })),
+        h('td', null, inp({ type: 'number', value: l.qty, style: { width: '90px' }, oninput: set('qty') })),
+        h('td', null, inp({ type: 'number', value: l.price, style: { width: '100px' }, oninput: set('price') })),
+        h('td', null, inp({ type: 'number', value: l.tax, style: { width: '70px' }, oninput: set('tax') })),
+        h('td', null, h('button', { class: 'btn small danger', onclick: () => { cart.splice(i, 1); draw(); } }, '×'))));
+    });
+    if (!cart.length) tbody.append(h('tr', null, h('td', { colspan: 6, class: 'empty' }, 'أضف الأصناف المطلوبة')));
+    sum();
+  }
+  const send = submitter();
+  const save = async (approve) => {
+    if (!supplier.value) return toast('اختر المورد', 'bad');
+    const body = { party_id: Number(supplier.value), date: date.value, expected_date: expected.value || null, warehouse_id: Number(wh.value), notes: notes.value || null, approve,
+      lines: cart.map((l) => ({ item_id: l.item.id, unit_id: l.unit_id, qty: num(l.qty), price: num(l.price) ?? 0, tax_rate_pct: l.tax === '' || l.tax == null ? null : num(l.tax) })) };
+    const d = await run(() => (editing ? api('PUT', '/purchase-orders/' + editing.id, body) : send('POST', '/purchase-orders', body)), approve ? 'اعتُمد طلب الشراء' : 'حُفظت المسودة');
+    if (d) location.hash = '#/doc/' + d.id;
+  };
+  el.append(h('div', { class: 'note' }, 'طلب الشراء لا يغيّر المخزون أو الحسابات. الاستلام يتم من صفحة الطلب بفاتورة شراء جزئية أو كاملة، ولا يُقبل استلام أكثر من المطلوب.'),
+    h('div', { class: 'card' }, h('div', { class: 'grid' }, field('المورد', supplier, { req: true }), field('التاريخ', date), field('التوريد المتوقع', expected), field('مستودع الاستلام', wh), field('ملاحظات', notes))),
+    h('div', { class: 'card' }, picker.el, h('div', { class: 'table-wrap', style: { marginTop: '10px' } }, h('table', null,
+      h('thead', null, h('tr', null, ['الصنف', 'الوحدة', 'الكمية', 'السعر المتفق', 'ضريبة %', ''].map((x) => h('th', null, x)))), tbody)),
+    h('p', null, 'القيمة التقريبية قبل الضريبة: ', total)),
+    h('div', { class: 'actions' }, can('purchases.approve') ? h('button', { class: 'btn ok', onclick: () => save(true) }, 'اعتماد الطلب') : null, h('button', { class: 'btn', onclick: () => save(false) }, 'حفظ مسودة')));
+  draw();
 }

@@ -3,13 +3,14 @@ import { h, clear, dt, N, state, get, api, submitter, toast, run, M, Q, money, q
 
 const TYPE_TITLES = {
   sale: 'فواتير البيع', sale_return: 'مرتجعات المبيعات', purchase: 'فواتير الشراء', transfer: 'سجل التحويلات', 'receipt,payment,cash_transfer': 'سجل السندات',
-  expense: 'المصروفات',
+  expense: 'المصروفات', purchase_order: 'طلبات الشراء',
 };
 
 export async function list({ el, q, isCurrent }, type) {
   const head = pageHead(TYPE_TITLES[type] || 'المستندات',
     type === 'sale' && can('sales.create') ? h('a', { class: 'btn primary', href: '#/pos' }, 'فاتورة جديدة') : null,
     type === 'purchase' && can('purchases.create') ? h('a', { class: 'btn primary', href: '#/purchase' }, 'فاتورة شراء جديدة') : null,
+    type === 'purchase_order' && can('purchases.create') ? h('a', { class: 'btn primary', href: '#/purchase-order' }, 'طلب شراء جديد') : null,
     type.includes('receipt') && can('cash.receipt') ? h('a', { class: 'btn', href: '#/receipt' }, 'سند قبض') : null,
     type.includes('receipt') && can('cash.payment') ? h('a', { class: 'btn', href: '#/payment' }, 'سند صرف') : null);
   const qIn = inp({ placeholder: 'رقم المستند أو الطرف', value: q.q || '' });
@@ -30,6 +31,7 @@ export async function list({ el, q, isCurrent }, type) {
       type === 'sale' ? { key: 'rep_name', label: 'المندوب' } : null,
       { key: 'total', label: 'الإجمالي', type: 'money' },
       ['sale', 'purchase'].includes(type) ? { key: 'open_amount', label: 'المتبقي', type: 'money' } : null,
+      type === 'purchase_order' ? { key: 'po', label: 'الاستلام', render: (d) => poBadge(d.data?.po_state) } : null,
       { key: 'status', label: 'الحالة', render: (d) => [badge(STATUS, d.status), ' ', d.payment_status && d.status === 'approved' ? badge(PAY_STATUS, d.payment_status) : ''] },
       { key: 'created_by_name', label: 'بواسطة' },
     ].filter(Boolean);
@@ -114,6 +116,15 @@ export async function view({ el, params }) {
       if (can('purchases.reverse')) reverse(`/purchases/${d.id}/reverse`, 'إلغاء الفاتورة');
     }
   }
+  if (d.type === 'purchase_order') {
+    if (d.status === 'draft' && can('purchases.create')) L('تعديل', `#/purchase-order/${d.id}`);
+    if (d.status === 'draft' && can('purchases.approve')) A('اعتماد الطلب', async () => { if (await run(() => api('POST', `/purchase-orders/${d.id}/approve`, {}), 'اعتُمد')) reload(); }, 'ok');
+    if (d.status === 'draft') draftCancel(d, A, reload);
+    if (d.status === 'approved' && ['open', 'partial'].includes(d.data?.po_state)) {
+      if (can('purchases.create')) L('استلام (فاتورة شراء)', `#/purchase?po=${d.id}`, 'primary');
+      if (can('purchases.approve')) A('إغلاق الطلب', async () => { const rs = await askReason('إغلاق طلب الشراء بما تبقى منه'); if (rs && await run(() => api('POST', `/purchase-orders/${d.id}/close`, { reason: rs }), 'أُغلق الطلب')) reload(); }, 'danger');
+    }
+  }
   if (d.type === 'purchase_return' && d.status === 'approved' && d.open_amount > 0 && can('cash.receipt')) L('استرداد من المورد', `#/receipt?party=${d.party_id}&doc=${d.id}&account=AP`);
   if (['receipt', 'payment', 'cash_transfer'].includes(d.type) && d.status === 'approved' && can('docs.reverse')) reverse(`/cash-docs/${d.id}/reverse`, 'إلغاء السند');
   if (d.type === 'expense') {
@@ -150,6 +161,8 @@ export async function view({ el, params }) {
     d.data?.shortages ? ['نقص الاستلام', d.data.shortages.join('، ')] : null,
     d.ref_doc_id ? ['المستند الأصلي', h('a', { href: '#/doc/' + d.ref_doc_id }, d.ref_doc_number)] : null,
     d.due_date ? ['الاستحقاق', d.due_date] : null, d.expense_category_name ? ['التصنيف', d.expense_category_name] : null,
+    d.type === 'purchase_order' ? ['حالة الاستلام', poBadge(d.data?.po_state)] : null,
+    d.data?.closed_reason ? ['سبب الإغلاق', d.data.closed_reason] : null,
     d.payment_status ? ['السداد', badge(PAY_STATUS, d.payment_status)] : null,
     ['أنشأه', d.created_by_name], d.approved_by_name ? ['اعتمده', [d.approved_by_name, ' ', dt(d.approved_at)]] : null,
     d.reason ? ['السبب', d.reason] : null, d.notes ? ['ملاحظات', d.notes] : null, d.print_count ? ['مرات الطباعة', d.print_count] : null,
@@ -190,7 +203,10 @@ function draftCancel(d, A, reload) {
 function linesTable(d) {
   const t = d.type;
   let cols;
-  if (['sale', 'purchase', 'sale_return', 'purchase_return'].includes(t)) {
+  if (t === 'purchase_order') {
+    cols = [{ key: 'item_name', label: 'الصنف' }, { key: 'unit_name', label: 'الوحدة' }, { key: 'qty', label: 'المطلوب', type: 'qty' },
+      { key: 'received_qty', label: 'المستلم', render: (l) => Q((l.received_qty || 0) / (l.factor || 1) / 1000) }, { key: 'price', label: 'السعر', type: 'money' }, { key: 'total', label: 'الإجمالي', type: 'money' }];
+  } else if (['sale', 'purchase', 'sale_return', 'purchase_return'].includes(t)) {
     cols = [...LINE_COLS.default];
     if (t === 'purchase') cols.splice(2, 0, { key: 'batch_no', label: 'الدفعة' }, { key: 'expiry_date', label: 'الانتهاء' });
     if (t === 'purchase' && can('cost.view')) cols.push({ key: 'extra_cost', label: 'تكاليف تابعة', type: 'money' }, { key: 'cost', label: 'التكلفة النهائية', type: 'money' });
@@ -299,3 +315,7 @@ function thermal(d, s, copy) {
     h('div', { class: 'c', style: { marginTop: '6px' } }, s.invoice_footer || ''));
 }
 export { partySelect };
+
+function poBadge(st) {
+  return badge({ draft: ['مسودة', 'warn'], open: ['مفتوح', ''], partial: ['مستلم جزئيًا', 'warn'], received: ['مستلم بالكامل', 'ok'], closed: ['مغلق', 'bad'] }, st || 'draft');
+}

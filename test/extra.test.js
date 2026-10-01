@@ -232,3 +232,29 @@ test('تقارير الفترة تطابق المستندات المعتمدة',
   assert.equal(dash.net_sales, 75);
   assert.equal(dash.stock_value, 70);
 });
+
+test('طلب شراء واستلام جزئي على دفعتين ومنع تجاوز المطلوب', () => {
+  const e = setup();
+  const item = e.item({ name: 'زيت', carton: 12 });
+  const carton = item.units.find((u) => u.name === 'كرتون');
+  const sup = e.supplier();
+  const po = Pur.createPurchaseOrder(e.admin, { party_id: sup.id, approve: true, lines: [{ item_id: item.id, unit_id: carton.id, qty: 10, price: 60 }] });
+  assert.equal(po.data.po_state, 'open');
+  assert.equal(e.bal('INVENTORY'), 0, 'الطلب لا يؤثر في المخزون');
+  const pl = po.lines[0].id;
+  Pur.createPurchase(e.admin, { party_id: sup.id, po_id: po.id, approve: true, lines: [{ item_id: item.id, unit_id: carton.id, qty: 4, price: 60, po_line_id: pl }] });
+  let r = Pur.poRemaining(e.admin, po.id);
+  assert.equal(r.lines[0].received, 4);
+  assert.equal(r.lines[0].remaining, 6);
+  assert.equal(r.po.data.po_state, 'partial');
+  assert.throws(() => Pur.createPurchase(e.admin, { party_id: sup.id, po_id: po.id, approve: true, lines: [{ item_id: item.id, unit_id: carton.id, qty: 7, price: 60, po_line_id: pl }] }), (err) => err.code === 'OVER_RECEIPT');
+  const p2 = Pur.createPurchase(e.admin, { party_id: sup.id, po_id: po.id, approve: true, lines: [{ item_id: item.id, unit_id: carton.id, qty: 6, price: 60, po_line_id: pl }] });
+  assert.equal(Pur.poRemaining(e.admin, po.id).po.data.po_state, 'received');
+  Pur.reversePurchase(e.admin, p2.id, 'إدخال خاطئ');
+  r = Pur.poRemaining(e.admin, po.id);
+  assert.equal(r.lines[0].remaining, 6, 'إلغاء الاستلام يعيد المتبقي');
+  assert.equal(r.po.data.po_state, 'partial');
+  Pur.closePurchaseOrder(e.admin, po.id, 'المورد لن يورد الباقي');
+  assert.throws(() => Pur.createPurchase(e.admin, { party_id: sup.id, po_id: po.id, lines: [{ item_id: item.id, unit_id: carton.id, qty: 1, price: 60, po_line_id: pl }] }), (err) => err.code === 'INVALID_STATE');
+  assert.equal(e.stockQty(item.id).qty, 48);
+});

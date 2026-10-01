@@ -5,7 +5,7 @@ const { mulDiv, distribute, toMinor, toBp, toQty, fromMinor, fromQty, fromBp } =
 const { checkDate } = require('../lib/dates');
 
 const DOC_LABELS = {
-  sale: 'فاتورة بيع', sale_return: 'مرتجع مبيعات', purchase: 'فاتورة شراء', purchase_return: 'مرتجع مشتريات',
+  purchase_order: 'طلب شراء', sale: 'فاتورة بيع', sale_return: 'مرتجع مبيعات', purchase: 'فاتورة شراء', purchase_return: 'مرتجع مشتريات',
   receipt: 'سند قبض', payment: 'سند صرف', expense: 'مصروف', transfer: 'تحويل مخزون', stock_count: 'جرد',
   damage: 'تالف', opening_stock: 'مخزون افتتاحي', opening_balance: 'رصيد افتتاحي', cash_transfer: 'تحويل نقدي',
   session_variance: 'فرق وردية', custody_settlement: 'تسوية عهدة', commission: 'عمولة', batch_status: 'تغيير حالة دفعة',
@@ -13,7 +13,7 @@ const DOC_LABELS = {
 
 // صلاحية العرض لكل نوع مستند
 const DOC_VIEW_PERM = {
-  sale: 'sales.view', sale_return: 'sales.view', purchase: 'purchases.view', purchase_return: 'purchases.view', receipt: 'cash.receipt', payment: 'cash.view',
+  purchase_order: 'purchases.view', sale: 'sales.view', sale_return: 'sales.view', purchase: 'purchases.view', purchase_return: 'purchases.view', receipt: 'cash.receipt', payment: 'cash.view',
   expense: 'expenses.create', transfer: 'stock.view', stock_count: 'stock.view', damage: 'stock.view', opening_stock: 'stock.view', opening_balance: 'opening.manage',
   cash_transfer: 'cash.view', session_variance: 'cash.view', custody_settlement: 'reps.view', commission: 'commissions.manage', batch_status: 'stock.view',
 };
