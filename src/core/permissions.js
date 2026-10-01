@@ -59,6 +59,9 @@ const PERMISSIONS = {
   'sessions.manage': 'اعتماد الورديات وإعادة فتحها',
   'docs.reverse': 'إلغاء مستند معتمد (قبض/صرف/مصروف/تحويل)',
   'journal.manual': 'القيود اليدوية',
+  'messages.send': 'إرسال رسائل واتساب للعملاء',
+  'messages.view': 'عرض سجل الرسائل',
+  'messages.bulk': 'إرسال تذكيرات جماعية',
 
   'reps.view': 'عرض المناديب والعهد',
   'reps.custody': 'تسوية العهد',
@@ -80,7 +83,7 @@ const ROLES = {
   cashier: {
     name: 'الكاشير',
     permissions: ['items.view', 'parties.view', 'parties.all', 'sales.create', 'sales.view', 'sales.print', 'sale_returns.create',
-      'cash.receipt', 'sessions.own', 'stock.view'],
+      'cash.receipt', 'sessions.own', 'stock.view', 'messages.send'],
   },
   purchasing: {
     name: 'المشتريات',
@@ -95,7 +98,7 @@ const ROLES = {
     name: 'المحاسب',
     permissions: ['dashboard.view', 'items.view', 'cost.view', 'profit.view', 'parties.view', 'parties.all', 'parties.manage', 'sales.view', 'purchases.view',
       'cash.view', 'cash.receipt', 'cash.payment', 'cash.transfer', 'expenses.create', 'expenses.approve', 'reps.view', 'reps.custody',
-      'commissions.manage', 'commissions.pay', 'journal.manual', 'stock.view', 'reports.sales', 'reports.purchases', 'reports.stock', 'reports.finance',
+      'commissions.manage', 'commissions.pay', 'journal.manual', 'messages.send', 'messages.view', 'messages.bulk', 'stock.view', 'reports.sales', 'reports.purchases', 'reports.stock', 'reports.finance',
       'reports.export', 'sales.print', 'sale_returns.approve'],
   },
   rep: {

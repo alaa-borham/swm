@@ -227,6 +227,7 @@ function partyFields(input, ex = {}) {
     rep_id: input.rep_id !== undefined ? (input.rep_id || null) : ex.rep_id ?? null,
     tax_number: input.tax_number !== undefined ? s(input.tax_number) : ex.tax_number ?? null,
     notes: input.notes !== undefined ? s(input.notes) : ex.notes ?? null,
+    whatsapp_opt_in: input.whatsapp_opt_in !== undefined ? bool(input.whatsapp_opt_in) : ex.whatsapp_opt_in ?? 0,
     active: input.active !== undefined ? bool(input.active, 1) : ex.active ?? 1,
   };
   if (!f.is_customer && !f.is_supplier) fail('VALIDATION', 'حدد هل الطرف عميل أو مورد أو كلاهما');
@@ -239,9 +240,9 @@ function createParty(ctx, input) {
   return ctx.tx(() => {
     const f = partyFields(input);
     if (ctx.repScope) f.rep_id = ctx.repScope;
-    const id = ctx.db.prepare(`INSERT INTO parties(name,phone,address,is_customer,is_supplier,credit_limit,payment_terms_days,rep_id,tax_number,notes,active,created_at)
-      VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`).run(f.name, f.phone, f.address, f.is_customer, f.is_supplier, f.credit_limit, f.payment_terms_days,
-      f.rep_id, f.tax_number, f.notes, f.active, ctx.now()).lastInsertRowid;
+    const id = ctx.db.prepare(`INSERT INTO parties(name,phone,address,is_customer,is_supplier,credit_limit,payment_terms_days,rep_id,tax_number,notes,whatsapp_opt_in,active,created_at)
+      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(f.name, f.phone, f.address, f.is_customer, f.is_supplier, f.credit_limit, f.payment_terms_days,
+      f.rep_id, f.tax_number, f.notes, f.whatsapp_opt_in, f.active, ctx.now()).lastInsertRowid;
     ctx.audit('party.create', { entity: 'party', entity_id: id, after: f });
     return getParty(ctx, id);
   });
@@ -253,8 +254,8 @@ function updateParty(ctx, id, input) {
     const ex = getPartyRow(ctx, id);
     const f = partyFields(input, ex);
     if (f.credit_limit !== ex.credit_limit && !ctx.has('credit.override') && !ctx.has('users.manage')) ctx.require('credit.override', 'party.credit_limit');
-    ctx.db.prepare(`UPDATE parties SET name=?,phone=?,address=?,is_customer=?,is_supplier=?,credit_limit=?,payment_terms_days=?,rep_id=?,tax_number=?,notes=?,active=? WHERE id=?`)
-      .run(f.name, f.phone, f.address, f.is_customer, f.is_supplier, f.credit_limit, f.payment_terms_days, f.rep_id, f.tax_number, f.notes, f.active, id);
+    ctx.db.prepare(`UPDATE parties SET name=?,phone=?,address=?,is_customer=?,is_supplier=?,credit_limit=?,payment_terms_days=?,rep_id=?,tax_number=?,notes=?,whatsapp_opt_in=?,active=? WHERE id=?`)
+      .run(f.name, f.phone, f.address, f.is_customer, f.is_supplier, f.credit_limit, f.payment_terms_days, f.rep_id, f.tax_number, f.notes, f.whatsapp_opt_in, f.active, id);
     ctx.audit('party.update', { entity: 'party', entity_id: id, before: ex, after: f });
     return getParty(ctx, id);
   });

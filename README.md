@@ -6,7 +6,7 @@
 
 إضافة إلى توسعات بعد النسخة الأولى: الفروع المتعددة، طلبات الشراء والاستلام الجزئي، النقل على مراحل (بضاعة بالطريق)،
 العمل دون اتصال لنقطة البيع وتثبيتها كتطبيق على الجوال، باركود الميزان، رمز QR للفاتورة الضريبية المبسطة،
-والقيود اليدوية وميزان المراجعة ودفتر الأستاذ والمركز المالي.
+والقيود اليدوية وميزان المراجعة ودفتر الأستاذ والمركز المالي، ورسائل واتساب للعملاء عبر Meta Cloud API.
 
 ## التقنية
 
@@ -23,7 +23,7 @@
 
 ```bash
 npm install
-npm test                 # 42 اختبارًا تشمل اختبارات القبول الخمسة عشر
+npm test                 # 46 اختبارًا تشمل اختبارات القبول الخمسة عشر
 npm start                # يعمل على http://localhost:3000
 ```
 
@@ -63,7 +63,7 @@ src/
   core/                منطق العمل (كل عملية تفحص الصلاحية في الخادم وتنفذ ذريًا)
     sales.js purchases.js payments.js inventory.js stock.js finance.js reps.js
     ledger.js docs.js masters.js users.js reports.js backup.js importer.js permissions.js
-    accounting.js einvoice.js
+    accounting.js einvoice.js whatsapp.js
   server.js            واجهة HTTP والحماية ومنع التكرار والجدولة
 public/                الواجهة العربية (sw.js لعمل نقطة البيع دون اتصال)
 scripts/               النسخ والاستعادة وبيانات التجربة

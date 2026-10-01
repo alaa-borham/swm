@@ -63,6 +63,7 @@ const ROUTES = [
   ['import', Admin.importPage, 'import.manage'],
   ['opening', Admin.opening, 'opening.manage'],
   ['period', Admin.period, 'period.lock'],
+  ['whatsapp', Admin.whatsapp, 'messages.view'],
   ['password', Admin.password, null],
   ['offline-queue', queuePage, 'sales.create'],
 ];
@@ -75,7 +76,7 @@ const NAV = [
   ['المالية', [['receipt', 'سند قبض'], ['payment', 'سند صرف'], ['expenses', 'المصروفات'], ['cash', 'الصناديق والبنوك'], ['cash-transfer', 'تحويل نقدي / توريد'], ['cash-docs', 'سجل السندات'], ['journal', 'قيد يدوي']]],
   ['المناديب', [['reps', 'المناديب والعهد'], ['commissions', 'العمولات']]],
   ['البيانات الأساسية', [['items', 'الأصناف والباركود'], ['parties', 'العملاء والموردون'], ['warehouses', 'الفروع والمستودعات والحسابات'], ['categories', 'التصنيفات']]],
-  ['المراجعة', [['reports', 'التقارير'], ['import', 'الاستيراد'], ['backup', 'النسخ الاحتياطي'], ['audit', 'سجل التدقيق']]],
+  ['المراجعة', [['reports', 'التقارير'], ['whatsapp', 'رسائل واتساب'], ['import', 'الاستيراد'], ['backup', 'النسخ الاحتياطي'], ['audit', 'سجل التدقيق']]],
   ['الإدارة', [['settings', 'الإعدادات'], ['users', 'المستخدمون والأدوار'], ['opening', 'الأرصدة الافتتاحية'], ['period', 'إقفال الفترات']]],
 ];
 

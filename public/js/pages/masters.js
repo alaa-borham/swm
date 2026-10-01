@@ -112,7 +112,7 @@ async function partyForm(p) {
   const reps = await lookup('reps');
   const f = {
     name: inp({ value: p?.name || '' }), phone: inp({ value: p?.phone || '' }), address: inp({ value: p?.address || '' }), tax_number: inp({ value: p?.tax_number || '' }),
-    is_customer: h('input', { type: 'checkbox', checked: p ? !!p.is_customer : true }), is_supplier: h('input', { type: 'checkbox', checked: !!p?.is_supplier }),
+    is_customer: h('input', { type: 'checkbox', checked: p ? !!p.is_customer : true }), is_supplier: h('input', { type: 'checkbox', checked: !!p?.is_supplier }), whatsapp_opt_in: h('input', { type: 'checkbox', checked: !!p?.whatsapp_opt_in }),
     credit_limit: inp({ type: 'number', value: p?.credit_limit ?? '', placeholder: 'فارغ = بلا حد' }), payment_terms_days: inp({ type: 'number', value: p?.payment_terms_days ?? 0 }),
     rep_id: sel([{ value: '', label: '—' }, ...reps.map((r) => ({ value: r.id, label: r.name }))], p?.rep_id || ''), notes: inp({ value: p?.notes || '' }),
     active: h('input', { type: 'checkbox', checked: p ? !!p.active : true }),
@@ -121,10 +121,10 @@ async function partyForm(p) {
   const m = modal(p ? 'تعديل ' + p.name : 'طرف جديد', h('div', null, h('div', { class: 'grid' },
     field('الاسم', f.name, { req: true }), field('الهاتف', f.phone), field('العنوان', f.address), field('الرقم الضريبي', f.tax_number),
     field('الحد الائتماني', f.credit_limit), field('مدة السداد (يوم)', f.payment_terms_days), field('المندوب المسؤول', f.rep_id), field('ملاحظات', f.notes)),
-  h('div', { class: 'row', style: { marginTop: '10px' } }, h('label', { class: 'check' }, f.is_customer, 'عميل'), h('label', { class: 'check' }, f.is_supplier, 'مورد'), h('label', { class: 'check' }, f.active, 'نشط')),
+  h('div', { class: 'row', style: { marginTop: '10px' } }, h('label', { class: 'check' }, f.is_customer, 'عميل'), h('label', { class: 'check' }, f.is_supplier, 'مورد'), h('label', { class: 'check' }, f.active, 'نشط'), h('label', { class: 'check' }, f.whatsapp_opt_in, 'وافق على استلام رسائل واتساب')),
   h('p', { class: 'small muted' }, 'يمكن أن يكون الطرف عميلاً وموردًا معًا؛ يُعرض الحسابان منفصلين دون دمج تلقائي.')),
   [{ label: 'حفظ', class: 'primary', onClick: async () => {
-    const body = { name: f.name.value, phone: f.phone.value, address: f.address.value, tax_number: f.tax_number.value, is_customer: f.is_customer.checked ? 1 : 0, is_supplier: f.is_supplier.checked ? 1 : 0,
+    const body = { name: f.name.value, phone: f.phone.value, address: f.address.value, tax_number: f.tax_number.value, is_customer: f.is_customer.checked ? 1 : 0, is_supplier: f.is_supplier.checked ? 1 : 0, whatsapp_opt_in: f.whatsapp_opt_in.checked ? 1 : 0,
       credit_limit: f.credit_limit.value, payment_terms_days: num(f.payment_terms_days.value) || 0, rep_id: f.rep_id.value ? Number(f.rep_id.value) : null, notes: f.notes.value, active: f.active.checked ? 1 : 0 };
     const r = await run(() => (p ? api('PUT', '/parties/' + p.id, body) : api('POST', '/parties', body)), 'تم الحفظ');
     if (!r) return false;

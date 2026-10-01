@@ -22,6 +22,7 @@ const R = require('./core/reports');
 const Backup = require('./core/backup');
 const Importer = require('./core/importer');
 const Export = require('./api/export');
+const WA = require('./core/whatsapp');
 const { DEFAULT_SETTINGS } = require('./db');
 
 const ALLOWED_UPLOADS = {
@@ -53,6 +54,19 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
   });
 
   app.use(express.static(path.join(__dirname, '..', 'public'), { index: 'index.html', maxAge: 0 }));
+
+  // Webhook حالات تسليم واتساب من Meta (خارج /api: لا جلسة، ويُتحقق من توقيع Meta)
+  app.get('/webhooks/whatsapp', (req, res) => {
+    const token = (db.prepare("SELECT value FROM settings WHERE key='whatsapp_verify_token'").get() || {}).value;
+    if (req.query['hub.mode'] === 'subscribe' && token && req.query['hub.verify_token'] === token) return res.type('text/plain').send(String(req.query['hub.challenge'] || ''));
+    res.sendStatus(403);
+  });
+  app.post('/webhooks/whatsapp', express.raw({ type: '*/*', limit: '1mb' }), (req, res) => {
+    const raw = Buffer.isBuffer(req.body) ? req.body : Buffer.from('');
+    if (!WA.verifySignature(raw, req.get('X-Hub-Signature-256'), process.env.WHATSAPP_APP_SECRET)) return res.sendStatus(403);
+    try { WA.applyStatuses(db, JSON.parse(raw.toString('utf8'))); } catch (e) { logger.error('whatsapp webhook:', e.message); }
+    res.sendStatus(200);
+  });
   app.use('/api', express.json({ limit: '8mb' }));
 
   const timeout = () => Number((db.prepare("SELECT value FROM settings WHERE key='session_timeout_minutes'").get() || {}).value || 480);
@@ -138,7 +152,7 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
         org_name: s.org_name, org_address: s.org_address, org_phone: s.org_phone, org_tax_number: s.org_tax_number, currency: s.currency,
         money_decimals: getMoneyDecimals(), prices_include_tax: s.prices_include_tax === '1', default_tax_rate: fromBp(Number(s.default_tax_rate_bp)),
         invoice_footer: s.invoice_footer, receipt_width_mm: Number(s.receipt_width_mm), locked_until: s.locked_until, today: ctx.today(),
-        expiry_alert_days: Number(s.expiry_alert_days), einvoice_qr: s.einvoice_qr === '1',
+        expiry_alert_days: Number(s.expiry_alert_days), einvoice_qr: s.einvoice_qr === '1', whatsapp_enabled: s.whatsapp_enabled === '1',
       },
     };
   }));
@@ -150,13 +164,14 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
     currency: 'settings.manage', timezone: 'settings.manage', expiry_block_days: 'settings.manage', expiry_alert_days: 'settings.manage',
     cashier_max_discount_pct: 'settings.manage', extra_cost_basis: 'settings.manage', session_timeout_minutes: 'settings.manage', backup_hour: 'backup.manage',
     backup_retention: 'backup.manage', invoice_footer: 'settings.manage', receipt_width_mm: 'settings.manage', money_decimals: 'settings.manage',
-    default_tax_rate_pct: 'tax.manage', prices_include_tax: 'tax.manage', tax_recoverable: 'tax.manage', einvoice_qr: 'tax.manage', scale_prefix: 'settings.manage', scale_plu_digits: 'settings.manage', scale_value_digits: 'settings.manage', scale_mode: 'settings.manage',
+    default_tax_rate_pct: 'tax.manage', prices_include_tax: 'tax.manage', tax_recoverable: 'tax.manage', einvoice_qr: 'tax.manage', whatsapp_enabled: 'settings.manage', whatsapp_phone_number_id: 'settings.manage', whatsapp_api_version: 'settings.manage', whatsapp_lang: 'settings.manage', whatsapp_country_code: 'settings.manage', whatsapp_template_invoice: 'settings.manage', whatsapp_template_receipt: 'settings.manage', whatsapp_template_reminder: 'settings.manage', whatsapp_auto_invoice: 'settings.manage', whatsapp_auto_receipt: 'settings.manage', whatsapp_verify_token: 'settings.manage', scale_prefix: 'settings.manage', scale_plu_digits: 'settings.manage', scale_value_digits: 'settings.manage', scale_mode: 'settings.manage',
   };
   api.get('/settings', h((ctx) => {
     ctx.require('settings.manage');
     const s = { ...ctx.settings() };
     s.default_tax_rate_pct = fromBp(Number(s.default_tax_rate_bp));
     s.cashier_max_discount_pct = fromBp(Number(s.cashier_max_discount_bp));
+    s.whatsapp_status = WA.status(ctx);
     return s;
   }));
   api.put('/settings', h((ctx, req) => ctx.tx(() => {
@@ -173,7 +188,7 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
         if (![0, 1, 2, 3].includes(Number(v))) fail('VALIDATION', 'منازل العملة بين 0 و3');
         require('./lib/money').setMoneyDecimals(Number(v));
       }
-      if (['prices_include_tax', 'tax_recoverable', 'einvoice_qr'].includes(k)) { set.run(k, v ? '1' : '0'); continue; }
+      if (['prices_include_tax', 'tax_recoverable', 'einvoice_qr', 'whatsapp_enabled', 'whatsapp_auto_invoice', 'whatsapp_auto_receipt'].includes(k)) { set.run(k, v ? '1' : '0'); continue; }
       set.run(k, String(v ?? ''));
     }
     ctx.invalidateSettings();
@@ -247,6 +262,19 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
     canView(ctx, doc);
     return require('./core/einvoice').qrSvg(ctx, doc);
   }));
+  api.post('/docs/:id/whatsapp', h((ctx, req) => WA.sendForDoc(ctx, id(req))));
+  api.get('/whatsapp/status', h((ctx) => { ctx.requireAny(['messages.send', 'settings.manage']); return WA.status(ctx); }));
+  api.get('/whatsapp/overdue', h((ctx) => {
+    ctx.require('messages.bulk');
+    const cc = (ctx.setting('whatsapp_country_code') || '');
+    return WA.overdueParties(ctx).map((o) => {
+      const p = db.prepare('SELECT id,name,phone,whatsapp_opt_in FROM parties WHERE id=?').get(o.party_id);
+      return { ...o, amount: fromMinor(o.amount), name: p.name, phone: p.phone, opt_in: !!p.whatsapp_opt_in, phone_ok: !!WA.normalizePhone(p.phone, cc) };
+    });
+  }));
+  api.post('/whatsapp/reminders', h((ctx, req) => WA.remindOverdue(ctx, req.body)));
+  api.post('/whatsapp/test', h((ctx, req) => WA.sendTest(ctx, req.body)));
+  api.get('/messages', h((ctx, req) => WA.listMessages(ctx, req.query)));
   api.post('/docs/:id/print', h((ctx, req) => {
     ctx.require('sales.print');
     const doc = D.loadDoc(ctx, id(req));
@@ -269,9 +297,11 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
   })));
 
   // المبيعات
-  api.post('/sales', h((ctx, req) => Sales.createSale(ctx, req.body)));
+  // الإشعار التلقائي يُرسل بعد اكتمال الاعتماد ولا يؤثر فيه
+  const notify = (ctx, doc) => { if (doc && doc.status === 'approved') setImmediate(() => WA.autoNotify(ctx, doc)); return doc; };
+  api.post('/sales', h((ctx, req) => notify(ctx, Sales.createSale(ctx, req.body))));
   api.put('/sales/:id', h((ctx, req) => Sales.updateSaleDraft(ctx, id(req), req.body)));
-  api.post('/sales/:id/approve', h((ctx, req) => Sales.approveSaleDraft(ctx, id(req), req.body)));
+  api.post('/sales/:id/approve', h((ctx, req) => notify(ctx, Sales.approveSaleDraft(ctx, id(req), req.body))));
   api.post('/sales/:id/reverse', h((ctx, req) => Sales.reverseSale(ctx, id(req), req.body.reason)));
   api.get('/sales/:id/returnable', h((ctx, req) => { ctx.require('sale_returns.create'); return Sales.returnableLines(ctx, id(req)); }));
   api.post('/sale-returns', h((ctx, req) => Sales.createSaleReturn(ctx, req.body)));
@@ -288,7 +318,7 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
   api.get('/purchase-orders/:id/remaining', h((ctx, req) => Pur.poRemaining(ctx, id(req))));
   api.post('/purchase-returns', h((ctx, req) => Pur.createPurchaseReturn(ctx, req.body)));
   // النقد
-  api.post('/receipts', h((ctx, req) => Pay.createReceipt(ctx, req.body)));
+  api.post('/receipts', h((ctx, req) => notify(ctx, Pay.createReceipt(ctx, req.body))));
   api.post('/payments', h((ctx, req) => Pay.createPayment(ctx, req.body)));
   api.post('/allocations', h((ctx, req) => Pay.allocateLater(ctx, req.body)));
   api.post('/cash-transfers', h((ctx, req) => Pay.createCashTransfer(ctx, req.body)));

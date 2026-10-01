@@ -19,6 +19,29 @@ const MIGRATIONS = {
       WHERE branch_id IS NULL;
       CREATE INDEX IF NOT EXISTS docs_branch ON docs(branch_id, type, date);`);
   },
+  3: (db) => {
+    // موافقة العميل على استلام رسائل واتساب، وسجل الرسائل وحالات التسليم
+    addColumn(db, 'parties', 'whatsapp_opt_in', 'INTEGER NOT NULL DEFAULT 0');
+    db.exec(`CREATE TABLE IF NOT EXISTS messages (
+        id INTEGER PRIMARY KEY,
+        created_at TEXT NOT NULL,
+        channel TEXT NOT NULL DEFAULT 'whatsapp',
+        kind TEXT NOT NULL,
+        party_id INTEGER REFERENCES parties(id),
+        doc_id INTEGER REFERENCES docs(id),
+        phone TEXT NOT NULL,
+        template TEXT NOT NULL,
+        params TEXT,
+        status TEXT NOT NULL,
+        provider_id TEXT,
+        error TEXT,
+        updated_at TEXT,
+        user_id INTEGER REFERENCES users(id)
+      );
+      CREATE INDEX IF NOT EXISTS messages_doc ON messages(doc_id);
+      CREATE INDEX IF NOT EXISTS messages_party ON messages(party_id, created_at);
+      CREATE UNIQUE INDEX IF NOT EXISTS messages_provider ON messages(provider_id) WHERE provider_id IS NOT NULL;`);
+  },
 };
 const SCHEMA_VERSION = Math.max(1, ...Object.keys(MIGRATIONS).map(Number));
 
@@ -50,6 +73,18 @@ const DEFAULT_SETTINGS = {
   invoice_footer: 'شكرًا لتعاملكم معنا',
   receipt_width_mm: '80',
   einvoice_qr: '0',
+  // واتساب (Meta Cloud API). رمز الوصول وسر التطبيق في متغيرات البيئة فقط: WHATSAPP_TOKEN و WHATSAPP_APP_SECRET
+  whatsapp_enabled: '0',
+  whatsapp_phone_number_id: '',
+  whatsapp_api_version: 'v21.0',
+  whatsapp_lang: 'ar',
+  whatsapp_country_code: '966',
+  whatsapp_template_invoice: 'invoice_notice',
+  whatsapp_template_receipt: 'payment_received',
+  whatsapp_template_reminder: 'payment_reminder',
+  whatsapp_auto_invoice: '0',
+  whatsapp_auto_receipt: '0',
+  whatsapp_verify_token: '',
   scale_prefix: '',                  // باركود الميزان: البادئة (مثل 2 أو 21)، فارغ = غير مفعّل
   scale_plu_digits: '5',
   scale_value_digits: '5',

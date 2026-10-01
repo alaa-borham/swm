@@ -1,5 +1,5 @@
 // نقطة البيع: بحث بالباركود أو الاسم، وحدات وكميات، خصم وضريبة، سداد نقدي/شبكة/آجل جزئي.
-import { h, clear, state, get, api, submitter, toast, M, money, Q, inp, sel, field, num, itemPicker, partySelect, warehouseSelect, cashSelect, pageHead, can, askReason, today, modal, lookup } from '../lib.js';
+import { h, clear, state, get, api, submitter, toast, run, M, money, Q, inp, sel, field, num, itemPicker, partySelect, warehouseSelect, cashSelect, pageHead, can, askReason, today, modal, lookup } from '../lib.js';
 import { printDoc } from './docs.js';
 import { enqueue, refreshCatalog } from '../offline.js';
 
@@ -178,7 +178,8 @@ async function posView({ el, q }) {
     modal(`الفاتورة ${doc.number}`, h('div', null,
       h('p', null, 'الإجمالي: ', M(doc.total), ' — المتبقي: ', M(doc.open_amount))),
     [{ label: 'طباعة إيصال', class: 'primary', onClick: () => printDoc(doc.id, 'thermal') }, { label: 'طباعة A4', onClick: () => printDoc(doc.id, 'a4') },
-      { label: 'عرض الفاتورة', onClick: () => { location.hash = '#/doc/' + doc.id; } }]);
+      { label: 'عرض الفاتورة', onClick: () => { location.hash = '#/doc/' + doc.id; } },
+      ...(state.settings.whatsapp_enabled && doc.party_id && can('messages.send') ? [{ label: 'إرسال واتساب', onClick: async () => !!(await run(() => api('POST', `/docs/${doc.id}/whatsapp`, {}), 'أُرسلت الرسالة')) }] : [])]);
   }
 
   const keys = (e) => {

@@ -1,5 +1,5 @@
 // الإدارة: الإعدادات، المستخدمون والأدوار، سجل التدقيق، النسخ الاحتياطي، الاستيراد، الأرصدة الافتتاحية، إقفال الفترات، كلمة المرور.
-import { h, clear, dt, state, get, api, submitter, toast, run, M, inp, sel, field, num, table, pageHead, can, askReason, today, lookup, readFileB64, download, partySelect, cashSelect, warehouseSelect, modal } from '../lib.js';
+import { h, clear, dt, badge, state, get, api, submitter, toast, run, M, inp, sel, field, num, table, pageHead, can, askReason, today, lookup, readFileB64, download, partySelect, cashSelect, warehouseSelect, modal } from '../lib.js';
 
 export async function settings({ el }) {
   pageHead('الإعدادات');
@@ -21,6 +21,7 @@ export async function settings({ el }) {
       F('expiry_block_days', 'منع البيع قبل الانتهاء بـ (أيام)', { type: 'number' }),
       F('scale_prefix', 'بادئة باركود الميزان (فارغ = غير مفعّل)'), F('scale_plu_digits', 'خانات كود الصنف في باركود الميزان', { type: 'number' }),
       F('scale_value_digits', 'خانات الوزن/السعر', { type: 'number' }), F('expiry_alert_days', 'تنبيه الصلاحية (أيام)', { type: 'number' }), field('توزيع تكاليف الشراء', basis), field('باركود الميزان يحمل', scaleMode))),
+    whatsappCard(s, F, chk),
     h('div', { class: 'card' }, h('h3', null, 'الطباعة والجلسات والنسخ'), h('div', { class: 'grid' }, F('invoice_footer', 'تذييل الفاتورة'), F('receipt_width_mm', 'عرض الإيصال الحراري (مم)', { type: 'number' }),
       F('session_timeout_minutes', 'انتهاء الجلسة عند الخمول (دقيقة)', { type: 'number' }), F('backup_hour', 'ساعة النسخ اليومي (0-23)', { type: 'number' }), F('backup_retention', 'عدد النسخ المحفوظة', { type: 'number' }))));
   el.append(form, h('button', { class: 'btn ok', onclick: async () => {
@@ -197,4 +198,60 @@ export async function password({ el }) {
       if (await run(() => api('POST', '/auth/password', { current: cur.value, password: pw.value }), 'تم تغيير كلمة المرور')) { clear(el); window.dispatchEvent(new CustomEvent('session-changed')); location.hash = '#/'; }
     } }, 'حفظ')));
   void M;
+}
+
+function whatsappCard(s, F, chk) {
+  const st = s.whatsapp_status || {};
+  const testPhone = inp({ placeholder: 'رقم جوال للاختبار' });
+  const ok = (b) => h('span', { class: 'badge ' + (b ? 'ok' : 'bad') }, b ? 'مضبوط' : 'غير مضبوط');
+  return h('div', { class: 'card' }, h('h3', null, 'واتساب (Meta WhatsApp Cloud API)'),
+    h('div', { class: 'note' + (st.ready ? '' : ' warn') }, st.ready ? 'جاهز للإرسال.' : 'غير جاهز: ' + (st.missing || []).join('، ')),
+    h('div', { class: 'row', style: { marginBottom: '10px' } }, chk('whatsapp_enabled', 'تفعيل الإرسال عبر واتساب'), chk('whatsapp_auto_invoice', 'إرسال الفاتورة تلقائيًا عند الاعتماد'), chk('whatsapp_auto_receipt', 'إرسال إشعار السداد تلقائيًا')),
+    h('div', { class: 'grid' }, F('whatsapp_phone_number_id', 'معرف رقم الهاتف (Phone number ID)'), F('whatsapp_api_version', 'إصدار الواجهة'), F('whatsapp_lang', 'لغة القوالب'),
+      F('whatsapp_country_code', 'رمز الدولة للأرقام المحلية'), F('whatsapp_template_invoice', 'قالب الفاتورة'), F('whatsapp_template_receipt', 'قالب إشعار السداد'),
+      F('whatsapp_template_reminder', 'قالب التذكير'), F('whatsapp_verify_token', 'رمز التحقق للـ Webhook')),
+    h('div', { class: 'doc-head', style: { marginTop: '10px' } },
+      h('div', null, h('b', null, 'رمز الوصول WHATSAPP_TOKEN (متغير بيئة)'), ok(st.token_configured)),
+      h('div', null, h('b', null, 'سر التطبيق WHATSAPP_APP_SECRET (للـ Webhook)'), ok(st.app_secret_configured)),
+      h('div', null, h('b', null, 'رابط الـ Webhook في Meta'), h('span', { class: 'num' }, location.origin + '/webhooks/whatsapp'))),
+    h('p', { class: 'small muted' }, 'رمز الوصول وسر التطبيق لا يُحفظان في قاعدة البيانات؛ يُضبطان في متغيرات بيئة الخادم. نصوص القوالب المطلوب اعتمادها في Meta موجودة في دليل التشغيل.'),
+    h('div', { class: 'row' }, field('اختبار الإرسال (قالب hello_world)', testPhone), h('button', { class: 'btn', onclick: async () => { await run(() => api('POST', '/whatsapp/test', { phone: testPhone.value }), 'أُرسلت رسالة الاختبار'); } }, 'إرسال اختبار')));
+}
+
+export async function whatsapp({ el }) {
+  pageHead('رسائل واتساب');
+  const st = await get('/whatsapp/status');
+  if (!st.ready) el.append(h('div', { class: 'note warn' }, 'واتساب غير جاهز: ' + st.missing.join('، '), can('settings.manage') ? [' — ', h('a', { href: '#/settings' }, 'الإعدادات')] : null));
+  const overdueBox = h('div');
+  const logBox = h('div');
+  const loadOverdue = async () => {
+    if (!can('messages.bulk')) return;
+    const rows = await get('/whatsapp/overdue');
+    const sel0 = new Set(rows.filter((r) => r.opt_in && r.phone_ok).map((r) => r.party_id));
+    overdueBox.replaceChildren(h('div', { class: 'card' }, h('h3', null, 'العملاء المتأخرون عن السداد'),
+      table({ columns: [
+        { key: 'x', label: '', render: (r) => (r.opt_in && r.phone_ok ? h('input', { type: 'checkbox', checked: true, onchange: (e) => { if (e.target.checked) sel0.add(r.party_id); else sel0.delete(r.party_id); } }) : '') },
+        { key: 'name', label: 'العميل', render: (r) => h('a', { href: '#/party/' + r.party_id }, r.name) }, { key: 'phone', label: 'الجوال' },
+        { key: 'invoices', label: 'فواتير متأخرة', type: 'int' }, { key: 'amount', label: 'المستحق المتأخر', type: 'money' }, { key: 'oldest_due', label: 'أقدم استحقاق' },
+        { key: 's', label: 'الإرسال', render: (r) => (!r.opt_in ? h('span', { class: 'badge bad' }, 'بلا موافقة') : !r.phone_ok ? h('span', { class: 'badge bad' }, 'رقم غير صحيح') : h('span', { class: 'badge ok' }, 'ممكن')) }],
+      rows, empty: 'لا يوجد متأخرون' }),
+      rows.length ? h('button', { class: 'btn primary', style: { marginTop: '10px' }, disabled: !st.ready || null, onclick: async () => {
+        if (!sel0.size) return toast('اختر عميلًا واحدًا على الأقل', 'bad');
+        const r = await run(() => api('POST', '/whatsapp/reminders', { party_ids: [...sel0] }));
+        if (r) { modal('نتيجة التذكيرات', h('div', null, h('p', null, `أُرسلت ${r.sent} — فشلت ${r.failed}`), r.skipped.length ? table({ columns: [{ key: 'party', label: 'العميل' }, { key: 'reason', label: 'السبب' }], rows: r.skipped }) : null)); loadLog(); }
+      } }, 'إرسال تذكير للمحددين') : null,
+      h('p', { class: 'small muted' }, 'لا يُرسل إلا لمن وافق على استلام رسائل واتساب (من بطاقة العميل)، ولا يتكرر التذكير لنفس العميل خلال 20 ساعة.')));
+  };
+  const loadLog = async () => {
+    if (!can('messages.view')) return;
+    const rows = await get('/messages', { limit: 300 });
+    const states = { queued: ['قيد الإرسال', 'warn'], sent: ['أُرسلت', ''], delivered: ['وصلت', 'ok'], read: ['قُرئت', 'ok'], failed: ['فشلت', 'bad'] };
+    logBox.replaceChildren(h('div', { class: 'card' }, h('h3', null, 'سجل الرسائل'), table({ columns: [
+      { key: 'created_at', label: 'الوقت', render: (m) => dt(m.created_at) }, { key: 'kind_label', label: 'النوع' }, { key: 'party_name', label: 'العميل' },
+      { key: 'doc_number', label: 'المستند', render: (m) => (m.doc_id ? h('a', { href: '#/doc/' + m.doc_id }, m.doc_number) : '') }, { key: 'phone', label: 'الجوال', render: (m) => h('span', { class: 'num' }, m.phone) },
+      { key: 'status', label: 'الحالة', render: (m) => badge(states, m.status) }, { key: 'error', label: 'الخطأ' }, { key: 'user_name', label: 'بواسطة' }], rows, empty: 'لا توجد رسائل' })));
+  };
+  el.append(overdueBox, logBox);
+  await loadOverdue();
+  await loadLog();
 }

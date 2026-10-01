@@ -72,6 +72,9 @@ export async function view({ el, params }) {
     A('طباعة A4', () => printDoc(d.id, 'a4'));
     if (['sale', 'sale_return', 'receipt'].includes(d.type)) A('إيصال حراري', () => printDoc(d.id, 'thermal'));
   }
+  if (state.settings.whatsapp_enabled && can('messages.send') && d.status === 'approved' && d.party_id && (d.type === 'sale' || (d.type === 'receipt' && d.ledger_account === 'AR'))) {
+    A('إرسال واتساب', async () => { if (await run(() => api('POST', `/docs/${d.id}/whatsapp`, {}), 'أُرسلت الرسالة')) reload(); });
+  }
   if (d.type === 'sale') {
     if (d.status === 'draft') {
       A('اعتماد', async () => { const send = submitter(); if (await run(() => send('POST', `/sales/${d.id}/approve`, {}), 'تم الاعتماد')) reload(); }, 'ok');
@@ -190,6 +193,12 @@ export async function view({ el, params }) {
   if (d.related.length) parts.push(h('div', { class: 'card' }, h('h3', null, 'مستندات مرتبطة'), table({ columns: [
     { key: 'number', label: 'الرقم', render: (r) => h('a', { href: '#/doc/' + r.id }, r.number) }, { key: 'date', label: 'التاريخ' }, { key: 'type', label: 'النوع', render: (r) => (state.meta?.doc_labels?.[r.type] || r.type) },
     { key: 'total', label: 'المبلغ', type: 'money' }, { key: 'status', label: 'الحالة', render: (r) => badge(STATUS, r.status) }], rows: d.related })));
+  if (state.settings.whatsapp_enabled && can('messages.send') && ['sale', 'receipt'].includes(d.type)) {
+    const msgs = await get('/messages', { doc_id: d.id }).catch(() => []);
+    const states = { queued: ['قيد الإرسال', 'warn'], sent: ['أُرسلت', ''], delivered: ['وصلت', 'ok'], read: ['قُرئت', 'ok'], failed: ['فشلت', 'bad'] };
+    if (msgs.length) parts.push(h('div', { class: 'card' }, h('h3', null, 'رسائل واتساب'), table({ columns: [{ key: 'created_at', label: 'الوقت', render: (m) => dt(m.created_at) },
+      { key: 'kind_label', label: 'النوع' }, { key: 'status', label: 'الحالة', render: (m) => badge(states, m.status) }, { key: 'error', label: 'الخطأ' }], rows: msgs })));
+  }
   if (d.attachments.length) parts.push(h('div', { class: 'card' }, h('h3', null, 'المرفقات'), d.attachments.map((a) => h('div', null, h('a', { href: `/api/attachments/${a.id}` }, a.file_name), ' ', h('span', { class: 'muted small' }, Math.round(a.size / 1024) + ' ك.ب')))));
   el.append(...parts);
 }
