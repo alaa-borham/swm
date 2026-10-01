@@ -11,6 +11,13 @@ const DOC_LABELS = {
   session_variance: 'فرق وردية', custody_settlement: 'تسوية عهدة', commission: 'عمولة', batch_status: 'تغيير حالة دفعة',
 };
 
+// صلاحية العرض لكل نوع مستند
+const DOC_VIEW_PERM = {
+  sale: 'sales.view', sale_return: 'sales.view', purchase: 'purchases.view', purchase_return: 'purchases.view', receipt: 'cash.receipt', payment: 'cash.view',
+  expense: 'expenses.create', transfer: 'stock.view', stock_count: 'stock.view', damage: 'stock.view', opening_stock: 'stock.view', opening_balance: 'opening.manage',
+  cash_transfer: 'cash.view', session_variance: 'cash.view', custody_settlement: 'reps.view', commission: 'commissions.manage', batch_status: 'stock.view',
+};
+
 function nextNumber(ctx, type) {
   const seq = ctx.db.prepare('SELECT prefix,next FROM doc_sequences WHERE type=?').get(type);
   if (!seq) throw new Error('no sequence for ' + type);
@@ -253,6 +260,6 @@ function markReversed(ctx, doc, reason) {
 }
 
 module.exports = {
-  DOC_LABELS, nextNumber, insertDoc, updateDoc, insertLine, getDocRow, loadDoc, docLines, docData, openAmount, allocate, paymentStatus,
+  DOC_LABELS, DOC_VIEW_PERM, nextNumber, insertDoc, updateDoc, insertLine, getDocRow, loadDoc, docLines, docData, openAmount, allocate, paymentStatus,
   getItem, getUnit, toBaseQty, priceLines, parseLineMoney, itemTaxBp, present, fullDoc, markApproved, markReversed,
 };

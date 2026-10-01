@@ -396,11 +396,7 @@ function taxReport(ctx, opts = {}) {
 function listDocs(ctx, opts = {}) {
   const w = ['1=1'];
   const p = [];
-  const typePerm = {
-    sale: 'sales.view', sale_return: 'sales.view', purchase: 'purchases.view', purchase_return: 'purchases.view', receipt: 'cash.receipt', payment: 'cash.view',
-    expense: 'expenses.create', transfer: 'stock.view', stock_count: 'stock.view', damage: 'stock.view', opening_stock: 'stock.view', opening_balance: 'opening.manage',
-    cash_transfer: 'cash.view', session_variance: 'cash.view', custody_settlement: 'reps.view', commission: 'commissions.manage', batch_status: 'stock.view',
-  };
+  const typePerm = D.DOC_VIEW_PERM;
   if (opts.type) {
     const types = String(opts.type).split(',');
     for (const t of types) if (typePerm[t]) ctx.require(typePerm[t]);

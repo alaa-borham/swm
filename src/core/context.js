@@ -91,7 +91,7 @@ class Ctx {
     try {
       return this.db.transaction(fn).immediate();
     } catch (e) {
-      this.flushDenied(e);
+      if (!this.db.inTransaction) this.flushDenied(e);
       throw e;
     }
   }
