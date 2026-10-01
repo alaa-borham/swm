@@ -119,8 +119,8 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
   app.use('/api', api);
   const h = (fn) => (req, res) => {
     const out = fn(ctxOf(req), req, res);
-    if (out && typeof out.then === 'function') return out.then((v) => { if (!res.headersSent) res.json(v ?? { ok: true }); });
-    if (!res.headersSent) res.json(out ?? { ok: true });
+    if (out && typeof out.then === 'function') return out.then((v) => { if (!res.headersSent) res.json(v === undefined ? { ok: true } : v); });
+    if (!res.headersSent) res.json(out === undefined ? { ok: true } : out);
   };
   const id = (req) => Number(req.params.id);
 
