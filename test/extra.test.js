@@ -258,3 +258,22 @@ test('طلب شراء واستلام جزئي على دفعتين ومنع تج�
   assert.throws(() => Pur.createPurchase(e.admin, { party_id: sup.id, po_id: po.id, lines: [{ item_id: item.id, unit_id: carton.id, qty: 1, price: 60, po_line_id: pl }] }), (err) => err.code === 'INVALID_STATE');
   assert.equal(e.stockQty(item.id).qty, 48);
 });
+
+test('رمز QR للفاتورة المبسطة بصيغة TLV', async () => {
+  const e = setup();
+  const EI = require('../src/core/einvoice');
+  e.db.prepare("UPDATE settings SET value='300000000000003' WHERE key='org_tax_number'").run();
+  e.admin.invalidateSettings();
+  const item = e.item({ price: 100, tax: 15 });
+  e.stock(item, 5, 50);
+  const s = Sales.createSale(e.admin, { lines: [{ item_id: item.id, qty: 2 }], payments: [{ cash_account_id: 1, amount: 230 }] });
+  const doc = e.db.prepare('SELECT * FROM docs WHERE id=?').get(s.id);
+  const { payload, svg } = await EI.qrSvg(e.admin, doc);
+  const f = EI.decodeTlv(payload);
+  assert.equal(f[1], e.admin.setting('org_name'));
+  assert.equal(f[2], '300000000000003');
+  assert.match(f[3], /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+  assert.equal(f[4], '230.00');
+  assert.equal(f[5], '30.00');
+  assert.ok(svg.startsWith('<svg'));
+});

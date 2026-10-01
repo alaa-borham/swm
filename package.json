@@ -24,7 +24,8 @@
   "dependencies": {
     "better-sqlite3": "^13.0.3",
     "exceljs": "^4.4.0",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "qrcode": "^1.5.4"
   },
   "private": true,
   "engines": {

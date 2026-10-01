@@ -269,6 +269,15 @@ export async function printDoc(id, format = 'a4') {
     const d = await get('/docs/' + id);
     const p = await api('POST', `/docs/${id}/print`, {});
     const s = state.settings;
+    // رمز الفاتورة الضريبية المبسطة
+    let qrImg = null;
+    if (s.einvoice_qr && ['sale', 'sale_return'].includes(d.type)) {
+      try {
+        const q = await get(`/docs/${id}/qr`);
+        qrImg = h('img', { src: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(q.svg), alt: 'QR', style: { width: format === 'thermal' ? '36mm' : '32mm', height: 'auto', display: 'block', margin: '8px auto' } });
+      } catch (e) { toast('تعذر إنشاء رمز الفاتورة: ' + e.message, 'bad'); }
+    }
+    d._qr = qrImg;
     const area = document.querySelector('.print-area') || document.body.appendChild(h('div', { class: 'print-area' }));
     clear(area);
     area.append(format === 'thermal' ? thermal(d, s, p.copy) : a4(d, s, p.copy));
@@ -286,7 +295,7 @@ function a4(d, s, copy) {
   return h('div', { class: 'print-a4' },
     h('div', { class: 'head' },
       h('div', null, h('h1', null, s.org_name), d.branch_name && (d.branch_address || d.branch_phone) ? h('div', null, d.branch_name) : null, h('div', null, d.branch_address || s.org_address), h('div', null, d.branch_phone || s.org_phone), s.org_tax_number ? h('div', null, 'الرقم الضريبي: ', s.org_tax_number) : null),
-      h('div', { style: { textAlign: 'left' } }, h('h1', null, d.label), h('div', null, 'رقم: ', N(d.number)), h('div', null, 'التاريخ: ', N(d.date)),
+      h('div', { style: { textAlign: 'left' } }, h('h1', null, s.einvoice_qr && d.type === 'sale' ? 'فاتورة ضريبية مبسطة' : d.label), h('div', null, 'رقم: ', N(d.number)), h('div', null, 'التاريخ: ', N(d.date)),
         d.due_date ? h('div', null, 'الاستحقاق: ', N(d.due_date)) : null, copy ? h('div', { class: 'copy-mark' }, 'نسخة') : null)),
     d.party_name ? h('p', null, h('b', null, 'العميل/المورد: '), d.party_name) : null,
     d.ref_doc_number ? h('p', null, 'مرجع: ', d.ref_doc_number) : null,
@@ -296,6 +305,7 @@ function a4(d, s, copy) {
     h('table', { style: { width: '320px', marginTop: '12px', marginRight: 'auto' } }, h('tbody', null,
       [['الإجمالي قبل الخصم', d.subtotal], ['الخصم', d.discount], ['الصافي', d.net], ['الضريبة', d.tax], ['الإجمالي', d.total],
         ['المدفوع', d.open_amount != null ? d.total - d.open_amount : null], ['المتبقي', d.open_amount]].filter(([k, v]) => v != null && (v !== 0 || k === 'الإجمالي' || k === 'المتبقي')).map(([k, v]) => h('tr', null, h('td', null, k), h('td', null, money(v)))))),
+    d._qr || null,
     h('p', { style: { marginTop: '24px', textAlign: 'center' } }, s.invoice_footer || ''));
 }
 
@@ -312,6 +322,7 @@ function thermal(d, s, copy) {
     d.discount ? h('div', null, 'الخصم: ', money(d.discount)) : null, d.tax ? h('div', null, 'الضريبة: ', money(d.tax)) : null,
     h('div', null, h('b', null, 'الإجمالي: ', money(d.total))),
     d.open_amount != null ? h('div', null, 'المدفوع: ', money(d.total - d.open_amount), ' — المتبقي: ', money(d.open_amount)) : null,
+    d._qr || null,
     h('div', { class: 'c', style: { marginTop: '6px' } }, s.invoice_footer || ''));
 }
 export { partySelect };

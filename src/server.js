@@ -138,7 +138,7 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
         org_name: s.org_name, org_address: s.org_address, org_phone: s.org_phone, org_tax_number: s.org_tax_number, currency: s.currency,
         money_decimals: getMoneyDecimals(), prices_include_tax: s.prices_include_tax === '1', default_tax_rate: fromBp(Number(s.default_tax_rate_bp)),
         invoice_footer: s.invoice_footer, receipt_width_mm: Number(s.receipt_width_mm), locked_until: s.locked_until, today: ctx.today(),
-        expiry_alert_days: Number(s.expiry_alert_days),
+        expiry_alert_days: Number(s.expiry_alert_days), einvoice_qr: s.einvoice_qr === '1',
       },
     };
   }));
@@ -150,7 +150,7 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
     currency: 'settings.manage', timezone: 'settings.manage', expiry_block_days: 'settings.manage', expiry_alert_days: 'settings.manage',
     cashier_max_discount_pct: 'settings.manage', extra_cost_basis: 'settings.manage', session_timeout_minutes: 'settings.manage', backup_hour: 'backup.manage',
     backup_retention: 'backup.manage', invoice_footer: 'settings.manage', receipt_width_mm: 'settings.manage', money_decimals: 'settings.manage',
-    default_tax_rate_pct: 'tax.manage', prices_include_tax: 'tax.manage', tax_recoverable: 'tax.manage',
+    default_tax_rate_pct: 'tax.manage', prices_include_tax: 'tax.manage', tax_recoverable: 'tax.manage', einvoice_qr: 'tax.manage',
   };
   api.get('/settings', h((ctx) => {
     ctx.require('settings.manage');
@@ -173,7 +173,7 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
         if (![0, 1, 2, 3].includes(Number(v))) fail('VALIDATION', 'منازل العملة بين 0 و3');
         require('./lib/money').setMoneyDecimals(Number(v));
       }
-      if (['prices_include_tax', 'tax_recoverable'].includes(k)) { set.run(k, v ? '1' : '0'); continue; }
+      if (['prices_include_tax', 'tax_recoverable', 'einvoice_qr'].includes(k)) { set.run(k, v ? '1' : '0'); continue; }
       set.run(k, String(v ?? ''));
     }
     ctx.invalidateSettings();
@@ -241,6 +241,11 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
       if (['purchase', 'purchase_return', 'opening_stock'].includes(doc.type)) for (const l of full.lines) { delete l.price; }
     }
     return full;
+  }));
+  api.get('/docs/:id/qr', h(async (ctx, req) => {
+    const doc = D.loadDoc(ctx, id(req));
+    canView(ctx, doc);
+    return require('./core/einvoice').qrSvg(ctx, doc);
   }));
   api.post('/docs/:id/print', h((ctx, req) => {
     ctx.require('sales.print');
