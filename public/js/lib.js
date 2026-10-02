@@ -318,7 +318,9 @@ export function itemPicker({ onPick, warehouseId, placeholder = 'ابحث بال
     else if (e.key === 'ArrowUp') { idx = Math.max(idx - 1, 0); render(); e.preventDefault(); }
     else if (e.key === 'Escape') { results = []; render(); }
   });
-  return { el: h('div', null, input, box), input };
+  const addBtn = allowCreate && can('items.manage')
+    ? h('button', { type: 'button', class: 'btn primary', style: { whiteSpace: 'nowrap' }, onclick: () => quickItem(input.value.trim()) }, '+ صنف جديد') : null;
+  return { el: h('div', null, addBtn ? h('div', { class: 'row', style: { gap: '6px', flexWrap: 'nowrap' } }, input, addBtn) : input, box), input };
 }
 
 /** شريط فلاتر بسيط */
