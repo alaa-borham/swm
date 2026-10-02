@@ -206,8 +206,13 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
         if (!m) fail('VALIDATION', 'الشعار يجب أن يكون صورة PNG أو JPG أو WebP');
         if (m[2].length * 0.75 > 300 * 1024) fail('VALIDATION', 'حجم الشعار كبير؛ الحد 300 كيلوبايت');
       }
+      // رمز QR السعودي يتطلب رقمًا ضريبيًا صحيحًا (15 رقمًا يبدأ وينتهي بـ 3)
+      const vatMsg = 'الرقم الضريبي يجب أن يكون 15 رقمًا يبدأ وينتهي بالرقم 3 (مثل 310123456700003)؛ وإلا لن يُقرأ رمز QR في تطبيق الهيئة';
+      const qrOn = 'einvoice_qr' in req.body ? !!req.body.einvoice_qr && req.body.einvoice_qr !== '0' : before.einvoice_qr === '1';
+      if (k === 'org_tax_number' && v && qrOn && !require('./core/einvoice').validVatNumber(v)) fail('VALIDATION', vatMsg);
+      if (k === 'einvoice_qr' && v && v !== '0' && !require('./core/einvoice').validVatNumber('org_tax_number' in req.body ? req.body.org_tax_number : before.org_tax_number)) fail('VALIDATION', vatMsg);
       // أول إدخال للرقم الضريبي يفعّل رمز QR للفاتورة الضريبية تلقائيًا
-      if (k === 'org_tax_number' && v && !before.org_tax_number && !('einvoice_qr' in req.body) && ctx.has('tax.manage')) set.run('einvoice_qr', '1');
+      if (k === 'org_tax_number' && v && !before.org_tax_number && !('einvoice_qr' in req.body) && ctx.has('tax.manage') && require('./core/einvoice').validVatNumber(v)) set.run('einvoice_qr', '1');
       if (k === 'expiry_block_days') intIn(0, 365, 'منع البيع قبل الانتهاء');
       if (k === 'expiry_alert_days') intIn(0, 3650, 'تنبيه الصلاحية');
       if (k === 'session_timeout_minutes') intIn(5, 10080, 'انتهاء الجلسة');

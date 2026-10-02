@@ -310,7 +310,7 @@ export async function printDoc(id, format = 'a4') {
     if (s.einvoice_qr && ['sale', 'sale_return'].includes(d.type)) {
       try {
         const q = await get(`/docs/${id}/qr`);
-        qrImg = h('img', { src: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(q.svg), alt: 'QR', style: { width: format === 'thermal' ? '36mm' : '32mm', height: 'auto', display: 'block', margin: '8px auto' } });
+        qrImg = h('img', { src: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(q.svg), alt: 'QR', style: { width: format === 'thermal' ? '40mm' : '34mm', height: 'auto', display: 'block', margin: '8px auto', imageRendering: 'pixelated' } });
       } catch (e) { toast('تعذر إنشاء رمز الفاتورة: ' + e.message, 'bad'); }
     }
     d._qr = qrImg;

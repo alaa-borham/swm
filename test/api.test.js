@@ -259,3 +259,14 @@ test('وحدة الإدخال: الشراء بوحدة واحدة فقط وال�
     assert.equal(upd.units.find((u) => u.is_base).for_purchase, 1);
   } finally { await t.close(); }
 });
+
+test('الرقم الضريبي: رفض الرقم غير الصحيح عند تفعيل رمز QR', async () => {
+  const t = await boot();
+  try {
+    const bad = await t.admin.put('/settings', { org_tax_number: '1111111111', einvoice_qr: true });
+    assert.equal(bad.status, 400);
+    assert.match(bad.body.error.message, /15 رقمًا/);
+    assert.equal((await t.admin.put('/settings', { org_tax_number: '310123456700003' })).status, 200);
+    assert.equal((await t.admin.get('/settings')).body.einvoice_qr, '1', 'يُفعّل تلقائيًا مع رقم صحيح');
+  } finally { await t.close(); }
+});
