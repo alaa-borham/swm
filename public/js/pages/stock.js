@@ -1,9 +1,11 @@
 // المخزون: الأرصدة والدفعات، التنبيهات، التحويل، الجرد، التالف، بطاقة الصنف، المخزون الافتتاحي.
+import { canAddStock, addStockModal } from './addstock.js';
 import { h, clear, get, api, submitter, toast, run, M, Q, inp, sel, field, num, table, badge, STATUS, itemPicker, warehouseSelect, pageHead, can, askReason, today, lookup, modal, download } from '../lib.js';
 
 export async function balances({ el, q, isCurrent }) {
   pageHead('رصيد المخزون', can('reports.export') ? h('button', { class: 'btn', onclick: () => download(`/reports/stock/export?format=xlsx&by=${by.value}&warehouse_id=${wh.value}`, 'stock.xlsx') }, 'تصدير Excel') : null,
-    h('button', { class: 'btn', onclick: () => window.print() }, 'طباعة'));
+    h('button', { class: 'btn', onclick: () => window.print() }, 'طباعة'),
+    canAddStock() ? h('button', { class: 'btn ok', onclick: () => addStockModal(null, () => load()) }, '+ إضافة رصيد') : null);
   const wh = await warehouseSelect(q.warehouse_id || '', {}, { all: true });
   const by = sel([{ value: 'item', label: 'حسب الصنف' }, { value: 'batch', label: 'حسب التشغيلة' }], q.by || 'item');
   const state = sel([{ value: '', label: 'كل الحالات' }, { value: 'صالح', label: 'صالح' }, { value: 'منتهي', label: 'منتهي' }, { value: 'معزول', label: 'معزول' }, { value: 'قيد الفحص', label: 'قيد الفحص' }], '');

@@ -1,8 +1,8 @@
 // عامل الخدمة: يحفظ ملفات الواجهة لتعمل نقطة البيع دون اتصال. طلبات /api لا تُحفظ أبدًا.
-const CACHE = 'frs-shell-v26';
+const CACHE = 'frs-shell-v27';
 const SHELL = ['/', '/index.html', '/css/app.css', '/icon.svg', '/manifest.webmanifest', '/js/app.js', '/js/lib.js', '/js/offline.js',
   '/js/pages/dashboard.js', '/js/pages/pos.js', '/js/pages/docs.js', '/js/pages/purchases.js', '/js/pages/cash.js', '/js/pages/stock.js',
-  '/js/pages/reps.js', '/js/pages/masters.js', '/js/pages/reports.js', '/js/pages/admin.js'];
+  '/js/pages/reps.js', '/js/pages/masters.js', '/js/pages/addstock.js', '/js/pages/reports.js', '/js/pages/admin.js'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

@@ -1,4 +1,5 @@
 // البيانات الأساسية: الأصناف والوحدات والباركود، العملاء والموردون، المستودعات والحسابات، التصنيفات.
+import { canAddStock, addStockModal } from './addstock.js';
 import { h, clear, state, get, api, submitter, toast, run, M, inp, sel, field, num, table, pageHead, can, lookup, invalidate, today, download } from '../lib.js';
 
 // ===================== الأصناف =====================
@@ -15,7 +16,7 @@ export async function items({ el, q, isCurrent }) {
       { key: 'units', label: 'الوحدات والأسعار', render: (it) => it.units.map((u) => h('div', { class: 'small' }, `${u.name}${u.is_base ? '' : ' = ' + u.factor + ' ' + it.base_unit}: `, M(u.sell_price), u.barcode ? h('span', { class: 'muted' }, ' · ' + u.barcode) : '')) },
       { key: 'tax_rate_bp', label: 'ضريبة %', render: (it) => (it.tax_rate_bp == null ? 'الافتراضية' : it.tax_rate_bp) },
       { key: 'active', label: 'الحالة', render: (it) => (it.active ? h('span', { class: 'badge ok' }, 'نشط') : h('span', { class: 'badge bad' }, 'موقوف')) },
-      { key: 'a', label: '', render: (it) => [h('a', { class: 'btn small', href: `#/item-card?item=${it.id}` }, 'بطاقة'), ' ', can('items.manage') ? h('a', { class: 'btn small', href: '#/item/' + it.id }, 'تعديل') : null] }],
+      { key: 'a', label: '', render: (it) => [h('a', { class: 'btn small', href: `#/item-card?item=${it.id}` }, 'بطاقة'), ' ', can('items.manage') ? h('a', { class: 'btn small', href: '#/item/' + it.id }, 'تعديل') : null, ' ', canAddStock() && it.active ? h('button', { class: 'btn small ok', onclick: (e) => { e.stopPropagation(); addStockModal(it); } }, '+ رصيد') : null] }],
     rows: r.rows }), h('div', { class: 'muted small', style: { marginTop: '6px' } }, `${r.total} صنف`));
   };
   el.append(h('form', { class: 'row card filters', style: { padding: '12px' }, onsubmit: (e) => { e.preventDefault(); load(); } }, field('بحث', qIn), field('الحالة', active), h('button', { class: 'btn primary' }, 'بحث')), body);
@@ -113,7 +114,7 @@ export async function itemForm({ el, params }) {
       h('div', { class: 'row', style: { marginTop: '12px', maxWidth: '420px' } }, field('وحدة الإدخال (الشراء)', entrySel)),
       h('p', { class: 'small muted', style: { margin: '4px 0 0' } }, 'اختر الوحدة لعرض بياناتها وتعديلها في السطر أعلاه. الوحدة المختارة هي وحدة الشراء والاستلام الوحيدة، والبيع متاح بكل الوحدات النشطة.'),
       h('p', { class: 'small muted' }, 'مثال: وحدة المنتج "حبة"، والكرتون معامله 12. تغيير الاسم أو السعر أو المعامل لا يغيّر المستندات التاريخية. اترك سعر البيع فارغًا واكتب سعر الشراء ونسبة الربح ليُحسب تلقائيًا.')),
-    h('button', { class: 'btn ok', onclick: save }, 'حفظ'));
+    h('div', { class: 'actions' }, h('button', { class: 'btn ok', onclick: save }, 'حفظ'), it && it.active && canAddStock() ? h('button', { class: 'btn', onclick: async () => addStockModal(await get('/items/' + it.id)) }, '+ إضافة رصيد لهذا الصنف') : null));
   drawUnits();
 }
 

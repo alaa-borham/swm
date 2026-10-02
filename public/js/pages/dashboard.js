@@ -20,7 +20,9 @@ export async function render({ el, isCurrent }) {
     ['stock.view', '#/stock', '📊', 'رصيد المخزون', 'الكميات المتاحة بالمستودعات'],
     ['cash.receipt', '#/receipt', '💵', 'سند قبض', 'دفعة من عميل'],
   ].filter(([p]) => can(p));
-  if (shortcuts.length) el.append(h('div', { class: 'quick-actions' }, shortcuts.map(([, href, icon, label, sub]) => h('a', { class: 'quick', href }, h('span', { class: 'ic', 'aria-hidden': 'true' }, icon), h('span', null, label, h('small', null, sub))))));
+  const { canAddStock, addStockModal } = await import('./addstock.js');
+  const quickAdd = canAddStock() ? h('button', { type: 'button', class: 'quick', onclick: () => addStockModal(null, () => load()) }, h('span', { class: 'ic', 'aria-hidden': 'true' }, '➕'), h('span', null, 'إضافة رصيد', h('small', null, 'صنف جاهز للبيع'))) : null;
+  if (shortcuts.length || quickAdd) el.append(h('div', { class: 'quick-actions' }, shortcuts.map(([, href, icon, label, sub]) => h('a', { class: 'quick', href }, h('span', { class: 'ic', 'aria-hidden': 'true' }, icon), h('span', null, label, h('small', null, sub)))), quickAdd));
   el.append(h('form', { class: 'row card filters', style: { padding: '12px' }, onsubmit: (e) => { e.preventDefault(); load(); } },
     field('من', from), field('إلى', to), branch ? field('الفرع', branch) : null, h('button', { class: 'btn primary' }, 'عرض')), body);
   await load();
