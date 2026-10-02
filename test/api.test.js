@@ -241,3 +241,21 @@ test('نسبة الربح: سعر البيع = سعر الشراء + النسب�
     assert.equal(bad.status, 400);
   } finally { await t.close(); }
 });
+
+test('وحدة الإدخال: الشراء بوحدة واحدة فقط والبيع بكل الوحدات', async () => {
+  const t = await boot();
+  try {
+    const sup = (await t.admin.post('/parties', { name: 'مورد', is_supplier: 1 })).body;
+    const it = (await t.admin.post('/items', { name: 'حلاوة', base_unit: 'حبة', track_expiry: 0, sell_price: 2, base_for_purchase: 0, units: [{ name: 'كرتون', factor: 12, sell_price: 20, for_purchase: 1 }] })).body;
+    const [piece, carton] = it.units;
+    assert.deepEqual([piece.for_purchase, carton.for_purchase], [0, 1]);
+    const bad = await t.admin.post('/purchases', { party_id: sup.id, lines: [{ item_id: it.id, unit_id: piece.id, qty: 1, price: 1 }] });
+    assert.equal(bad.status, 400);
+    assert.equal((await t.admin.post('/purchases', { party_id: sup.id, approve: true, lines: [{ item_id: it.id, unit_id: carton.id, qty: 1, price: 12 }] })).status, 200);
+    const sale = await t.admin.post('/sales', { lines: [{ item_id: it.id, unit_id: piece.id, qty: 1 }], payments: [{ cash_account_id: 1, amount: 2 }] });
+    assert.equal(sale.status, 200, 'البيع بالحبة متاح');
+    // إيقاف وحدة الإدخال الوحيدة يعيدها لوحدة المنتج
+    const upd = (await t.admin.put('/items/' + it.id, { name: 'حلاوة', base_unit: 'حبة', units: [{ ...piece, for_purchase: 0 }, { ...carton, for_purchase: 1, active: 0 }] })).body;
+    assert.equal(upd.units.find((u) => u.is_base).for_purchase, 1);
+  } finally { await t.close(); }
+});

@@ -330,8 +330,10 @@ export function itemPicker({ onPick, warehouseId, placeholder = 'ابحث بال
     unitsBox, h('button', { type: 'button', class: 'btn small', style: { marginTop: '8px' }, onclick: addUnit }, '+ إضافة وحدة أخرى'),
     h('p', { class: 'small muted' }, 'سعر الشراء يُكتب في الفاتورة تلقائيًا. عند كتابة نسبة الربح يُحسب سعر البيع لكل وحدة = سعر شرائها + النسبة. باقي البيانات تُضبط من صفحة الأصناف.')),
     [{ label: 'حفظ وإضافة', class: 'primary', onClick: async () => {
-      const units = extra.map((u) => ({ name: u.name.value, factor: u.factor.value, barcode: u.barcode.value || undefined, purchase_price: u.cost.value || undefined, profit_margin: f.margin.value || undefined }));
-      const it = await run(() => api('POST', '/items', { name: f.name.value, base_unit: f.base_unit.value, sell_price: 0, purchase_price: f.cost.value || undefined, profit_margin: f.margin.value || undefined, barcode: f.barcode.value || undefined, track_expiry: f.track_expiry.checked ? 1 : 0, units }), 'أُضيف الصنف');
+      // وحدة الإدخال: أول وحدة أخرى لها سعر شراء إن لم يُكتب سعر لوحدة المنتج، وإلا وحدة المنتج
+      const entry = f.cost.value ? null : extra.find((u) => u.cost.value) || null;
+      const units = extra.map((u) => ({ name: u.name.value, factor: u.factor.value, barcode: u.barcode.value || undefined, purchase_price: u.cost.value || undefined, profit_margin: f.margin.value || undefined, for_purchase: u === entry ? 1 : 0 }));
+      const it = await run(() => api('POST', '/items', { name: f.name.value, base_unit: f.base_unit.value, sell_price: 0, purchase_price: f.cost.value || undefined, profit_margin: f.margin.value || undefined, base_for_purchase: entry ? 0 : 1, barcode: f.barcode.value || undefined, track_expiry: f.track_expiry.checked ? 1 : 0, units }), 'أُضيف الصنف');
       if (!it) return false;
       // سعر الشراء المُدخل لكل وحدة يُمرَّر للسطر؛ وتُختار أول وحدة أخرى لها سعر وإلا وحدة المنتج
       const base = it.units.find((u) => u.is_base);

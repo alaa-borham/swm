@@ -79,6 +79,10 @@ function saveUnits(ctx, item, units) {
       }
     }, `الباركود ${vals.barcode || ''} أو اسم الوحدة ${name} مستخدم مسبقًا`);
   }
+  // لا يبقى صنف بلا وحدة إدخال: تُعتمد وحدة المنتج
+  if (!ctx.db.prepare('SELECT 1 FROM item_units WHERE item_id=? AND for_purchase=1 AND active=1').get(item.id)) {
+    ctx.db.prepare('UPDATE item_units SET for_purchase=1 WHERE item_id=? AND is_base=1').run(item.id);
+  }
 }
 
 function createItem(ctx, input) {
@@ -93,7 +97,7 @@ function createItem(ctx, input) {
     `كود الصنف ${code} مستخدم مسبقًا`);
     if (!code) ctx.db.prepare('UPDATE items SET code=? WHERE id=?').run(`IT${String(id).padStart(5, '0')}`, id);
     const item = ctx.db.prepare('SELECT * FROM items WHERE id=?').get(id);
-    const units = [{ is_base: 1, name: f.base_unit, barcode: input.barcode, sell_price: input.sell_price ?? 0, purchase_price: input.purchase_price, profit_margin: input.profit_margin }, ...(input.units || []).filter((u) => !u.is_base)];
+    const units = [{ is_base: 1, name: f.base_unit, barcode: input.barcode, sell_price: input.sell_price ?? 0, purchase_price: input.purchase_price, profit_margin: input.profit_margin, for_purchase: input.base_for_purchase }, ...(input.units || []).filter((u) => !u.is_base)];
     saveUnits(ctx, item, units);
     ctx.audit('item.create', { entity: 'item', entity_id: id, after: { ...f, code: item.code } });
     return getItemFull(ctx, id);
