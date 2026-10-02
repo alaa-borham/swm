@@ -171,3 +171,19 @@ test('المستودعات: تعديل الاسم وحذف الفارغ فقط',
     assert.equal(t.db.prepare("SELECT COUNT(*) n FROM audit_log WHERE action='warehouse.delete'").get().n, 1, 'الحذف موثق');
   } finally { await t.close(); }
 });
+
+test('الصناديق: تعديل الاسم وحذف غير المستخدم فقط', async () => {
+  const t = await boot();
+  try {
+    const c = (await t.admin.post('/cash-accounts', { name: 'صندوق مؤقت', kind: 'cash' })).body;
+    assert.equal((await t.admin.put('/cash-accounts/' + c.id, { name: 'كاش' })).body.name, 'كاش');
+    const item = (await t.admin.post('/items', { name: 'ملح', base_unit: 'حبة', track_expiry: 0, sell_price: 5 })).body;
+    await t.admin.post('/opening-stock', { warehouse_id: 1, lines: [{ item_id: item.id, qty: 5, unit_cost: 1 }] });
+    await t.admin.post('/sales', { lines: [{ item_id: item.id, qty: 1 }], payments: [{ cash_account_id: c.id, amount: 5 }] });
+    const r = await t.admin.del('/cash-accounts/' + c.id);
+    assert.equal(r.status, 400);
+    assert.match(r.body.error.message, /حركات/);
+    const c2 = (await t.admin.post('/cash-accounts', { name: 'بنك جديد', kind: 'bank' })).body;
+    assert.equal((await t.admin.del('/cash-accounts/' + c2.id)).status, 200);
+  } finally { await t.close(); }
+});

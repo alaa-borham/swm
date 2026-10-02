@@ -371,6 +371,16 @@ function saveWarehouse(ctx, input, id) {
   });
 }
 
+/** يمنع حذف سجل يشير إليه أي جدول آخر (مستندات، حركات، قيود، ورديات...) */
+function assertUnreferenced(ctx, table, id, message) {
+  const tables = ctx.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all().map((t) => t.name);
+  for (const t of tables) {
+    for (const fk of ctx.db.prepare(`PRAGMA foreign_key_list("${t}")`).all()) {
+      if (fk.table === table && ctx.db.prepare(`SELECT 1 FROM "${t}" WHERE "${fk.from}"=? LIMIT 1`).get(id)) fail('IN_USE', message);
+    }
+  }
+}
+
 /** حذف مستودع فارغ لم تُسجَّل عليه أي حركة أو مستند. ما له تاريخ يُوقَف ولا يُحذف حفاظًا على السجلات. */
 function deleteWarehouse(ctx, id) {
   ctx.require('warehouses.manage');
@@ -382,14 +392,7 @@ function deleteWarehouse(ctx, id) {
     if (ctx.db.prepare('SELECT 1 FROM batches WHERE warehouse_id=? AND qty>0').get(id)) fail('IN_USE', 'لا يمكن حذف مستودع به منتجات');
     const others = ctx.db.prepare("SELECT COUNT(*) n FROM warehouses WHERE branch_id=? AND kind='main' AND active=1 AND id<>?").get(ex.branch_id, id).n;
     if (!others) fail('IN_USE', 'لا يمكن حذف المستودع الوحيد في الفرع');
-    // أي جدول يشير إلى المستودع (مستندات، حركات، دفعات، ورديات...) يمنع الحذف
-    const tables = ctx.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all().map((t) => t.name);
-    for (const t of tables) {
-      for (const fk of ctx.db.prepare(`PRAGMA foreign_key_list("${t}")`).all()) {
-        if (fk.table !== 'warehouses') continue;
-        if (ctx.db.prepare(`SELECT 1 FROM "${t}" WHERE "${fk.from}"=? LIMIT 1`).get(id)) fail('IN_USE', 'لا يمكن حذف مستودع عليه حركات أو مستندات سابقة، يمكنك إيقافه بدلًا من ذلك');
-      }
-    }
+    assertUnreferenced(ctx, 'warehouses', id, 'لا يمكن حذف مستودع عليه حركات أو مستندات سابقة، يمكنك إيقافه بدلًا من ذلك');
     ctx.db.prepare('DELETE FROM warehouses WHERE id=?').run(id);
     ctx.audit('warehouse.delete', { entity: 'warehouse', entity_id: id, before: ex });
     return { ok: true };
@@ -414,6 +417,7 @@ function saveCashAccount(ctx, input, id) {
       if (id) {
         const ex = ctx.db.prepare('SELECT * FROM cash_accounts WHERE id=?').get(id);
         if (!ex) notFound('الحساب');
+        ctx.checkBranch(ex.branch_id);
         ctx.db.prepare('UPDATE cash_accounts SET name=?, active=? WHERE id=?').run(name, input.active !== undefined ? bool(input.active, 1) : ex.active, id);
         ctx.audit('cash_account.update', { entity: 'cash_account', entity_id: id, before: ex, after: input });
         return ctx.db.prepare('SELECT * FROM cash_accounts WHERE id=?').get(id);
@@ -425,6 +429,23 @@ function saveCashAccount(ctx, input, id) {
       ctx.audit('cash_account.create', { entity: 'cash_account', entity_id: nid, after: input });
       return ctx.db.prepare('SELECT * FROM cash_accounts WHERE id=?').get(nid);
     }, 'اسم الحساب مستخدم');
+  });
+}
+
+/** حذف صندوق/بنك لم تُسجَّل عليه أي حركة */
+function deleteCashAccount(ctx, id) {
+  ctx.require('warehouses.manage');
+  return ctx.tx(() => {
+    const ex = ctx.db.prepare('SELECT * FROM cash_accounts WHERE id=?').get(id);
+    if (!ex) notFound('الحساب');
+    ctx.checkBranch(ex.branch_id);
+    if (ex.kind === 'rep_custody') fail('IN_USE', 'عهدة المندوب تُدار من صفحة المندوب');
+    const others = ctx.db.prepare("SELECT COUNT(*) n FROM cash_accounts WHERE branch_id=? AND kind<>'rep_custody' AND active=1 AND id<>?").get(ex.branch_id, id).n;
+    if (!others) fail('IN_USE', 'لا يمكن حذف الحساب الوحيد في الفرع');
+    assertUnreferenced(ctx, 'cash_accounts', id, 'لا يمكن حذف حساب عليه حركات أو مستندات سابقة، يمكنك إيقافه بدلًا من ذلك');
+    ctx.db.prepare('DELETE FROM cash_accounts WHERE id=?').run(id);
+    ctx.audit('cash_account.delete', { entity: 'cash_account', entity_id: id, before: ex });
+    return { ok: true };
   });
 }
 
@@ -503,5 +524,5 @@ function listReps(ctx) {
 
 module.exports = {
   createItem, updateItem, getItemFull, listItems, lookupItem, posCatalog, createParty, updateParty, getParty, getPartyRow, listParties,
-  simpleList, listWarehouses, listBranches, saveBranch, saveWarehouse, deleteWarehouse, listCashAccounts, saveCashAccount, saveCategory, createRep, updateRep, getRep, listReps, addCommissionPlan,
+  simpleList, listWarehouses, listBranches, saveBranch, saveWarehouse, deleteWarehouse, listCashAccounts, saveCashAccount, deleteCashAccount, saveCategory, createRep, updateRep, getRep, listReps, addCommissionPlan,
 };

@@ -243,6 +243,7 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
   api.get('/cash-accounts', h((ctx) => M.listCashAccounts(ctx)));
   api.post('/cash-accounts', h((ctx, req) => M.saveCashAccount(ctx, req.body)));
   api.put('/cash-accounts/:id', h((ctx, req) => M.saveCashAccount(ctx, req.body, id(req))));
+  api.delete('/cash-accounts/:id', h((ctx, req) => M.deleteCashAccount(ctx, id(req))));
   api.get('/branches', h((ctx) => M.listBranches(ctx)));
   api.post('/branches', h((ctx, req) => M.saveBranch(ctx, req.body)));
   api.put('/branches/:id', h((ctx, req) => M.saveBranch(ctx, req.body, id(req))));
