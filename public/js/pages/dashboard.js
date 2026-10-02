@@ -19,6 +19,7 @@ export async function render({ el, isCurrent }) {
     ['purchases.create', '#/purchase', '🧾', 'فاتورة شراء', 'استلام بضاعة من مورد'],
     ['items.view', '#/items', '📦', 'الأصناف والباركود', 'الأصناف والأسعار'],
     ['stock.view', '#/stock', '📊', 'رصيد المخزون', 'الكميات المتاحة بالمستودعات'],
+    ['stock.transfer', '#/reps', '🚚', 'تسليم بضاعة لمندوب', 'تحويل إلى مخزون المندوب'],
     ['cash.receipt', '#/receipt', '💵', 'تحصيل من عميل', 'سند قبض دفعة'],
   ].filter(([p]) => can(p));
   const { canAddStock, addStockModal } = await import('./addstock.js');

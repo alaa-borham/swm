@@ -47,10 +47,14 @@ export async function alerts({ el }) {
 }
 
 // ===================== التحويل =====================
-export async function transfer({ el }) {
+export async function transfer({ el, q }) {
   pageHead('تحويل بين المستودعات / تسليم عهدة مندوب');
-  const from = await warehouseSelect('');
-  const to = await warehouseSelect('', {}, { any: true });
+  // تسليم بضاعة لمندوب: ?rep=ID يختار مستودع المندوب كوجهة
+  let toId = q.to || '';
+  if (q.rep) { try { toId = (await get('/reps/' + q.rep)).warehouse_id || toId; } catch { /* تجاهل */ } }
+  const from = await warehouseSelect(q.from || '');
+  const to = await warehouseSelect(toId, {}, { any: true });
+  if (from.value && from.value === to.value && from.options.length > 1) from.selectedIndex = from.selectedIndex === 0 ? 1 : 0;
   const notes = inp({ placeholder: 'ملاحظات' });
   const transit = h('input', { type: 'checkbox' });
   const cart = [];

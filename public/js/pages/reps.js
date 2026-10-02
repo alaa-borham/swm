@@ -15,13 +15,13 @@ export async function list({ el }) {
   const r = await get('/reports/reps', { from: '2000-01-01', to: today() });
   const canEdit = can('warehouses.manage');
   el.append(table({ columns: [{ key: 'name', label: 'المندوب', render: (x) => h('a', { href: '#/rep/' + x.rep_id }, x.name) }, ...r.columns.slice(1),
-    ...(canEdit ? [{ key: 'e', label: '', render: (x) => (x.rep_id ? h('button', { class: 'btn small', onclick: (e) => { e.stopPropagation(); editRep(x.rep_id, () => location.reload()); } }, 'تعديل') : '') }] : [])],
+    ...(canEdit ? [{ key: 'e', label: '', render: (x) => (x.rep_id ? [h('button', { class: 'btn small', onclick: (e) => { e.stopPropagation(); editRep(x.rep_id, () => location.reload()); } }, 'تعديل'), ' ', can('stock.transfer') ? h('a', { class: 'btn small ok', href: '#/transfer?rep=' + x.rep_id, onclick: (e) => e.stopPropagation() }, 'تسليم بضاعة') : null] : '') }] : [])],
   rows: r.rows, totals: r.totals, onRow: (x) => { if (x.rep_id) location.hash = '#/rep/' + x.rep_id; } }));
 }
 
 export async function view({ el, params }) {
   const rep = await get('/reps/' + params[0]);
-  const head = pageHead(`المندوب ${rep.name}`, can('warehouses.manage') ? h('button', { class: 'btn primary', onclick: () => editRep(rep.id, () => location.reload()) }, 'تعديل البيانات وكلمة المرور') : null, can('stock.transfer') ? h('a', { class: 'btn', href: '#/transfer' }, 'تسليم بضاعة') : null,
+  const head = pageHead(`المندوب ${rep.name}`, can('warehouses.manage') ? h('button', { class: 'btn primary', onclick: () => editRep(rep.id, () => location.reload()) }, 'تعديل البيانات وكلمة المرور') : null, can('stock.transfer') ? h('a', { class: 'btn ok', href: '#/transfer?rep=' + rep.id }, 'تسليم بضاعة للمندوب') : null,
     can('cash.transfer') ? h('a', { class: 'btn', href: '#/cash-transfer' }, 'توريد نقد') : null,
     can('commissions.manage') ? h('a', { class: 'btn', href: '#/commissions?rep=' + rep.id }, 'العمولات') : null);
   const from = inp({ type: 'date', value: monthStart() });

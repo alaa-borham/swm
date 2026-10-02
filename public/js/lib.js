@@ -255,7 +255,7 @@ export async function cashSelect(value, attrs = {}, filter = () => true, { empty
 }
 
 /** منتقي صنف بالبحث بالاسم أو الباركود */
-export function itemPicker({ onPick, warehouseId, placeholder = 'ابحث بالاسم أو امسح الباركود', autofocus, allowCreate, inStockOnly }) {
+export function itemPicker({ onPick, warehouseId, placeholder = 'ابحث بالاسم أو امسح الباركود', autofocus, allowCreate, inStockOnly, emptyHint }) {
   const input = inp({ class: 'search', placeholder, autocomplete: 'off', autofocus });
   const box = h('div', { class: 'results hidden' });
   let results = [], idx = 0, timer, empty = '';
@@ -263,7 +263,7 @@ export function itemPicker({ onPick, warehouseId, placeholder = 'ابحث بال
     clear(box);
     box.classList.toggle('hidden', !results.length && !empty);
     if (!results.length && empty) {
-      box.appendChild(h('div', { class: 'r', style: { cursor: 'default' } }, h('span', { class: 'muted' }, inStockOnly ? (empty === ' ' ? 'لا توجد أصناف لها رصيد في هذا المستودع' : `لا يوجد رصيد متاح لـ "${empty}" في هذا المستودع`) : empty === ' ' ? 'لا توجد أصناف مسجلة بعد' : `لا يوجد صنف باسم "${empty}"`),
+      box.appendChild(h('div', { class: 'r', style: { cursor: 'default' } }, h('span', { class: 'muted' }, inStockOnly ? (empty === ' ' ? (emptyHint || 'لا توجد أصناف لها رصيد في هذا المستودع') : `لا يوجد رصيد متاح لـ "${empty}" في هذا المستودع`) : empty === ' ' ? 'لا توجد أصناف مسجلة بعد' : `لا يوجد صنف باسم "${empty}"`),
         allowCreate && can('items.manage') ? h('button', { type: 'button', class: 'btn small primary', onclick: () => quickItem(empty.trim()) }, '+ صنف جديد') : null));
     }
     results.forEach((it, i) => {
