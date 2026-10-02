@@ -140,7 +140,7 @@ export async function form({ el, params, q }) {
     h('div', { class: 'card' }, h('div', { class: 'grid' },
       field('المورد', supplierField, { req: true }), field('رقم فاتورة المورد', invNo), field('التاريخ', date, { req: true }), dueField,
       field('مستودع الاستلام', wh, { req: true }), field('ملاحظات', notes))),
-    h('div', { class: 'card' }, picker.el, h('div', { class: 'table-wrap', style: { marginTop: '10px' } }, h('table', null,
+    h('div', { class: 'card' }, picker.el, h('div', { class: 'table-wrap', style: { marginTop: '10px' } }, h('table', { class: 'lines-table' },
       h('thead', null, h('tr', null, ['الصنف', 'الوحدة', 'الكمية', 'تكلفة الوحدة', 'خصم', 'ضريبة %', 'رقم التشغيلة', 'الإنتاج', 'الانتهاء', ''].map((x) => h('th', null, x)))), tbody))),
     h('div', { class: 'grid wide' },
       h('div', { class: 'card' }, h('h3', null, 'تكاليف الشراء التابعة (نقل، تحميل…)'), extrasBox,
@@ -164,7 +164,7 @@ export async function purchaseReturn({ el, params }) {
   const send = submitter();
   el.append(
     h('div', { class: 'note' }, 'يُرجع من نفس الدفعة الأصلية وبتكلفتها التاريخية، ولا يتجاوز ما اشتُري بعد المرتجعات السابقة ولا الموجود من الدفعة في موقع الإرجاع.'),
-    h('div', { class: 'card' }, h('div', { class: 'table-wrap' }, h('table', null,
+    h('div', { class: 'card' }, h('div', { class: 'table-wrap' }, h('table', { class: 'lines-table' },
       h('thead', null, h('tr', null, ['الصنف', 'الوحدة', 'المشترى', 'المرتجع سابقًا', 'رقم التشغيلة', 'السعر', 'كمية الإرجاع'].map((x) => h('th', null, x)))),
       h('tbody', null, rows.map(({ l, q }) => h('tr', null, h('td', null, l.item_name), h('td', null, l.unit_name), h('td', null, Q(l.qty)),
         h('td', null, Q(l.returned_qty / (l.factor || 1))), h('td', null, l.batch_no || ''), h('td', null, M(l.price)), h('td', null, q))))))),
@@ -223,7 +223,7 @@ export async function orderForm({ el, params }) {
   };
   el.append(h('div', { class: 'note' }, 'طلب الشراء لا يغيّر المخزون أو الحسابات. الاستلام يتم من صفحة الطلب بفاتورة شراء جزئية أو كاملة، ولا يُقبل استلام أكثر من المطلوب.'),
     h('div', { class: 'card' }, h('div', { class: 'grid' }, field('المورد', supplierField, { req: true }), field('التاريخ', date), field('التوريد المتوقع', expected), field('مستودع الاستلام', wh), field('ملاحظات', notes))),
-    h('div', { class: 'card' }, picker.el, h('div', { class: 'table-wrap', style: { marginTop: '10px' } }, h('table', null,
+    h('div', { class: 'card' }, picker.el, h('div', { class: 'table-wrap', style: { marginTop: '10px' } }, h('table', { class: 'lines-table' },
       h('thead', null, h('tr', null, ['الصنف', 'الوحدة', 'الكمية', 'السعر المتفق', 'ضريبة %', ''].map((x) => h('th', null, x)))), tbody)),
     h('p', null, 'القيمة التقريبية قبل الضريبة: ', total)),
     h('div', { class: 'actions' }, can('purchases.approve') ? h('button', { class: 'btn ok', onclick: () => save(true) }, 'اعتماد الطلب') : null, h('button', { class: 'btn', onclick: () => save(false) }, 'حفظ مسودة')));

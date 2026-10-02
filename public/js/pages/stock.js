@@ -128,7 +128,7 @@ export async function transfer({ el, q }) {
       h('label', { class: 'check', style: { marginTop: '10px' } }, transit, 'نقل على مراحل: تبقى البضاعة "بالطريق" غير متاحة في الطرفين حتى تستلمها الوجهة')),
     hint,
     h('div', { class: 'card' }, h('div', { class: 'row', style: { alignItems: 'center' } }, h('div', { style: { flex: 1 } }, filterIn), countBox),
-      h('div', { class: 'table-wrap', style: { marginTop: '10px' } }, h('table', null, h('thead', null, h('tr', null, ['', 'الصنف', 'المتاح', 'الوحدة', 'الكمية المحوّلة', ''].map((x) => h('th', null, x)))), tbody))),
+      h('div', { class: 'table-wrap', style: { marginTop: '10px' } }, h('table', { class: 'lines-table' }, h('thead', null, h('tr', null, ['', 'الصنف', 'المتاح', 'الوحدة', 'الكمية المحوّلة', ''].map((x) => h('th', null, x)))), tbody))),
     h('button', { class: 'btn ok', onclick: async () => {
       if (from.value === to.value) return toast('المستودع المصدر والوجهة متطابقان', 'bad');
       const lines = [];
@@ -266,7 +266,7 @@ export async function openingStock({ el }) {
   const send = submitter();
   el.append(h('div', { class: 'note' }, 'الأرصدة الافتتاحية تُدخل بمستند مؤرخ يمكن تتبعه. يمكن أيضًا الاستيراد من Excel من صفحة الاستيراد.'),
     h('div', { class: 'card' }, h('div', { class: 'row' }, field('المستودع', wh), field('التاريخ', date))),
-    h('div', { class: 'card' }, picker.el, h('div', { class: 'table-wrap', style: { marginTop: '10px' } }, h('table', null,
+    h('div', { class: 'card' }, picker.el, h('div', { class: 'table-wrap', style: { marginTop: '10px' } }, h('table', { class: 'lines-table' },
       h('thead', null, h('tr', null, ['الصنف', 'الوحدة', 'الكمية', 'تكلفة الوحدة', 'رقم التشغيلة', 'الانتهاء', ''].map((x) => h('th', null, x)))), tbody))),
     h('button', { class: 'btn ok', onclick: async () => {
       const d = await run(() => send('POST', '/opening-stock', { warehouse_id: Number(wh.value), date: date.value, lines: cart.map((l) => ({ item_id: l.item.id, unit_id: l.unit_id, qty: num(l.qty), unit_cost: num(l.unit_cost), batch_no: l.batch_no || null, expiry_date: l.expiry_date || null })) }), 'تم');

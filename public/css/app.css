@@ -233,3 +233,26 @@ tbody tr.sel td { background: var(--brand-soft); }
 @media (max-width: 900px) { .stepper .step { width: 40px; min-height: 42px; } }
 input::placeholder, textarea::placeholder { color: var(--muted); opacity: .85; }
 .stepper:has(input:disabled) .step { opacity: .4; pointer-events: none; }
+/* بنود الفواتير كبطاقات على الجوال */
+@media (max-width: 700px) {
+  .table-wrap:has(> table.lines-table) { overflow: visible; border: 0; background: none; }
+  table.lines-table, table.lines-table tbody, table.lines-table tr, table.lines-table td { display: block; width: 100%; }
+  table.lines-table thead { display: none; }
+  table.lines-table tr { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; box-shadow: var(--shadow); }
+  table.lines-table td { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; border: 0; text-align: right; min-height: 0; }
+  table.lines-table td::before { content: attr(data-label); color: var(--muted); font-size: 13px; flex: none; }
+  table.lines-table td[data-label=""]::before { content: none; }
+  table.lines-table td:first-child { font-weight: 700; font-size: 16px; padding-left: 44px; display: block; }
+  table.lines-table td:first-child::before { content: none; }
+  table.lines-table td:last-child:has(> button.danger) { position: absolute; top: 8px; left: 8px; width: auto; padding: 0; }
+  table.lines-table td:first-child:has(> input[type=checkbox]) { position: absolute; top: 12px; left: 12px; width: auto; padding: 0; }
+  table.lines-table td:first-child:has(> input[type=checkbox]) input { width: 22px; height: 22px; }
+  table.lines-table tr:has(> td:first-child > input[type=checkbox]) > td:nth-child(2) { display: block; font-weight: 700; font-size: 16px; padding-left: 44px; }
+  table.lines-table tr:has(> td:first-child > input[type=checkbox]) > td:nth-child(2)::before { content: none; }
+  table.lines-table td[colspan] { display: block; text-align: center; }
+  table.lines-table td[colspan]::before { content: none; }
+  table.lines-table td input:not([type=checkbox]), table.lines-table td select { max-width: 60%; }
+  table.lines-table td .stepper { max-width: 70%; }
+  table.lines-table td .stepper input { max-width: none; }
+  table.lines-table td.n { font-weight: 800; font-size: 17px; border-top: 1px dashed var(--line); margin-top: 4px; padding-top: 8px; }
+}

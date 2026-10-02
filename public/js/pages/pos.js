@@ -272,7 +272,7 @@ async function posView({ el, q }) {
       h('div', { class: 'card' }, picker.el, h('div', { class: 'small muted', style: { marginTop: '6px' } },
         h('span', { class: 'kbd' }, 'F2'), ' بحث · ', h('span', { class: 'kbd' }, 'Enter'), ' إضافة · ', h('span', { class: 'kbd' }, 'F4'), ' مسودة · ',
         h('span', { class: 'kbd' }, 'F9'), ' اعتماد · ', h('span', { class: 'kbd' }, 'F10'), ' اعتماد وطباعة')),
-      h('div', { class: 'table-wrap' }, h('table', null,
+      h('div', { class: 'table-wrap' }, h('table', { class: 'lines-table' },
         h('thead', null, h('tr', null, ['الصنف', 'الوحدة', 'الكمية', 'السعر', 'خصم %', 'الإجمالي', ''].map((x) => h('th', null, x)))), tbody))),
     h('div', null,
       h('div', { class: 'card' },

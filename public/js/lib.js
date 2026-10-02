@@ -258,6 +258,28 @@ export async function cashSelect(value, attrs = {}, filter = () => true, { empty
   return sel([...(empty ? [{ value: '', label: empty }] : []), ...list.map((c) => ({ value: c.id, label: c.name }))], value, attrs);
 }
 
+// جداول البنود تتحول لبطاقات على الشاشات الضيقة: كل خلية تأخذ اسم عمودها لعرضه كعنوان داخل البطاقة
+function labelLineTable(table) {
+  const heads = [...table.querySelectorAll('thead th')].map((th) => th.textContent.trim());
+  for (const tr of table.querySelectorAll('tbody tr')) {
+    [...tr.children].forEach((td, i) => { if (!td.hasAttribute('colspan')) td.dataset.label = heads[i] || ''; });
+  }
+}
+const lineTableObserver = new MutationObserver((muts) => {
+  const tables = new Set();
+  for (const m of muts) {
+    for (const n of m.addedNodes) {
+      if (n.nodeType !== 1) continue;
+      if (n.matches?.('table.lines-table')) tables.add(n);
+      n.querySelectorAll?.('table.lines-table').forEach((t) => tables.add(t));
+      const t = n.closest?.('table.lines-table'); if (t) tables.add(t);
+    }
+    const t = m.target.closest?.('table.lines-table'); if (t) tables.add(t);
+  }
+  tables.forEach(labelLineTable);
+});
+if (typeof document !== 'undefined') lineTableObserver.observe(document.documentElement, { childList: true, subtree: true });
+
 /** حقل رقمي بزرّي زيادة ونقصان (مفيد على الجوال) */
 export function stepper(input, { step = 1, min = 0, onChange } = {}) {
   const bump = (d) => {
