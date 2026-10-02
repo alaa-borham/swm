@@ -453,7 +453,7 @@ export function a4(d, s, copy) {
       h('div', null, s.org_logo_url ? h('img', { class: 'logo', src: s.org_logo_url, alt: '' }) : null, h('h1', null, s.org_name), s.org_cr_number ? h('div', null, 'السجل التجاري: ', N(s.org_cr_number)) : null, d.branch_name && (d.branch_address || d.branch_phone) ? h('div', null, d.branch_name) : null, h('div', null, d.branch_address || s.org_address), h('div', null, d.branch_phone || s.org_phone), s.org_tax_number ? h('div', null, 'الرقم الضريبي: ', s.org_tax_number) : null),
       h('div', { style: { textAlign: 'left' } }, h('h1', null, s.einvoice_qr && d.type === 'sale' ? 'فاتورة ضريبية مبسطة' : d.label), h('div', null, 'رقم: ', N(d.number)), h('div', null, 'التاريخ: ', N(d.date)),
         d.due_date ? h('div', null, 'الاستحقاق: ', N(d.due_date)) : null, copy ? h('div', { class: 'copy-mark' }, 'نسخة') : null)),
-    d.party_name ? h('p', null, h('b', null, 'العميل/المورد: '), d.party_name) : null,
+    d.party_name ? h('p', null, h('b', null, 'العميل/المورد: '), d.party_name, d.party_tax_number ? h('span', null, ' — الرقم الضريبي: ', d.party_tax_number) : null) : null,
     d.ref_doc_number ? h('p', null, 'مرجع: ', d.ref_doc_number) : null,
     isItems ? h('table', null, h('thead', null, h('tr', null, ['#', 'الصنف', 'الوحدة', 'الكمية', 'السعر', 'الخصم', 'الضريبة', 'الإجمالي'].map((x) => h('th', null, x)))),
       h('tbody', null, d.lines.map((l, i) => h('tr', null, h('td', null, i + 1), h('td', null, l.item_name), h('td', null, l.unit_name), h('td', null, qty(l.qty)),
@@ -481,7 +481,9 @@ export function thermal(d, s, copy) {
     h('div', { class: 'sep' }),
     h('div', { class: 'c' }, h('b', null, title)),
     row('رقم الفاتورة', N(d.number)), row('التاريخ', d.approved_at ? dt(d.approved_at) : N(d.date)),
-    d.party_name ? row('العميل', d.party_name) : null,
+    // اسم العميل في منتصف السطر، وفي مكانه الرقم الضريبي للعميل إن وُجد
+    d.party_name ? h('div', { class: 'c', style: { fontWeight: '700', margin: '2px 0' } }, d.party_name) : null,
+    d.party_tax_number ? row('الرقم الضريبي للعميل', d.party_tax_number) : null,
     copy ? h('div', { class: 'c' }, '— نسخة —') : null,
     h('div', { class: 'sep' }),
     // كل صنف في سطر واحد: الاسم | الكمية | السعر | الإجمالي
