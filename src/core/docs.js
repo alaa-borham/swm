@@ -258,6 +258,7 @@ function fullDoc(ctx, id) {
   const names = ctx.db.prepare(`SELECT
       (SELECT name FROM parties WHERE id=?) party_name,
       (SELECT tax_number FROM parties WHERE id=?) party_tax_number,
+      (SELECT code FROM parties WHERE id=?) party_code,
       (SELECT name FROM warehouses WHERE id=?) warehouse_name,
       (SELECT name FROM warehouses WHERE id=?) to_warehouse_name,
       (SELECT name FROM cash_accounts WHERE id=?) cash_account_name,
@@ -270,7 +271,7 @@ function fullDoc(ctx, id) {
       (SELECT address FROM branches WHERE id=?) branch_address,
       (SELECT phone FROM branches WHERE id=?) branch_phone,
       (SELECT name FROM expense_categories WHERE id=?) expense_category_name`)
-    .get(d.party_id, d.party_id, d.warehouse_id, d.to_warehouse_id, d.cash_account_id, d.to_cash_account_id, d.rep_id, d.created_by, d.approved_by, d.ref_doc_id, d.branch_id, d.branch_id, d.branch_id, d.expense_category_id);
+    .get(d.party_id, d.party_id, d.party_id, d.warehouse_id, d.to_warehouse_id, d.cash_account_id, d.to_cash_account_id, d.rep_id, d.created_by, d.approved_by, d.ref_doc_id, d.branch_id, d.branch_id, d.branch_id, d.expense_category_id);
   Object.assign(out, names);
   out.attachments = ctx.db.prepare('SELECT id,file_name,mime,size,created_at FROM attachments WHERE doc_id=?').all(id);
   return out;
