@@ -201,3 +201,4 @@ tr.clickable { cursor: pointer; }
 tbody tr.sel td { background: var(--brand-soft); }
 
 .back-btn { white-space: nowrap; }
+.side .org small.ver { display: block; opacity: .6; font-size: 11px; margin-top: 2px; direction: ltr; text-align: right; }

@@ -1,5 +1,8 @@
 // تشغيل الواجهة: الدخول، التخطيط، القائمة، والتوجيه.
 import { h, clear, state, api, get, toast, can, inp, field } from './lib.js';
+
+// يُرفع مع كل تحديث للواجهة لمعرفة النسخة التي يعمل بها الجهاز
+const UI_VERSION = 45;
 import * as Dash from './pages/dashboard.js';
 import * as Pos from './pages/pos.js';
 import * as Docs from './pages/docs.js';
@@ -111,7 +114,8 @@ function loginView(msg) {
 function layout() {
   clear(app);
   const side = h('nav', { class: 'side', 'aria-label': 'القائمة' },
-    h('div', { class: 'org' }, state.settings.org_name, h('small', null, state.me.full_name, state.branch ? ' — ' + state.branch.name : '')));
+    h('div', { class: 'org' }, state.settings.org_name, h('small', null, state.me.full_name, state.branch ? ' — ' + state.branch.name : ''),
+      h('small', { class: 'ver', title: 'إصدار الواجهة · إصدار الخادم' }, `الإصدار ${UI_VERSION} · ${state.settings.app_version || '-'}`)));
   // مجموعات قابلة للطي؛ تُحفظ المجموعات المفتوحة على الجهاز
   let openGroups;
   try { openGroups = new Set(JSON.parse(localStorage.getItem('frs-nav-open') || '[]')); } catch (_) { openGroups = new Set(); }
@@ -268,6 +272,20 @@ async function queuePage({ el }) {
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => null);
 Offline.startAutoSync();
+// عند العودة للتطبيق (خاصة على الجوال): إن نُشر إصدار جديد على الخادم يُعاد التحميل تلقائيًا
+let versionCheckAt = 0;
+async function checkNewVersion() {
+  if (document.visibilityState !== 'visible' || !state.settings?.app_version || Date.now() - versionCheckAt < 60e3) return;
+  versionCheckAt = Date.now();
+  try {
+    const r = await (await fetch('/healthz', { cache: 'no-store' })).json();
+    if (r.version && r.version !== 'dev' && r.version !== state.settings.app_version && !document.querySelector('.modal')) location.reload();
+  } catch (_) { /* بلا اتصال */ }
+}
+document.addEventListener('visibilitychange', checkNewVersion);
+window.addEventListener('focus', checkNewVersion);
+setInterval(checkNewVersion, 5 * 60e3);
+
 // عمق التنقل داخل النظام لزر الرجوع
 let navDepth = 0, goingBack = false;
 window.addEventListener('hashchange', () => { if (goingBack) { navDepth = Math.max(0, navDepth - 1); goingBack = false; } else navDepth++; });

@@ -33,6 +33,9 @@ const ALLOWED_UPLOADS = {
 };
 const MAX_UPLOAD = 5 * 1024 * 1024;
 
+// رقم الإصدار المنشور (Railway يمرر رقم الـ commit) لمعرفة النسخة التي تعمل فعليًا
+const APP_VERSION = (process.env.RAILWAY_GIT_COMMIT_SHA || process.env.GIT_COMMIT || '').slice(0, 7) || 'dev';
+
 function createApp({ db, dataDir, today, logger = console } = {}) {
   const uploadsDir = path.join(dataDir, 'uploads');
   const backupDir = path.join(dataDir, 'backups');
@@ -55,7 +58,7 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
 
   // فحص صحة الخادم للاستضافة (لا يكشف بيانات)
   app.get('/healthz', (req, res) => {
-    try { db.prepare('SELECT 1').get(); res.json({ ok: true }); } catch (_) { res.status(503).json({ ok: false }); }
+    try { db.prepare('SELECT 1').get(); res.json({ ok: true, version: APP_VERSION }); } catch (_) { res.status(503).json({ ok: false }); }
   });
   app.use(express.static(path.join(__dirname, '..', 'public'), { index: 'index.html', maxAge: 0 }));
 
@@ -157,7 +160,7 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
         org_logo_url: s.org_logo ? '/api/settings/logo?v=' + crypto.createHash('sha1').update(s.org_logo).digest('hex').slice(0, 10) : null,
         money_decimals: getMoneyDecimals(), prices_include_tax: s.prices_include_tax === '1', default_tax_rate: fromBp(Number(s.default_tax_rate_bp)),
         invoice_footer: s.invoice_footer, receipt_width_mm: Number(s.receipt_width_mm), locked_until: s.locked_until, today: ctx.today(),
-        expiry_alert_days: Number(s.expiry_alert_days), einvoice_qr: s.einvoice_qr === '1', whatsapp_enabled: s.whatsapp_enabled === '1',
+        expiry_alert_days: Number(s.expiry_alert_days), einvoice_qr: s.einvoice_qr === '1', whatsapp_enabled: s.whatsapp_enabled === '1', app_version: APP_VERSION,
       },
     };
   }));
