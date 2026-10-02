@@ -51,6 +51,35 @@ export async function view({ el, params }) {
     } }, 'إضافة خطة')));
   }
   if (head) el.append(head);
+  // عملاء المندوب: من يبيع لهم ويحصّل منهم
+  const custCard = h('div', { class: 'card' });
+  const loadCustomers = async () => {
+    const all = (await get('/parties', { type: 'customer', limit: 2000 })).rows;
+    const mine = all.filter((p) => p.rep_id === rep.id);
+    const others = all.filter((p) => p.rep_id !== rep.id && p.active);
+    custCard.replaceChildren(h('h3', null, `عملاء المندوب (${mine.length})`),
+      mine.length ? table({ columns: [{ key: 'name', label: 'العميل', render: (p) => h('a', { href: '#/party/' + p.id }, p.name) }, { key: 'phone', label: 'الهاتف' }, { key: 'ar_balance', label: 'عليه', type: 'money' },
+        ...(can('parties.manage') ? [{ key: 'x', label: '', render: (p) => h('button', { class: 'btn small danger', onclick: async () => { if (await run(() => api('POST', `/reps/${rep.id}/customers`, { party_ids: [p.id], unassign: true }), 'أُزيل من عملاء المندوب')) loadCustomers(); } }, 'إزالة') }] : [])],
+      rows: mine }) : h('p', { class: 'muted' }, 'لا يوجد عملاء مسندون لهذا المندوب؛ لن يظهر له أي عميل في فاتورة البيع والتحصيل.'),
+      can('parties.manage') ? h('button', { class: 'btn primary', style: { marginTop: '8px' }, onclick: () => {
+        const checks = others.map((p) => ({ p, c: h('input', { type: 'checkbox' }) }));
+        const search = inp({ placeholder: 'بحث بالاسم أو الهاتف' });
+        const list = h('div', { style: { maxHeight: '50vh', overflowY: 'auto', marginTop: '8px' } });
+        const drawList = () => list.replaceChildren(...checks.filter(({ p }) => !search.value || p.name.includes(search.value) || String(p.phone || '').includes(search.value))
+          .map(({ p, c }) => h('label', { class: 'check', style: { display: 'flex', padding: '6px 0', borderBottom: '1px solid var(--line)' } }, c, p.name, p.rep_name ? h('span', { class: 'muted small' }, ` — حاليًا مع ${p.rep_name}`) : '')));
+        search.addEventListener('input', drawList); drawList();
+        modal('إسناد عملاء للمندوب ' + rep.name, h('div', null, others.length ? [search, list] : h('p', { class: 'muted' }, 'كل العملاء مسندون لهذا المندوب')),
+          [{ label: 'إسناد المحددين', class: 'primary', onClick: async () => {
+            const ids = checks.filter(({ c }) => c.checked).map(({ p }) => p.id);
+            if (!ids.length) { toast('حدد عميلًا واحدًا على الأقل', 'bad'); return false; }
+            const r = await run(() => api('POST', `/reps/${rep.id}/customers`, { party_ids: ids }), 'تم الإسناد');
+            if (r) loadCustomers();
+            return !!r;
+          } }]);
+      } }, '+ إسناد عملاء للمندوب') : null);
+  };
+  el.append(custCard);
+  loadCustomers();
   el.append(h('form', { class: 'row card filters', style: { padding: '12px' }, onsubmit: (e) => { e.preventDefault(); load(); } }, field('من', from), field('إلى', to), h('button', { class: 'btn primary' }, 'عرض')), body, plans);
   await load();
 }

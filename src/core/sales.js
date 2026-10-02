@@ -59,7 +59,7 @@ function storeDraft(ctx, input, existing) {
   }
   let repId = input.rep_id ? Number(input.rep_id) : (party ? party.rep_id : null) || (wh.kind === 'rep' ? wh.rep_id : null);
   if (ctx.repScope) {
-    if (party && party.rep_id !== ctx.repScope) fail('FORBIDDEN', 'هذا العميل خارج نطاقك', 403);
+    if (party && ctx.partyScope && party.rep_id !== ctx.partyScope) fail('FORBIDDEN', 'هذا العميل خارج نطاقك', 403);
     const rep = ctx.db.prepare('SELECT * FROM reps WHERE id=?').get(ctx.repScope);
     if (warehouseId !== rep.warehouse_id) fail('FORBIDDEN', 'المندوب يبيع من مخزونه فقط', 403);
     repId = ctx.repScope;

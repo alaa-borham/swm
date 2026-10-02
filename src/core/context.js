@@ -65,6 +65,12 @@ class Ctx {
     return this.has('parties.all') ? null : this.user.rep_id;
   }
 
+  /** نطاق العملاء للمندوب: عملاؤه فقط، إلا إذا سمحت الإعدادات برؤية كل العملاء */
+  get partyScope() {
+    const r = this.repScope;
+    return r && this.setting('reps_all_customers') !== '1' ? r : null;
+  }
+
   settings() {
     if (!this._settings) {
       this._settings = {};

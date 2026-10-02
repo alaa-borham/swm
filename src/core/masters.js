@@ -300,7 +300,7 @@ function updateParty(ctx, id, input) {
 function getPartyRow(ctx, id) {
   const p = ctx.db.prepare('SELECT * FROM parties WHERE id=?').get(id);
   if (!p) notFound('الطرف');
-  if (ctx.repScope && p.rep_id !== ctx.repScope) fail('FORBIDDEN', 'هذا العميل خارج نطاقك', 403);
+  if (ctx.partyScope && p.rep_id !== ctx.partyScope) fail('FORBIDDEN', 'هذا العميل خارج نطاقك', 403);
   return p;
 }
 
@@ -322,7 +322,8 @@ function listParties(ctx, { q, type, active, limit = 200, offset = 0 } = {}) {
   if (type === 'customer') w.push('is_customer=1');
   if (type === 'supplier') w.push('is_supplier=1');
   if (active !== undefined && active !== '') { w.push('active=?'); p.push(bool(active)); }
-  if (ctx.repScope) { w.push('rep_id=?'); p.push(ctx.repScope); }
+  if (ctx.partyScope) { w.push('rep_id=?'); p.push(ctx.partyScope); }
+  if (ctx.repScope) w.push('is_customer=1');
   const rows = ctx.db.prepare(`SELECT p.*,
       (SELECT COALESCE(SUM(debit-credit),0) FROM journal_lines WHERE account='AR' AND party_id=p.id) ar,
       (SELECT COALESCE(SUM(credit-debit),0) FROM journal_lines WHERE account='AP' AND party_id=p.id) ap,
@@ -342,6 +343,11 @@ function simpleList(ctx, table, perm) {
 function listWarehouses(ctx, { all } = {}) {
   // all: كل المستودعات (لاختيار وجهة تحويل لفرع آخر)
   const scope = all ? null : ctx.branchScope;
+  // المندوب يرى مستودعه فقط
+  if (ctx.repScope) {
+    return ctx.db.prepare(`SELECT w.*, b.name branch_name, r.name rep_name FROM warehouses w JOIN branches b ON b.id=w.branch_id
+      JOIN reps r ON r.id=? AND r.warehouse_id=w.id`).all(ctx.repScope);
+  }
   return ctx.db.prepare(`SELECT w.*, b.name branch_name, r.name rep_name FROM warehouses w JOIN branches b ON b.id=w.branch_id
     LEFT JOIN reps r ON r.id=w.rep_id ${scope ? 'WHERE w.branch_id=' + Number(scope) : ''} ORDER BY w.active DESC, w.kind, w.name`).all();
 }
@@ -548,6 +554,19 @@ function addCommissionPlan(ctx, repId, { rate_pct, valid_from, reason }) {
   });
 }
 
+/** إسناد عملاء لمندوب أو إلغاء إسنادهم */
+function assignRepCustomers(ctx, repId, { party_ids = [], unassign = false } = {}) {
+  ctx.require('parties.manage');
+  return ctx.tx(() => {
+    if (!ctx.db.prepare('SELECT 1 FROM reps WHERE id=?').get(repId)) notFound('المندوب');
+    const upd = ctx.db.prepare('UPDATE parties SET rep_id=? WHERE id=? AND is_customer=1' + (unassign ? ' AND rep_id=?' : ''));
+    let n = 0;
+    for (const id of party_ids) n += upd.run(...(unassign ? [null, Number(id), repId] : [repId, Number(id)])).changes;
+    ctx.audit(unassign ? 'rep.customers_unassign' : 'rep.customers_assign', { entity: 'rep', entity_id: repId, after: { party_ids } });
+    return { updated: n };
+  });
+}
+
 function getRep(ctx, id) {
   const r = ctx.db.prepare(`SELECT r.*, w.name warehouse_name, c.name custody_name FROM reps r
     LEFT JOIN warehouses w ON w.id=r.warehouse_id LEFT JOIN cash_accounts c ON c.id=r.custody_account_id WHERE r.id=?`).get(id);
@@ -564,5 +583,5 @@ function listReps(ctx) {
 
 module.exports = {
   createItem, updateItem, getItemFull, listItems, lookupItem, posCatalog, createParty, updateParty, getParty, getPartyRow, listParties,
-  simpleList, listWarehouses, listBranches, saveBranch, saveWarehouse, deleteWarehouse, listCashAccounts, saveCashAccount, deleteCashAccount, saveCategory, createRep, updateRep, getRep, listReps, addCommissionPlan,
+  simpleList, listWarehouses, listBranches, saveBranch, saveWarehouse, deleteWarehouse, listCashAccounts, saveCashAccount, deleteCashAccount, saveCategory, createRep, updateRep, getRep, assignRepCustomers, listReps, addCommissionPlan,
 };

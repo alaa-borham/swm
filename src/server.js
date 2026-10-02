@@ -166,7 +166,7 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
 
   const SETTING_KEYS = {
     org_name: 'settings.manage', org_address: 'settings.manage', org_phone: 'settings.manage', org_tax_number: 'settings.manage', country: 'settings.manage',
-    org_logo: 'settings.manage', org_cr_number: 'settings.manage',
+    org_logo: 'settings.manage', org_cr_number: 'settings.manage', reps_all_customers: 'settings.manage',
     currency: 'settings.manage', timezone: 'settings.manage', expiry_block_days: 'settings.manage', expiry_alert_days: 'settings.manage',
     cashier_max_discount_pct: 'settings.manage', extra_cost_basis: 'settings.manage', session_timeout_minutes: 'settings.manage', backup_hour: 'backup.manage',
     backup_retention: 'backup.manage', invoice_footer: 'settings.manage', receipt_width_mm: 'settings.manage', money_decimals: 'settings.manage',
@@ -229,7 +229,7 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
         if (![0, 1, 2, 3].includes(Number(v))) fail('VALIDATION', 'منازل العملة بين 0 و3');
         require('./lib/money').setMoneyDecimals(Number(v));
       }
-      if (['prices_include_tax', 'tax_recoverable', 'einvoice_qr', 'whatsapp_enabled', 'whatsapp_auto_invoice', 'whatsapp_auto_receipt'].includes(k)) { set.run(k, v ? '1' : '0'); continue; }
+      if (['reps_all_customers', 'prices_include_tax', 'tax_recoverable', 'einvoice_qr', 'whatsapp_enabled', 'whatsapp_auto_invoice', 'whatsapp_auto_receipt'].includes(k)) { set.run(k, v ? '1' : '0'); continue; }
       set.run(k, String(v ?? ''));
     }
     ctx.invalidateSettings();
@@ -275,6 +275,7 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
   api.get('/reps/:id', h((ctx, req) => M.getRep(ctx, id(req))));
   api.post('/reps', h((ctx, req) => M.createRep(ctx, req.body)));
   api.put('/reps/:id', h((ctx, req) => M.updateRep(ctx, id(req), req.body)));
+  api.post('/reps/:id/customers', h((ctx, req) => M.assignRepCustomers(ctx, id(req), req.body)));
   api.post('/reps/:id/plans', h((ctx, req) => { M.addCommissionPlan(ctx, id(req), req.body); return M.getRep(ctx, id(req)); }));
   api.get('/reps/:id/custody', h((ctx, req) => Reps.custodyStatement(ctx, id(req), req.query)));
   api.post('/reps/:id/settle', h((ctx, req) => Reps.settleCustody(ctx, id(req), req.body)));

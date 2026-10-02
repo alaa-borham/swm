@@ -117,7 +117,8 @@ function layout() {
   try { openGroups = new Set(JSON.parse(localStorage.getItem('frs-nav-open') || '[]')); } catch (_) { openGroups = new Set(); }
   const saveOpen = () => { try { localStorage.setItem('frs-nav-open', JSON.stringify([...openGroups])); } catch (_) { /* ignore */ } };
   for (const [group, items] of NAV) {
-    const vis = items.filter(([r]) => allowed(r));
+    // المندوب يتعامل مع العملاء فقط
+    const vis = items.filter(([r]) => allowed(r) && !(state.rep && !can('parties.all') && r === 'parties?type=supplier'));
     if (!vis.length) continue;
     const links = vis.map(([r, label]) => h('a', { class: 'nav', href: '#/' + r, 'data-route': r, onclick: () => side.classList.remove('open') }, label));
     if (!group) { side.append(...links); continue; }

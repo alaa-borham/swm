@@ -72,7 +72,7 @@ function cashDocInTx(ctx, type, input) {
   if (partyId) {
     const p = ctx.db.prepare('SELECT * FROM parties WHERE id=?').get(partyId);
     if (!p) notFound('الطرف');
-    if (ctx.repScope && p.rep_id !== ctx.repScope) fail('FORBIDDEN', 'هذا العميل خارج نطاقك', 403);
+    if (ctx.partyScope && p.rep_id !== ctx.partyScope) fail('FORBIDDEN', 'هذا العميل خارج نطاقك', 403);
   }
   if (account === 'AR' && !partyId && !input.allow_no_party) fail('VALIDATION', 'حدد العميل');
   if (account === 'COMMISSION_PAYABLE' && !input.rep_id) fail('VALIDATION', 'حدد المندوب');
