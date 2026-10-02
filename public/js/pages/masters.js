@@ -137,7 +137,8 @@ export async function parties({ el, q, isCurrent }) {
       { key: 'name', label: 'الاسم', render: (p) => h('a', { href: '#/party/' + p.id }, p.name) }, { key: 'phone', label: 'الهاتف' },
       { key: 't', label: 'النوع', render: (p) => [p.is_customer ? h('span', { class: 'badge' }, 'عميل') : '', ' ', p.is_supplier ? h('span', { class: 'badge warn' }, 'مورد') : ''] },
       { key: 'rep_name', label: 'المندوب' }, { key: 'credit_limit', label: 'الحد الائتماني', type: 'money' }, { key: 'ar_balance', label: 'عليه (عميل)', type: 'money' },
-      { key: 'ap_balance', label: 'له (مورد)', type: 'money' }, { key: 'active', label: '', render: (p) => (p.active ? '' : h('span', { class: 'badge bad' }, 'موقوف')) }],
+      { key: 'ap_balance', label: 'له (مورد)', type: 'money' }, { key: 'active', label: '', render: (p) => [p.active ? '' : h('span', { class: 'badge bad' }, 'موقوف'), ' ',
+        can('parties.manage') ? h('button', { class: 'btn small', onclick: async (e) => { e.stopPropagation(); partyForm(await get('/parties/' + p.id), p.is_customer ? 'customer' : 'supplier', () => load()); } }, 'تعديل') : null] }],
     rows: r.rows, onRow: (p) => { location.hash = '#/party/' + p.id; } }));
   };
   el.append(h('form', { class: 'row card filters', style: { padding: '12px' }, onsubmit: (e) => { e.preventDefault(); load(); } }, field('بحث', qIn), field('النوع', type), h('button', { class: 'btn primary' }, 'بحث')), body);
