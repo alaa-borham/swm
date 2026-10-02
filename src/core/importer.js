@@ -17,7 +17,8 @@ const TEMPLATES = {
   },
   parties: {
     label: 'العملاء والموردون',
-    columns: ['الاسم', 'الهاتف', 'العنوان', 'عميل', 'مورد', 'الحد الائتماني', 'مدة السداد', 'الرقم الضريبي', 'الرصيد الافتتاحي للعميل', 'الرصيد الافتتاحي للمورد'],
+    columns: ['الاسم', 'الهاتف', 'العنوان', 'عميل', 'مورد', 'المندوب', 'الحد الائتماني', 'مدة السداد', 'الرقم الضريبي', 'الرصيد الافتتاحي للعميل', 'الرصيد الافتتاحي للمورد'],
+    aliases: { 'اسم العميل': 'الاسم', 'الجوال': 'الهاتف', 'رقم الجوال': 'الهاتف', 'الرقم الضريبي للعميل': 'الرقم الضريبي', 'الرصيد الافتتاحي': 'الرصيد الافتتاحي للعميل' },
   },
   stock: {
     label: 'المخزون الافتتاحي',
@@ -67,6 +68,17 @@ function parseCsvLine(line) {
   return out;
 }
 
+const no = (v) => ['0', 'لا', 'no', 'false', 'n'].includes(String(v || '').trim().toLowerCase());
+// إكسيل يحذف الصفر الأول من أرقام الجوال (551234567)؛ نعيده
+const fixPhone = (v) => { const t = String(v || '').replace(/\s+/g, ''); return /^5\d{8}$/.test(t) ? '0' + t : t; };
+// المندوب بالاسم: فارغ = بدون مندوب، «الكل» = لكل المناديب
+const repOf = (ctx, v) => {
+  const t = String(v || '').trim();
+  if (!t) return { rep_id: null };
+  if (['الكل', 'كل المناديب', 'للكل'].includes(t)) return { rep_id: 'all' };
+  const r = ctx.db.prepare('SELECT id FROM reps WHERE name=? OR TRIM(name)=?').get(t, t);
+  return r ? { rep_id: r.id } : null;
+};
 const yes = (v) => ['1', 'نعم', 'yes', 'true', 'y', '✓'].includes(String(v || '').trim().toLowerCase());
 
 function mapRows(kind, rows) {
@@ -107,8 +119,13 @@ function preview(ctx, kind, rows) {
       if (r['وحدة الإدخال'] && !['', 'وحدة المنتج', 'الأساس', 'وحدة 2', r['وحدة المنتج'], r['وحدة 2']].includes(r['وحدة الإدخال'])) errors.push('وحدة الإدخال يجب أن تكون اسم وحدة المنتج أو اسم الوحدة 2');
       if (r['وحدة الإدخال'] && [r['وحدة 2'], 'وحدة 2'].includes(r['وحدة الإدخال']) && !r['وحدة 2']) errors.push('وحدة الإدخال هي الوحدة 2 لكن الوحدة 2 فارغة');
     } else if (kind === 'parties') {
+      r['الهاتف'] = fixPhone(r['الهاتف']);
+      // عمودا عميل/مورد فارغان = عميل
+      if (r['عميل'] === '' && r['مورد'] === '') r['عميل'] = 'نعم';
       if (!r['الاسم']) errors.push('الاسم مطلوب');
       if (!yes(r['عميل']) && !yes(r['مورد'])) errors.push('حدد عميل أو مورد');
+      if (r['المندوب'] && !repOf(ctx, r['المندوب'])) errors.push(`المندوب «${r['المندوب']}» غير موجود`);
+      if (r['الرقم الضريبي'] && !/^\d{15}$/.test(String(r['الرقم الضريبي']).trim())) errors.push('الرقم الضريبي يجب أن يكون 15 رقمًا');
       const key = 'p:' + r['الاسم'] + '|' + r['الهاتف'];
       if (seen.has(key)) errors.push(`مكرر في الملف (الصف ${seen.get(key)})`); else seen.set(key, r._row);
       if (ctx.db.prepare('SELECT 1 FROM parties WHERE name=? AND COALESCE(phone,\'\')=?').get(r['الاسم'], r['الهاتف'] || '')) errors.push('الطرف موجود مسبقًا بنفس الاسم والهاتف');
@@ -156,7 +173,8 @@ function commit(ctx, kind, rows, opts = {}) {
       for (const r of pv.rows) {
         const p = M.createParty(ctx, {
           name: r['الاسم'], phone: r['الهاتف'], address: r['العنوان'], is_customer: yes(r['عميل']), is_supplier: yes(r['مورد']),
-          credit_limit: r['الحد الائتماني'] === '' ? null : r['الحد الائتماني'], payment_terms_days: r['مدة السداد'] || 0, tax_number: r['الرقم الضريبي'],
+          credit_limit: r['الحد الائتماني'] === '' ? null : r['الحد الائتماني'], payment_terms_days: r['مدة السداد'] || 0, tax_number: r['الرقم الضريبي'] || null,
+          ...(yes(r['عميل']) ? repOf(ctx, r['المندوب']) : {}),
         });
         if (Number(r['الرصيد الافتتاحي للعميل'])) F.createOpeningBalance(ctx, { kind: 'customer', party_id: p.id, amount: r['الرصيد الافتتاحي للعميل'], date: opts.date });
         if (Number(r['الرصيد الافتتاحي للمورد'])) F.createOpeningBalance(ctx, { kind: 'supplier', party_id: p.id, amount: r['الرصيد الافتتاحي للمورد'], date: opts.date });
@@ -237,6 +255,41 @@ async function templateXlsx(kind) {
       ['تتبع الصلاحية', 'نعم = يُطلب تاريخ الانتهاء عند الشراء ويُمنع بيع المنتهي. فارغ = نعم.'],
     ];
     notes.forEach(([k, v]) => { const row = help.addRow([k, v]); row.getCell(1).font = { bold: true }; row.alignment = { wrapText: true, vertical: 'top' }; });
+  }
+  if (kind === 'parties') {
+    const col = (name) => tpl.columns.indexOf(name) + 1;
+    ws.getCell(1, col('الاسم')).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC00000' } };
+    ws.getColumn(col('الاسم')).width = 28; ws.getColumn(col('العنوان')).width = 24;
+    for (let r = 2; r <= 2001; r++) {
+      for (const n of ['عميل', 'مورد']) ws.getCell(r, col(n)).dataValidation = { type: 'list', allowBlank: true, formulae: ['"نعم,لا"'] };
+      for (const n of ['الهاتف', 'الرقم الضريبي']) ws.getCell(r, col(n)).numFmt = '@';
+      for (const n of ['الحد الائتماني', 'مدة السداد']) ws.getCell(r, col(n)).dataValidation = { type: 'decimal', operator: 'greaterThanOrEqual', allowBlank: true, formulae: [0], showErrorMessage: true, error: 'أدخل رقمًا موجبًا' };
+    }
+    const ex = wb.addWorksheet('مثال', { views: [{ rightToLeft: true }] });
+    ex.addRow(tpl.columns).font = { bold: true };
+    [
+      ['بقالة البوادي', '0551234567', 'جدة - حي الصفا', 'نعم', '', 'أحمد', 5000, 30, '310123456700003', 1200, ''],
+      ['سوبرماركت النخيل', '0509876543', 'جدة - حي النسيم', 'نعم', '', 'الكل', '', '', '', '', ''],
+      ['عميل نقدي محمد', '0533333333', '', '', '', '', '', '', '', '', ''],
+      ['مصنع الحلويات', '0122222222', 'جدة - الصناعية', '', 'نعم', '', '', '', '300000000000003', '', 3500],
+    ].forEach((r) => ex.addRow(r));
+    ex.columns.forEach((c, i) => { c.width = i === 0 ? 24 : Math.max(14, String(tpl.columns[i]).length + 4); });
+    const help = wb.addWorksheet('التعليمات', { views: [{ rightToLeft: true }] });
+    help.getColumn(1).width = 26; help.getColumn(2).width = 95;
+    help.addRow(['طريقة الاستيراد', 'املأ الورقة الأولى من الصف الثاني (صف لكل عميل)، ثم من النظام: الاستيراد من Excel ← العملاء والموردون ← اختر الملف ← معاينة وتحقق ← اعتماد الاستيراد.']).font = { bold: true };
+    help.addRow(['', 'لا تغيّر أسماء الأعمدة. الاسم فقط إلزامي والباقي اختياري. ورقة «مثال» للتوضيح ولا تُستورد. لا يُستورد شيء ما دام في الملف صف به خطأ.']);
+    help.addRow([]);
+    [
+      ['الاسم', 'إلزامي. إن وُجد عميل بنفس الاسم والهاتف يظهر خطأ حتى لا يتكرر.'],
+      ['الهاتف', 'للاتصال وواتساب. إن حذف إكسيل الصفر الأول (551234567) يُعاد تلقائيًا.'],
+      ['عميل / مورد', 'نعم أو لا. إن تُركا فارغين يُعتبر عميلًا.'],
+      ['المندوب', 'اسم المندوب كما هو في النظام ليظهر العميل له؛ «الكل» ليظهر لكل المناديب؛ فارغ = بدون مندوب.'],
+      ['الحد الائتماني', 'أقصى رصيد آجل مسموح؛ فارغ = بلا حد.'],
+      ['مدة السداد', 'عدد أيام الآجل (مثل 30).'],
+      ['الرقم الضريبي', '15 رقمًا؛ يظهر في فاتورة العميل.'],
+      ['الرصيد الافتتاحي للعميل', 'المبلغ المستحق على العميل حاليًا (من دفاترك السابقة) بتاريخ الأرصدة المختار في شاشة الاستيراد.'],
+      ['الرصيد الافتتاحي للمورد', 'المبلغ المستحق للمورد حاليًا.'],
+    ].forEach(([k, v]) => { const row = help.addRow([k, v]); row.getCell(1).font = { bold: true }; row.alignment = { wrapText: true, vertical: 'top' }; });
   }
   return wb.xlsx.writeBuffer();
 }

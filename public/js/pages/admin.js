@@ -175,9 +175,9 @@ function verifyView(r) {
     h('p', null, `فحص السلامة: ${r.integrity} — المرفقات ${r.files}/${r.expected_files}`));
 }
 
-export async function importPage({ el }) {
+export async function importPage({ el, q = {} }) {
   pageHead('الاستيراد من Excel');
-  const kind = sel([{ value: 'items', label: 'الأصناف والوحدات والباركود' }, { value: 'parties', label: 'العملاء والموردون (مع الأرصدة الافتتاحية)' }, { value: 'stock', label: 'المخزون الافتتاحي' }], 'items');
+  const kind = sel([{ value: 'items', label: 'الأصناف والوحدات والباركود' }, { value: 'parties', label: 'العملاء والموردون (مع الأرصدة الافتتاحية)' }, { value: 'stock', label: 'المخزون الافتتاحي' }], ['items', 'parties', 'stock'].includes(q.kind) ? q.kind : 'items');
   const file = h('input', { type: 'file', accept: '.xlsx,.csv' });
   const wh = await warehouseSelect('');
   const date = inp({ type: 'date', value: today() });
@@ -186,6 +186,7 @@ export async function importPage({ el }) {
   el.append(h('div', { class: 'card' }, h('div', { class: 'grid' }, field('نوع البيانات', kind), field('الملف (xlsx أو csv)', file), field('المستودع (للمخزون)', wh), field('تاريخ الأرصدة', date)),
     h('div', { class: 'actions', style: { marginTop: '12px' } },
       h('button', { class: 'btn', onclick: () => download(`/import/template/${kind.value}`, `template-${kind.value}.xlsx`) }, 'تنزيل القالب'),
+      h('span', { class: 'small muted' }, 'نزّل القالب، املأه في Excel (فيه ورقة مثال وورقة تعليمات)، ثم اختر الملف واضغط «معاينة وتحقق».'),
       h('button', { class: 'btn primary', onclick: async () => {
         if (!file.files[0]) return toast('اختر الملف', 'bad');
         const r = await run(async () => api('POST', '/import/preview', await payload()));

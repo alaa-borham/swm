@@ -123,7 +123,8 @@ export async function parties({ el, q, isCurrent }) {
   const title = q.type === 'supplier' ? 'الموردون' : q.type === 'customer' ? 'العملاء' : 'العملاء والموردون';
   const head = pageHead(title,
     can('parties.manage') && q.type !== 'customer' ? h('button', { class: 'btn primary', onclick: () => partyForm(null, 'supplier') }, '+ مورد جديد') : null,
-    can('parties.manage') && q.type !== 'supplier' ? h('button', { class: q.type === 'customer' ? 'btn primary' : 'btn', onclick: () => partyForm(null, 'customer') }, '+ عميل جديد') : null);
+    can('parties.manage') && q.type !== 'supplier' ? h('button', { class: q.type === 'customer' ? 'btn primary' : 'btn', onclick: () => partyForm(null, 'customer') }, '+ عميل جديد') : null,
+    can('import.manage') ? h('a', { class: 'btn', href: '#/import?kind=parties' }, 'استيراد من Excel') : null);
   if (head) el.append(head);
   if (q.new && can('parties.manage')) setTimeout(() => partyForm(null, q.new), 50);
   const qIn = inp({ placeholder: 'الاسم أو الهاتف', value: q.q || '' });

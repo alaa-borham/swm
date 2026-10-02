@@ -434,3 +434,37 @@ test('استعادة كلمة مرور المدير من ADMIN_RESET_PASSWORD: �
     assert.equal(users.resetAdmin(t.db, 'NewReset2026'), 'already', 'لا تُعاد عند إعادة التشغيل');
   } finally { await t.close(); }
 });
+
+test('استيراد العملاء من Excel: المندوب بالاسم و«الكل»، إعادة صفر الجوال، العميل افتراضيًا، والرصيد الافتتاحي', async () => {
+  const t = await boot();
+  try {
+    const ExcelJS = require('exceljs');
+    const rep = (await t.admin.post('/reps', { name: 'أحمد' })).body;
+    const tpl = await t.admin.get('/import/template/parties');
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(tpl.body));
+    assert.deepEqual(wb.worksheets.map((w) => w.name), ['العملاء والموردون', 'مثال', 'التعليمات']);
+    wb.getWorksheet('مثال').eachRow((row, n) => { if (n > 1) wb.worksheets[0].addRow(row.values.slice(1)); });
+    wb.worksheets[0].addRow(['رقم بلا صفر', 551112222]);
+    const data = Buffer.from(await wb.xlsx.writeBuffer()).toString('base64');
+    const pv = await t.admin.post('/import/preview', { kind: 'parties', filename: 'c.xlsx', data });
+    assert.equal(pv.status, 200, JSON.stringify(pv.body));
+    assert.equal(pv.body.invalid, 0, JSON.stringify(pv.body.rows.filter((r) => r._errors.length)));
+    const c = await t.admin.post('/import/commit', { kind: 'parties', filename: 'c.xlsx', data, date: '2026-10-01' });
+    assert.equal(c.body.imported, 5);
+    const P = (name) => t.db.prepare('SELECT * FROM parties WHERE name=?').get(name);
+    assert.equal(P('بقالة البوادي').rep_id, rep.id);
+    assert.equal(P('بقالة البوادي').tax_number, '310123456700003');
+    assert.equal(P('سوبرماركت النخيل').all_reps, 1);
+    assert.equal(P('عميل نقدي محمد').is_customer, 1, 'فارغ = عميل');
+    assert.equal(P('مصنع الحلويات').is_supplier, 1);
+    assert.equal(P('رقم بلا صفر').phone, '0551112222');
+    const bal = (await t.admin.get('/parties/' + P('بقالة البوادي').id)).body;
+    assert.equal(bal.ar_balance, 1200);
+    // أخطاء واضحة: مندوب غير موجود ورقم ضريبي خاطئ وتكرار
+    const bad = new ExcelJS.Workbook(); const ws = bad.addWorksheet('x');
+    ws.addRow(['الاسم', 'المندوب', 'الرقم الضريبي']); ws.addRow(['ع1', 'مجهول', '']); ws.addRow(['ع2', '', '123']); ws.addRow(['بقالة البوادي', '', '']);
+    const pv2 = await t.admin.post('/import/preview', { kind: 'parties', filename: 'b.xlsx', data: Buffer.from(await bad.xlsx.writeBuffer()).toString('base64') });
+    assert.equal(pv2.body.invalid, 2, JSON.stringify(pv2.body.rows.map((r) => r._errors)));
+  } finally { await t.close(); }
+});
