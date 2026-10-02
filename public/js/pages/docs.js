@@ -331,14 +331,55 @@ export async function printDoc(id, format = 'a4') {
       document.body.classList.add('print-preview');
       document.body.appendChild(h('div', { class: 'print-toolbar' },
         h('button', { class: 'btn primary', onclick: () => window.print() }, 'طباعة'),
+        h('button', { class: 'btn ok', onclick: () => shareAsImage(area.firstElementChild, `${d.number}.png`, format) }, 'مشاركة صورة'),
         h('button', { class: 'btn', onclick: close }, 'إغلاق'),
-        h('span', { class: 'small' }, 'للطابعة الحرارية بالبلوتوث: اختر الطابعة من قائمة الطباعة أو «حفظ كـ PDF» ثم شاركه')));
+        h('span', { class: 'small' }, 'إن لم تظهر قائمة الطباعة: استخدم «مشاركة صورة» وأرسلها لتطبيق الطابعة (مثل RawBT) أو واتساب أو احفظها.')));
       return;
     }
     autoClose = () => close();
     window.addEventListener('afterprint', autoClose);
     setTimeout(() => window.print(), 50);
   } catch (e) { toast(e.message, 'bad'); }
+}
+
+/** تحويل الإيصال إلى صورة PNG ومشاركتها (أو تنزيلها) — بديل عندما يمنع المتصفح الطباعة */
+async function shareAsImage(node, filename, format) {
+  try {
+    const toDataUrl = (blob) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(blob); });
+    const clone = node.cloneNode(true);
+    // الصور الخارجية (الشعار) تُضمَّن كبيانات حتى لا تُمنع في الرسم
+    for (const img of clone.querySelectorAll('img')) {
+      if (img.src && !img.src.startsWith('data:')) { try { img.src = await toDataUrl(await (await fetch(img.src, { credentials: 'same-origin' })).blob()); } catch (_) { img.remove(); } }
+    }
+    const css = await (await fetch('/css/app.css')).text();
+    const width = Math.ceil(node.getBoundingClientRect().width) + 24;
+    const height = Math.ceil(node.getBoundingClientRect().height) + 24;
+    const html = new XMLSerializer().serializeToString(clone);
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><foreignObject width="100%" height="100%">`
+      + `<div xmlns="http://www.w3.org/1999/xhtml" dir="rtl" class="print-area" style="display:block;background:#fff;color:#000;padding:12px;font-family:Tahoma,Arial,sans-serif">`
+      + `<style>${css.replace(/<\/style/gi, '')}</style>${html}</div></foreignObject></svg>`;
+    const img = new Image();
+    await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error('تعذر تجهيز الصورة')); img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg); });
+    const scale = format === 'thermal' ? 3 : 2;
+    const canvas = document.createElement('canvas');
+    canvas.width = width * scale; canvas.height = height * scale;
+    const g = canvas.getContext('2d');
+    g.fillStyle = '#fff'; g.fillRect(0, 0, canvas.width, canvas.height);
+    g.scale(scale, scale); g.drawImage(img, 0, 0);
+    const blob = await new Promise((res) => canvas.toBlob(res, 'image/png'));
+    if (!blob) throw new Error('تعذر تجهيز الصورة');
+    const file = new File([blob], filename, { type: 'image/png' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: filename });
+    } else {
+      const a = h('a', { href: URL.createObjectURL(blob), download: filename });
+      document.body.appendChild(a); a.click(); a.remove();
+      toast('حُفظت صورة الإيصال في التنزيلات', 'ok');
+    }
+  } catch (e) {
+    if (e && e.name === 'AbortError') return; // أغلق المستخدم قائمة المشاركة
+    toast(e.message || 'تعذرت المشاركة', 'bad');
+  }
 }
 
 function a4(d, s, copy) {
