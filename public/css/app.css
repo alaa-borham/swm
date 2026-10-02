@@ -232,3 +232,4 @@ tbody tr.sel td { background: var(--brand-soft); }
 .stepper .step:active { background: var(--brand); color: var(--brand-ink); }
 @media (max-width: 900px) { .stepper .step { width: 40px; min-height: 42px; } }
 input::placeholder, textarea::placeholder { color: var(--muted); opacity: .85; }
+.stepper:has(input:disabled) .step { opacity: .4; pointer-events: none; }
