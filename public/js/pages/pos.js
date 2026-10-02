@@ -19,7 +19,7 @@ async function openSessionForm(el) {
   const send = submitter();
   el.append(h('div', { class: 'card', style: { maxWidth: '560px' } },
     h('h3', null, 'افتح ورديتك قبل البيع'),
-    h('div', { class: 'grid' }, field('الصندوق', cash, { req: true }), field('حساب الشبكة', card), field('المستودع', wh), field('النقد الافتتاحي المعدود', opening, { req: true })),
+    h('div', { class: 'grid' }, field('الصندوق', cash, { req: true }), field('طريقة سداد الشبكة الافتراضية', card), field('المستودع', wh), field('النقد الافتتاحي المعدود', opening, { req: true })),
     h('div', { class: 'actions', style: { marginTop: '12px' } }, h('button', { class: 'btn primary', onclick: async () => {
       try {
         await send('POST', '/sessions', { cash_account_id: Number(cash.value), card_account_id: card.value ? Number(card.value) : null, warehouse_id: Number(wh.value), opening_amount: num(opening.value) ?? 0 });
@@ -42,7 +42,7 @@ async function posView({ el, q }) {
   const invDiscAmt = inp({ type: 'number', placeholder: 'مبلغ' });
   const cashIn = inp({ type: 'number', placeholder: '0' });
   const cardIn = inp({ type: 'number', placeholder: '0' });
-  const bankSel = await cashSelect('', {}, (a) => a.kind === 'bank', { empty: '— حساب الشبكة —' });
+  const bankSel = await cashSelect('', {}, (a) => a.kind === 'bank', { empty: '— اختر طريقة السداد —' });
   const cashSel = can('cash.view') && !state.session && !isRep ? await cashSelect('', {}, (a) => a.kind === 'cash') : null;
   const tbody = h('tbody');
   const totals = h('div', { class: 'total-box' });
@@ -109,8 +109,8 @@ async function posView({ el, q }) {
     const paid = (num(cashIn.value) || 0) + (num(cardIn.value) || 0);
     const credit = Math.max(0, Number((c.total - paid).toFixed(3)));
     clear(totals).append(
-      line('قيمة البنود', c.subtotal), line('الخصم', c.discount), line('الصافي قبل الضريبة', c.net), line('الضريبة', c.tax),
-      h('div', { class: 'line grand' }, h('span', null, 'الإجمالي'), M(c.total)),
+      line('إجمالي الفاتورة', c.subtotal), line('الخصم', c.discount), line('الصافي قبل الضريبة', c.net), line('الضريبة', c.tax),
+      h('div', { class: 'line grand' }, h('span', null, 'الإجمالي شامل الضريبة'), M(c.total)),
       line('المدفوع', Math.min(paid, c.total)), credit > 0 ? h('div', { class: 'line', style: { color: 'var(--bad)' } }, h('span', null, 'آجل على العميل'), M(credit)) : null);
     const change = paid - c.total;
     changeBox.textContent = change > 0 && num(cashIn.value) ? `الباقي للعميل: ${money(change)}` : '';
@@ -206,7 +206,8 @@ async function posView({ el, q }) {
       h('div', { class: 'card' }, totals),
       h('div', { class: 'card' },
         h('div', { class: 'row' }, field('نقدي مستلم', cashIn), cashSel ? field('الصندوق', cashSel) : null),
-        h('div', { class: 'row', style: { marginTop: '8px' } }, field('شبكة/بنك', cardIn), field('الحساب', bankSel)),
+        h('div', { class: 'row', style: { marginTop: '8px' } }, field('مبلغ شبكة/بنك', cardIn), field('طريقة السداد', bankSel)),
+        can('warehouses.manage') ? h('a', { class: 'small', href: '#/warehouses' }, '+ إضافة طريقة سداد جديدة') : null,
         changeBox,
         h('div', { class: 'small muted', style: { marginTop: '6px' } }, 'غير المدفوع يُسجل آجلاً ويتطلب اختيار العميل'),
         h('div', { class: 'actions', style: { marginTop: '12px' } },

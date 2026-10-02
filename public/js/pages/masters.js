@@ -213,7 +213,7 @@ export async function warehouses({ el }) {
   const whBranch = brSel();
   const caName = inp({ placeholder: 'اسم الحساب' });
   const caBranch = brSel();
-  const caKind = sel([{ value: 'cash', label: 'صندوق نقدي' }, { value: 'bank', label: 'بنك / شبكة' }], 'cash');
+  const caKind = sel([{ value: 'cash', label: 'صندوق نقدي' }, { value: 'bank', label: 'بنك / شبكة / طريقة سداد' }], 'cash');
   const toggle = (url, row) => h('button', { class: 'btn small', onclick: async () => { if (await run(() => api('PUT', url, { name: row.name, branch_id: row.branch_id, active: row.active ? 0 : 1 }), 'تم')) reload('warehouses', 'cash', 'branches'); } }, row.active ? 'إيقاف' : 'تفعيل');
   const editWarehouse = async (w) => {
     const { modal } = await import('../lib.js');
