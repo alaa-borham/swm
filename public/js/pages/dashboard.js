@@ -11,6 +11,13 @@ export async function render({ el, isCurrent }) {
     if (!isCurrent()) return;
     body.replaceChildren(view(d));
   };
+  // اختصارات العمليات اليومية حسب صلاحيات المستخدم
+  const shortcuts = [
+    ['parties.manage', '#/parties?type=customer&new=customer', '👤', 'عميل جديد', 'إضافة عميل'],
+    ['purchases.create', '#/purchase', '🧾', 'فاتورة شراء', 'استلام بضاعة من مورد'],
+    ['cash.receipt', '#/receipt', '💵', 'سند قبض', 'دفعة من عميل'],
+  ].filter(([p]) => can(p));
+  if (shortcuts.length) el.append(h('div', { class: 'quick-actions' }, shortcuts.map(([, href, icon, label, sub]) => h('a', { class: 'quick', href }, h('span', { class: 'ic', 'aria-hidden': 'true' }, icon), h('span', null, label, h('small', null, sub))))));
   el.append(h('form', { class: 'row card filters', style: { padding: '12px' }, onsubmit: (e) => { e.preventDefault(); load(); } },
     field('من', from), field('إلى', to), branch ? field('الفرع', branch) : null, h('button', { class: 'btn primary' }, 'عرض')), body);
   await load();
