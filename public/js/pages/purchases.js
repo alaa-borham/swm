@@ -1,6 +1,6 @@
 // فاتورة الشراء والاستلام، ومرتجع المشتريات.
 import { partyForm } from './masters.js';
-import { h, clear, state, get, api, submitter, toast, run, M, Q, inp, sel, field, num, itemPicker, partySelect, warehouseSelect, cashSelect, pageHead, can, askReason, today } from '../lib.js';
+import { stepper, h, clear, state, get, api, submitter, toast, run, M, Q, inp, sel, field, num, itemPicker, partySelect, warehouseSelect, cashSelect, pageHead, can, askReason, today } from '../lib.js';
 
 export async function form({ el, params, q }) {
   const editing = params[0] ? await get('/docs/' + params[0]) : null;
@@ -69,8 +69,8 @@ export async function form({ el, params, q }) {
       tbody.append(h('tr', null,
         h('td', null, l.item.name),
         h('td', null, sel(units.map((u) => ({ value: u.id, label: `${u.name}${u.factor !== 1 ? ' (' + u.factor + ' ' + l.item.base_unit + ')' : ''}` })), l.unit_id, { onchange: (e) => { switchUnit(l, Number(e.target.value)); draw(); } })),
-        h('td', null, inp({ type: 'number', value: l.qty, style: { width: '80px' }, oninput: set('qty') })),
-        h('td', null, inp({ type: 'number', value: l.price, style: { width: '90px' }, oninput: set('price'), placeholder: 'تكلفة الوحدة' })),
+        h('td', null, stepper(inp({ type: 'number', value: l.qty, style: { width: '80px' }, oninput: set('qty') }), { onChange: (v) => { l.qty = v; totalsOnly(); } })),
+        h('td', null, stepper(inp({ type: 'number', value: l.price, style: { width: '90px' }, oninput: set('price'), placeholder: 'تكلفة الوحدة' }), { onChange: (v) => { l.price = v; totalsOnly(); } })),
         h('td', null, inp({ type: 'number', value: l.discount_amount, style: { width: '80px' }, oninput: set('discount_amount') })),
         h('td', null, inp({ type: 'number', value: l.tax, style: { width: '60px' }, oninput: set('tax'), placeholder: '%' })),
         h('td', null, inp({ value: l.batch_no, placeholder: 'اختياري', title: 'رقم التشغيلة (Lot) المطبوع على العبوة — ليس مبلغًا', style: { width: '100px' }, oninput: set('batch_no') })),
@@ -205,7 +205,7 @@ export async function orderForm({ el, params }) {
       const set = (k) => (e) => { l[k] = e.target.value; sum(); };
       tbody.append(h('tr', null, h('td', null, l.item.name),
         h('td', null, sel(l.item.units.filter((u) => u.for_purchase).map((u) => ({ value: u.id, label: u.name })), l.unit_id, { onchange: (e) => { switchUnit(l, Number(e.target.value)); draw(); } })),
-        h('td', null, inp({ type: 'number', value: l.qty, style: { width: '90px' }, oninput: set('qty') })),
+        h('td', null, stepper(inp({ type: 'number', value: l.qty, style: { width: '90px' }, oninput: set('qty') }), { onChange: (v) => { l.qty = v; sum(); } })),
         h('td', null, inp({ type: 'number', value: l.price, style: { width: '100px' }, oninput: set('price') })),
         h('td', null, inp({ type: 'number', value: l.tax, style: { width: '70px' }, oninput: set('tax') })),
         h('td', null, h('button', { class: 'btn small danger', onclick: () => { cart.splice(i, 1); draw(); } }, '×'))));

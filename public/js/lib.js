@@ -258,6 +258,20 @@ export async function cashSelect(value, attrs = {}, filter = () => true, { empty
   return sel([...(empty ? [{ value: '', label: empty }] : []), ...list.map((c) => ({ value: c.id, label: c.name }))], value, attrs);
 }
 
+/** حقل رقمي بزرّي زيادة ونقصان (مفيد على الجوال) */
+export function stepper(input, { step = 1, min = 0, onChange } = {}) {
+  const bump = (d) => {
+    const cur = Number(String(input.value).replace(/[٠-٩]/g, (c) => '٠١٢٣٤٥٦٧٨٩'.indexOf(c))) || 0;
+    const v = Math.max(min, Number((cur + d * step).toFixed(3)));
+    input.value = v;
+    onChange?.(v);
+  };
+  return h('div', { class: 'stepper' },
+    h('button', { type: 'button', class: 'step', 'aria-label': 'نقص', tabindex: -1, onclick: () => bump(-1) }, '−'),
+    input,
+    h('button', { type: 'button', class: 'step', 'aria-label': 'زيادة', tabindex: -1, onclick: () => bump(1) }, '+'));
+}
+
 /** منتقي صنف بالبحث بالاسم أو الباركود */
 export function itemPicker({ onPick, warehouseId, placeholder = 'ابحث بالاسم أو امسح الباركود', autofocus, allowCreate, inStockOnly, emptyHint }) {
   const input = inp({ class: 'search', placeholder, autocomplete: 'off', autofocus });

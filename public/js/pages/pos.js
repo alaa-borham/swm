@@ -1,5 +1,5 @@
 // نقطة البيع: بحث بالباركود أو الاسم، وحدات وكميات، خصم وضريبة، سداد نقدي/شبكة/آجل جزئي.
-import { h, clear, state, get, api, submitter, toast, run, M, money, Q, inp, sel, field, num, itemPicker, partySelect, warehouseSelect, cashSelect, pageHead, can, askReason, today, modal, lookup } from '../lib.js';
+import { stepper, h, clear, state, get, api, submitter, toast, run, M, money, Q, inp, sel, field, num, itemPicker, partySelect, warehouseSelect, cashSelect, pageHead, can, askReason, today, modal, lookup } from '../lib.js';
 import { printDoc } from './docs.js';
 import { enqueue, refreshCatalog } from '../offline.js';
 
@@ -144,7 +144,8 @@ async function posView({ el, q }) {
       const dIn = inp({ type: 'number', value: l.discount_pct, placeholder: '%', style: { width: '64px' }, onchange: () => { l.discount_pct = dIn.value; redraw(); } });
       tbody.append(h('tr', null,
         h('td', null, l.item.name, l.item.sellable_qty != null ? h('div', { class: 'small muted' }, 'متاح ', Q(l.item.sellable_qty), ' ', l.item.base_unit) : null),
-        h('td', null, unitSel), h('td', null, qIn), h('td', null, pIn), h('td', null, dIn), h('td', { class: 'n' }, M(c.lines[i].total)),
+        h('td', null, unitSel), h('td', null, stepper(qIn, { step: 1, min: 0, onChange: (v) => { l.qty = v; redraw(); } })),
+        h('td', null, stepper(pIn, { step: 1, min: 0, onChange: (v) => { l.price = v; redraw(); } })), h('td', null, dIn), h('td', { class: 'n' }, M(c.lines[i].total)),
         h('td', null, h('button', { class: 'btn small danger', 'aria-label': 'حذف', onclick: () => { cart.splice(i, 1); draw(); } }, '×'))));
     });
     if (!cart.length) tbody.append(h('tr', null, h('td', { colspan: 7, class: 'empty' }, 'امسح الباركود أو ابحث عن صنف لإضافته')));
