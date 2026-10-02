@@ -1,5 +1,6 @@
 // سجل المستندات، عرض المستند وإجراءاته، مرتجع المبيعات، والطباعة.
 import { h, clear, dt, N, state, get, api, submitter, toast, run, M, Q, money, qty, inp, sel, field, num, table, badge, STATUS, PAY_STATUS, pageHead, can, askReason, today, monthStart, cashSelect, partySelect, modal } from '../lib.js';
+import { renderCanvas, paperDots, canvasToEscPos, printViaRawBT, printViaBluetooth, canBluetooth, isAndroid } from '../escpos.js';
 
 const TYPE_TITLES = {
   sale: 'فواتير البيع', sale_return: 'مرتجعات المبيعات', purchase: 'فواتير الشراء', transfer: 'سجل التحويلات', 'receipt,payment,cash_transfer': 'سجل السندات',
@@ -344,13 +345,14 @@ export async function viewDoc(id, format = 'a4', { count = false } = {}) {
     const canShareLink = ['sale', 'sale_return', 'receipt'].includes(d.type) && d.status === 'approved';
     const fmtBtn = (f, label) => h('button', { class: 'btn' + (fmt === f ? ' primary' : ''), onclick: async () => { fmt = f; await render(false); bar.replaceWith(toolbar()); } }, label);
     const toolbar = () => (bar = h('div', { class: 'print-toolbar' },
-      h('button', { class: 'btn ok', onclick: async () => { await markPrinted(); window.print(); } }, 'طباعة'),
+      h('button', { class: 'btn ok', onclick: async () => { await markPrinted(); if (fmt === 'thermal' && isAndroid()) await thermalPrint(area.firstElementChild, 'rawbt'); else window.print(); } }, 'طباعة'),
+      fmt === 'thermal' && canBluetooth() ? h('button', { class: 'btn', onclick: async () => { await markPrinted(); await thermalPrint(area.firstElementChild, 'ble'); } }, 'بلوتوث مباشر') : null,
       canShareLink ? h('button', { class: 'btn primary', onclick: () => shareDoc(d, area.firstElementChild, fmt) }, 'مشاركة') : null,
       canShareLink ? h('button', { class: 'btn', onclick: () => whatsappDoc(d) }, 'واتساب') : null,
       h('button', { class: 'btn', onclick: async () => { await markPrinted(); shareAsImage(area.firstElementChild, `${d.number}.png`, fmt); } }, 'حفظ صورة'),
       canThermal ? fmtBtn('a4', 'A4') : null, canThermal ? fmtBtn('thermal', 'حراري') : null,
       h('button', { class: 'btn', onclick: close }, 'إغلاق'),
-      h('span', { class: 'small' }, '«مشاركة» يرسل رابط الفاتورة عبر واتساب أو أي تطبيق، ويفتحه العميل دون تسجيل دخول. «حفظ صورة» لتطبيق الطابعة (مثل RawBT).')));
+      h('span', { class: 'small' }, isAndroid() && fmt === 'thermal' ? '«طباعة» ترسل الإيصال لطابعة البلوتوث عبر تطبيق RawBT (ثبّته مرة واحدة واقرنه بالطابعة). «بلوتوث مباشر» يطبع دون تطبيق إن كانت الطابعة تدعم BLE.' : '«مشاركة» يرسل رابط الفاتورة عبر واتساب أو أي تطبيق، ويفتحه العميل دون تسجيل دخول.')));
     let bar;
     document.querySelector('.print-toolbar')?.remove();
     document.body.classList.add('printing', 'print-preview');
@@ -405,30 +407,23 @@ async function whatsappDoc(d) {
   } catch (e) { toast(e.message || 'تعذر فتح واتساب', 'bad'); }
 }
 
+/** طباعة الإيصال على طابعة بلوتوث حرارية: RawBT أو Web Bluetooth */
+async function thermalPrint(node, via) {
+  try {
+    toast('جارٍ تجهيز الإيصال للطابعة…');
+    const canvas = await renderCanvas(node, { width: paperDots(state.settings.receipt_width_mm) });
+    const bytes = canvasToEscPos(canvas);
+    if (via === 'ble') { await printViaBluetooth(bytes); toast('أُرسل الإيصال للطابعة', 'ok'); } else printViaRawBT(bytes);
+  } catch (e) {
+    if (e && e.name === 'NotFoundError') return; // أغلق المستخدم نافذة اختيار الطابعة
+    toast(e.message || 'تعذرت الطباعة', 'bad');
+  }
+}
+
 /** تحويل الإيصال إلى صورة PNG ومشاركتها (أو تنزيلها) — بديل عندما يمنع المتصفح الطباعة */
 async function shareAsImage(node, filename, format) {
   try {
-    const toDataUrl = (blob) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(blob); });
-    const clone = node.cloneNode(true);
-    // الصور الخارجية (الشعار) تُضمَّن كبيانات حتى لا تُمنع في الرسم
-    for (const img of clone.querySelectorAll('img')) {
-      if (img.src && !img.src.startsWith('data:')) { try { img.src = await toDataUrl(await (await fetch(img.src, { credentials: 'same-origin' })).blob()); } catch (_) { img.remove(); } }
-    }
-    const css = await (await fetch('/css/app.css')).text();
-    const width = Math.ceil(node.getBoundingClientRect().width) + 24;
-    const height = Math.ceil(node.getBoundingClientRect().height) + 24;
-    const html = new XMLSerializer().serializeToString(clone);
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><foreignObject width="100%" height="100%">`
-      + `<div xmlns="http://www.w3.org/1999/xhtml" dir="rtl" class="print-area" style="display:block;background:#fff;color:#000;padding:12px;font-family:Tahoma,Arial,sans-serif">`
-      + `<style>${css.replace(/<\/style/gi, '')}</style>${html}</div></foreignObject></svg>`;
-    const img = new Image();
-    await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error('تعذر تجهيز الصورة')); img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg); });
-    const scale = format === 'thermal' ? 3 : 2;
-    const canvas = document.createElement('canvas');
-    canvas.width = width * scale; canvas.height = height * scale;
-    const g = canvas.getContext('2d');
-    g.fillStyle = '#fff'; g.fillRect(0, 0, canvas.width, canvas.height);
-    g.scale(scale, scale); g.drawImage(img, 0, 0);
+    const canvas = await renderCanvas(node, { scale: format === 'thermal' ? 3 : 2 });
     const blob = await new Promise((res) => canvas.toBlob(res, 'image/png'));
     if (!blob) throw new Error('تعذر تجهيز الصورة');
     const file = new File([blob], filename, { type: 'image/png' });
