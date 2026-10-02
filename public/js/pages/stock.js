@@ -57,28 +57,78 @@ export async function transfer({ el, q }) {
   if (from.value && from.value === to.value && from.options.length > 1) from.selectedIndex = from.selectedIndex === 0 ? 1 : 0;
   const notes = inp({ placeholder: 'ملاحظات' });
   const transit = h('input', { type: 'checkbox' });
-  const cart = [];
+  // قائمة أصناف المستودع المصدر: اختر ما يُحوَّل وعدّل الكمية والوحدة
+  const allItems = new Map(((await get('/items', { limit: 5000, active: 1 })).rows || []).map((it) => [it.id, it]));
+  let rows = [];
+  const picked = new Map(); // item_id → { qty, unit_id }
+  const filterIn = inp({ placeholder: 'بحث في أصناف المستودع بالاسم أو الكود' });
   const tbody = h('tbody');
-  const picker = itemPicker({ inStockOnly: true, warehouseId: () => from.value, onPick: (it) => { cart.push({ item: it, unit_id: it.selected_unit_id, qty: 1 }); draw(); } });
+  const countBox = h('span', { class: 'muted small' });
+  const factorOf = (it, unitId) => (it.units.find((u) => u.id === unitId)?.factor || 1);
   const draw = () => {
     clear(tbody);
-    cart.forEach((l, i) => tbody.append(h('tr', null, h('td', null, l.item.name, l.item.sellable_qty != null ? h('div', { class: 'small muted' }, 'متاح ', Q(l.item.sellable_qty)) : ''),
-      h('td', null, sel(l.item.units.map((u) => ({ value: u.id, label: u.name })), l.unit_id, { onchange: (e) => { l.unit_id = Number(e.target.value); } })),
-      h('td', null, inp({ type: 'number', value: l.qty, style: { width: '90px' }, oninput: (e) => { l.qty = e.target.value; } })),
-      h('td', null, h('button', { class: 'btn small danger', onclick: () => { cart.splice(i, 1); draw(); } }, '×')))));
-    if (!cart.length) tbody.append(h('tr', null, h('td', { colspan: 4, class: 'empty' }, 'أضف الأصناف')));
+    const f = filterIn.value.trim();
+    const list = rows.filter((r) => !f || r.name.includes(f) || String(r.code).includes(f));
+    for (const r of list) {
+      const it = allItems.get(r.item_id);
+      if (!it) continue;
+      const p = picked.get(r.item_id);
+      const units = it.units.filter((u) => u.active);
+      const chk = h('input', { type: 'checkbox', checked: !!p, onchange: (e) => {
+        if (e.target.checked) picked.set(r.item_id, { qty: '', unit_id: it.units.find((u) => u.is_base).id }); else picked.delete(r.item_id);
+        draw(); if (e.target.checked) tbody.querySelector(`[data-q="${r.item_id}"]`)?.focus();
+      } });
+      const qtyIn = inp({ type: 'number', value: p?.qty ?? '', placeholder: '0', style: { width: '90px' }, oninput: (e) => {
+        const cur = picked.get(r.item_id) || { unit_id: it.units.find((u) => u.is_base).id };
+        if (e.target.value === '' || Number(e.target.value) === 0) { cur.qty = e.target.value; picked.set(r.item_id, cur); } else picked.set(r.item_id, { ...cur, qty: e.target.value });
+        chk.checked = true; summary();
+      } });
+      qtyIn.dataset.q = r.item_id;
+      const unitSel = sel(units.map((u) => ({ value: u.id, label: u.name + (u.is_base ? '' : ` (${u.factor} ${it.base_unit})`) })), p?.unit_id || it.units.find((u) => u.is_base).id, { onchange: (e) => {
+        const cur = picked.get(r.item_id) || { qty: '' };
+        picked.set(r.item_id, { ...cur, unit_id: Number(e.target.value) }); chk.checked = true; summary();
+      } });
+      tbody.append(h('tr', { class: p ? 'sel' : null }, h('td', null, chk), h('td', null, r.name, h('div', { class: 'small muted' }, r.code)),
+        h('td', null, Q(r.sellable), ' ', r.base_unit), h('td', null, unitSel), h('td', null, qtyIn),
+        h('td', null, h('button', { type: 'button', class: 'btn small', title: 'تحويل كامل الكمية المتاحة', onclick: () => { picked.set(r.item_id, { qty: r.sellable, unit_id: it.units.find((u) => u.is_base).id }); draw(); } }, 'الكل'))));
+    }
+    if (!tbody.children.length) tbody.append(h('tr', null, h('td', { colspan: 6, class: 'empty' }, rows.length ? 'لا نتائج للبحث' : 'لا توجد أصناف لها رصيد صالح في هذا المستودع')));
+    summary();
   };
+  const summary = () => {
+    const n = [...picked.values()].filter((p) => Number(p.qty) > 0).length;
+    countBox.textContent = n ? `${n} صنف محدد للتحويل` : '';
+  };
+  const loadRows = async () => {
+    picked.clear();
+    const r = await get('/reports/stock', { warehouse_id: from.value });
+    rows = (r.rows || []).filter((x) => x.item_id && x.sellable > 0);
+    draw();
+  };
+  from.addEventListener('change', loadRows);
+  filterIn.addEventListener('input', draw);
   const send = submitter();
-  el.append(h('div', { class: 'note' }, 'يُصرف بالأقرب انتهاءً من الرصيد الصالح ويدخل الوجهة بنفس الدفعات والتكلفة. لا يغير إجمالي المخزون ولا يُعد بيعًا.'),
+  el.append(h('div', { class: 'note' }, 'اختر المستودع المصدر فتظهر أصنافه المتاحة. حدد الأصناف واكتب الكمية (أو «الكل»). يُصرف بالأقرب انتهاءً ويدخل الوجهة بنفس الدفعات والتكلفة، ولا يُعد بيعًا.'),
     h('div', { class: 'card' }, h('div', { class: 'grid' }, field('من مستودع', from, { req: true }), field('إلى مستودع', to, { req: true }), field('ملاحظات', notes)),
       h('label', { class: 'check', style: { marginTop: '10px' } }, transit, 'نقل على مراحل: تبقى البضاعة "بالطريق" غير متاحة في الطرفين حتى تستلمها الوجهة')),
-    h('div', { class: 'card' }, picker.el, h('div', { class: 'table-wrap', style: { marginTop: '10px' } }, h('table', null, h('thead', null, h('tr', null, ['الصنف', 'الوحدة', 'الكمية', ''].map((x) => h('th', null, x)))), tbody))),
+    h('div', { class: 'card' }, h('div', { class: 'row', style: { alignItems: 'center' } }, h('div', { style: { flex: 1 } }, filterIn), countBox),
+      h('div', { class: 'table-wrap', style: { marginTop: '10px' } }, h('table', null, h('thead', null, h('tr', null, ['', 'الصنف', 'المتاح', 'الوحدة', 'الكمية المحوّلة', ''].map((x) => h('th', null, x)))), tbody))),
     h('button', { class: 'btn ok', onclick: async () => {
-      if (!cart.length) return toast('أضف صنفًا', 'bad');
-      const d = await run(() => send('POST', '/transfers', { from_warehouse_id: Number(from.value), to_warehouse_id: Number(to.value), in_transit: transit.checked, notes: notes.value || null, lines: cart.map((l) => ({ item_id: l.item.id, unit_id: l.unit_id, qty: num(l.qty) })) }), 'تم التحويل');
+      if (from.value === to.value) return toast('المستودع المصدر والوجهة متطابقان', 'bad');
+      const lines = [];
+      for (const [itemId, p] of picked) {
+        const q = num(p.qty);
+        if (!(q > 0)) continue;
+        const it = allItems.get(itemId);
+        const r = rows.find((x) => x.item_id === itemId);
+        if (r && q * factorOf(it, p.unit_id) > r.sellable + 1e-9) return toast(`الكمية المطلوبة من ${it.name} أكبر من المتاح (${r.sellable} ${it.base_unit})`, 'bad');
+        lines.push({ item_id: itemId, unit_id: p.unit_id, qty: q });
+      }
+      if (!lines.length) return toast('حدد صنفًا واكتب الكمية', 'bad');
+      const d = await run(() => send('POST', '/transfers', { from_warehouse_id: Number(from.value), to_warehouse_id: Number(to.value), in_transit: transit.checked, notes: notes.value || null, lines }), 'تم التحويل');
       if (d) location.hash = '#/doc/' + d.id;
     } }, 'اعتماد التحويل'));
-  draw();
+  await loadRows();
 }
 
 // ===================== الجرد =====================
