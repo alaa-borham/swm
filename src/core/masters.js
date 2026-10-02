@@ -260,7 +260,8 @@ function partyFields(input, ex = {}) {
     is_supplier: input.is_supplier !== undefined ? bool(input.is_supplier) : ex.is_supplier ?? 0,
     credit_limit: input.credit_limit !== undefined ? optMoney(input.credit_limit, 'الحد الائتماني') : ex.credit_limit ?? null,
     payment_terms_days: input.payment_terms_days !== undefined ? Number(input.payment_terms_days || 0) : ex.payment_terms_days ?? 0,
-    rep_id: input.rep_id !== undefined ? (input.rep_id || null) : ex.rep_id ?? null,
+    rep_id: input.rep_id === 'all' ? null : input.rep_id !== undefined ? (input.rep_id || null) : ex.rep_id ?? null,
+    all_reps: input.rep_id !== undefined ? (input.rep_id === 'all' ? 1 : 0) : ex.all_reps ?? 0,
     tax_number: input.tax_number !== undefined ? s(input.tax_number) : ex.tax_number ?? null,
     notes: input.notes !== undefined ? s(input.notes) : ex.notes ?? null,
     whatsapp_opt_in: input.whatsapp_opt_in !== undefined ? bool(input.whatsapp_opt_in) : ex.whatsapp_opt_in ?? 0,
@@ -275,10 +276,10 @@ function createParty(ctx, input) {
   ctx.require('parties.manage');
   return ctx.tx(() => {
     const f = partyFields(input);
-    if (ctx.repScope) f.rep_id = ctx.repScope;
-    const id = ctx.db.prepare(`INSERT INTO parties(name,phone,address,is_customer,is_supplier,credit_limit,payment_terms_days,rep_id,tax_number,notes,whatsapp_opt_in,active,created_at)
-      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(f.name, f.phone, f.address, f.is_customer, f.is_supplier, f.credit_limit, f.payment_terms_days,
-      f.rep_id, f.tax_number, f.notes, f.whatsapp_opt_in, f.active, ctx.now()).lastInsertRowid;
+    if (ctx.repScope) { f.rep_id = ctx.repScope; f.all_reps = 0; }
+    const id = ctx.db.prepare(`INSERT INTO parties(name,phone,address,is_customer,is_supplier,credit_limit,payment_terms_days,rep_id,all_reps,tax_number,notes,whatsapp_opt_in,active,created_at)
+      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(f.name, f.phone, f.address, f.is_customer, f.is_supplier, f.credit_limit, f.payment_terms_days,
+      f.rep_id, f.all_reps, f.tax_number, f.notes, f.whatsapp_opt_in, f.active, ctx.now()).lastInsertRowid;
     ctx.audit('party.create', { entity: 'party', entity_id: id, after: f });
     return getParty(ctx, id);
   });
@@ -290,8 +291,8 @@ function updateParty(ctx, id, input) {
     const ex = getPartyRow(ctx, id);
     const f = partyFields(input, ex);
     if (f.credit_limit !== ex.credit_limit && !ctx.has('credit.override') && !ctx.has('users.manage')) ctx.require('credit.override', 'party.credit_limit');
-    ctx.db.prepare(`UPDATE parties SET name=?,phone=?,address=?,is_customer=?,is_supplier=?,credit_limit=?,payment_terms_days=?,rep_id=?,tax_number=?,notes=?,whatsapp_opt_in=?,active=? WHERE id=?`)
-      .run(f.name, f.phone, f.address, f.is_customer, f.is_supplier, f.credit_limit, f.payment_terms_days, f.rep_id, f.tax_number, f.notes, f.whatsapp_opt_in, f.active, id);
+    ctx.db.prepare(`UPDATE parties SET name=?,phone=?,address=?,is_customer=?,is_supplier=?,credit_limit=?,payment_terms_days=?,rep_id=?,all_reps=?,tax_number=?,notes=?,whatsapp_opt_in=?,active=? WHERE id=?`)
+      .run(f.name, f.phone, f.address, f.is_customer, f.is_supplier, f.credit_limit, f.payment_terms_days, f.rep_id, f.all_reps, f.tax_number, f.notes, f.whatsapp_opt_in, f.active, id);
     ctx.audit('party.update', { entity: 'party', entity_id: id, before: ex, after: f });
     return getParty(ctx, id);
   });
@@ -300,7 +301,7 @@ function updateParty(ctx, id, input) {
 function getPartyRow(ctx, id) {
   const p = ctx.db.prepare('SELECT * FROM parties WHERE id=?').get(id);
   if (!p) notFound('الطرف');
-  if (ctx.partyScope && p.rep_id !== ctx.partyScope) fail('FORBIDDEN', 'هذا العميل خارج نطاقك', 403);
+  if (ctx.partyScope && p.rep_id !== ctx.partyScope && !p.all_reps) fail('FORBIDDEN', 'هذا العميل خارج نطاقك', 403);
   return p;
 }
 
@@ -322,12 +323,12 @@ function listParties(ctx, { q, type, active, limit = 200, offset = 0 } = {}) {
   if (type === 'customer') w.push('is_customer=1');
   if (type === 'supplier') w.push('is_supplier=1');
   if (active !== undefined && active !== '') { w.push('active=?'); p.push(bool(active)); }
-  if (ctx.partyScope) { w.push('rep_id=?'); p.push(ctx.partyScope); }
+  if (ctx.partyScope) { w.push('(rep_id=? OR all_reps=1)'); p.push(ctx.partyScope); }
   if (ctx.repScope) w.push('is_customer=1');
   const rows = ctx.db.prepare(`SELECT p.*,
       (SELECT COALESCE(SUM(debit-credit),0) FROM journal_lines WHERE account='AR' AND party_id=p.id) ar,
       (SELECT COALESCE(SUM(credit-debit),0) FROM journal_lines WHERE account='AP' AND party_id=p.id) ap,
-      (SELECT name FROM reps WHERE id=p.rep_id) rep_name
+      CASE WHEN p.all_reps=1 THEN 'كل المناديب' ELSE (SELECT name FROM reps WHERE id=p.rep_id) END rep_name
     FROM parties p WHERE ${w.join(' AND ')} ORDER BY name LIMIT ? OFFSET ?`).all(...p, Number(limit), Number(offset));
   const total = ctx.db.prepare(`SELECT COUNT(*) n FROM parties WHERE ${w.join(' AND ')}`).get(...p).n;
   const { fromMinor } = require('../lib/money');
@@ -560,7 +561,7 @@ function assignRepCustomers(ctx, repId, { party_ids = [], unassign = false } = {
   ctx.require('parties.manage');
   return ctx.tx(() => {
     if (!ctx.db.prepare('SELECT 1 FROM reps WHERE id=?').get(repId)) notFound('المندوب');
-    const upd = ctx.db.prepare('UPDATE parties SET rep_id=? WHERE id=? AND is_customer=1' + (unassign ? ' AND rep_id=?' : ''));
+    const upd = ctx.db.prepare('UPDATE parties SET rep_id=?, all_reps=0 WHERE id=? AND is_customer=1' + (unassign ? ' AND rep_id=?' : ''));
     let n = 0;
     for (const id of party_ids) n += upd.run(...(unassign ? [null, Number(id), repId] : [repId, Number(id)])).changes;
     ctx.audit(unassign ? 'rep.customers_unassign' : 'rep.customers_assign', { entity: 'rep', entity_id: repId, after: { party_ids } });

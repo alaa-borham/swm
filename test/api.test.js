@@ -309,3 +309,24 @@ test('تعديل صلاحيات الأدوار: يسري فورًا، والمد
     assert.equal((await c.get('/reports/stock')).status, 200, 'عادت الافتراضية');
   } finally { await t.close(); }
 });
+
+test('عميل لكل المناديب: يظهر لكل مندوب ويبيع له، والعميل الخاص لمندوبه فقط', async () => {
+  const t = await boot();
+  try {
+    const r1 = (await t.admin.post('/reps', { name: 'أ' })).body;
+    const r2 = (await t.admin.post('/reps', { name: 'ب' })).body;
+    await t.admin.post('/users', { username: 'repa', full_name: 'أ', password: 'Rep12345', roles: ['rep'], rep_id: r1.id });
+    await t.admin.post('/users', { username: 'repb', full_name: 'ب', password: 'Rep12345', roles: ['rep'], rep_id: r2.id });
+    const all = (await t.admin.post('/parties', { name: 'الجنوب', is_customer: 1, rep_id: 'all' })).body;
+    assert.equal(all.all_reps, 1);
+    await t.admin.post('/parties', { name: 'خاص أ', is_customer: 1, rep_id: r1.id });
+    const a = await t.client('repa', 'Rep12345');
+    const b = await t.client('repb', 'Rep12345');
+    assert.deepEqual((await a.get('/parties?type=customer')).body.rows.map((p) => p.name).sort(), ['الجنوب', 'خاص أ'].sort());
+    assert.deepEqual((await b.get('/parties?type=customer')).body.rows.map((p) => p.name), ['الجنوب']);
+    assert.equal((await b.get('/parties/' + all.id)).status, 200);
+    const upd = (await t.admin.put('/parties/' + all.id, { name: 'الجنوب', is_customer: 1, rep_id: r2.id })).body;
+    assert.equal(upd.all_reps, 0);
+    assert.deepEqual((await a.get('/parties?type=customer')).body.rows.map((p) => p.name), ['خاص أ']);
+  } finally { await t.close(); }
+});

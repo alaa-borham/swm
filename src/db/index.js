@@ -57,6 +57,10 @@ const MIGRATIONS = {
       UPDATE cash_accounts SET branch_id=(SELECT u.branch_id FROM users u JOIN reps r ON r.id=u.rep_id WHERE r.custody_account_id=cash_accounts.id AND u.branch_id IS NOT NULL LIMIT 1)
         WHERE kind='rep_custody' AND EXISTS (SELECT 1 FROM users u JOIN reps r ON r.id=u.rep_id WHERE r.custody_account_id=cash_accounts.id AND u.branch_id IS NOT NULL);`);
   },
+  7: (db) => {
+    // عميل متاح لكل المناديب
+    addColumn(db, 'parties', 'all_reps', 'INTEGER NOT NULL DEFAULT 0');
+  },
 };
 const SCHEMA_VERSION = Math.max(1, ...Object.keys(MIGRATIONS).map(Number));
 

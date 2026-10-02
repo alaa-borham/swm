@@ -151,7 +151,7 @@ export async function partyForm(p, kind = 'customer', onSaved) {
     name: inp({ value: p?.name || '' }), phone: inp({ value: p?.phone || '' }), address: inp({ value: p?.address || '' }), tax_number: inp({ value: p?.tax_number || '' }),
     is_customer: h('input', { type: 'checkbox', checked: p ? !!p.is_customer : kind === 'customer' }), is_supplier: h('input', { type: 'checkbox', checked: p ? !!p.is_supplier : kind === 'supplier' }), whatsapp_opt_in: h('input', { type: 'checkbox', checked: !!p?.whatsapp_opt_in }),
     credit_limit: inp({ type: 'number', value: p?.credit_limit ?? '', placeholder: 'فارغ = بلا حد' }), payment_terms_days: inp({ type: 'number', value: p?.payment_terms_days ?? 0 }),
-    rep_id: sel([{ value: '', label: '—' }, ...reps.map((r) => ({ value: r.id, label: r.name }))], p?.rep_id || ''), notes: inp({ value: p?.notes || '' }),
+    rep_id: sel([{ value: '', label: '— بدون مندوب —' }, { value: 'all', label: 'كل المناديب' }, ...reps.map((r) => ({ value: r.id, label: r.name }))], p?.all_reps ? 'all' : p?.rep_id || ''), notes: inp({ value: p?.notes || '' }),
     active: h('input', { type: 'checkbox', checked: p ? !!p.active : true }),
   };
   const { modal } = await import('../lib.js');
@@ -162,7 +162,7 @@ export async function partyForm(p, kind = 'customer', onSaved) {
   h('p', { class: 'small muted' }, 'يمكن أن يكون الطرف عميلاً وموردًا معًا؛ يُعرض الحسابان منفصلين دون دمج تلقائي.')),
   [{ label: 'حفظ', class: 'primary', onClick: async () => {
     const body = { name: f.name.value, phone: f.phone.value, address: f.address.value, tax_number: f.tax_number.value, is_customer: f.is_customer.checked ? 1 : 0, is_supplier: f.is_supplier.checked ? 1 : 0, whatsapp_opt_in: f.whatsapp_opt_in.checked ? 1 : 0,
-      credit_limit: f.credit_limit.value, payment_terms_days: num(f.payment_terms_days.value) || 0, rep_id: f.rep_id.value ? Number(f.rep_id.value) : null, notes: f.notes.value, active: f.active.checked ? 1 : 0 };
+      credit_limit: f.credit_limit.value, payment_terms_days: num(f.payment_terms_days.value) || 0, rep_id: f.rep_id.value === 'all' ? 'all' : f.rep_id.value ? Number(f.rep_id.value) : null, notes: f.notes.value, active: f.active.checked ? 1 : 0 };
     const r = await run(() => (p ? api('PUT', '/parties/' + p.id, body) : api('POST', '/parties', body)), 'تم الحفظ');
     if (!r) return false;
     invalidate('customers', 'suppliers');
@@ -194,7 +194,7 @@ export async function party({ el, params, q }) {
   };
   el.append(h('div', { class: 'card' }, h('div', { class: 'doc-head' },
     h('div', null, h('b', null, 'الهاتف'), p.phone || '—'), h('div', null, h('b', null, 'العنوان'), p.address || '—'), h('div', null, h('b', null, 'الحد الائتماني'), p.credit_limit == null ? 'بلا حد' : M(p.credit_limit)),
-    h('div', null, h('b', null, 'مدة السداد'), `${p.payment_terms_days} يوم`), h('div', null, h('b', null, 'المندوب'), p.rep_name || '—'),
+    h('div', null, h('b', null, 'مدة السداد'), `${p.payment_terms_days} يوم`), h('div', null, h('b', null, 'المندوب'), p.all_reps ? 'كل المناديب' : p.rep_name || '—'),
     p.is_customer ? h('div', null, h('b', null, 'رصيد العميل (عليه)'), M(p.ar_balance)) : null, p.is_supplier ? h('div', null, h('b', null, 'رصيد المورد (له)'), M(p.ap_balance)) : null)),
   h('form', { class: 'row card filters', style: { padding: '12px' }, onsubmit: (e) => { e.preventDefault(); load(); } }, field('الحساب', account), field('من', from), field('إلى', to), h('button', { class: 'btn primary' }, 'كشف الحساب')), body);
   await load();
