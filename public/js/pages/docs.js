@@ -77,6 +77,7 @@ export async function view({ el, params }) {
   }
   if (d.type === 'sale') {
     if (d.status === 'draft') {
+      if (can('sales.create')) L('فتح في فاتورة البيع للتعديل', `#/pos?draft=${d.id}`, 'primary');
       A('اعتماد', async () => { const send = submitter(); if (await run(() => send('POST', `/sales/${d.id}/approve`, {}), 'تم الاعتماد')) reload(); }, 'ok');
       draftCancel(d, A, reload);
     }

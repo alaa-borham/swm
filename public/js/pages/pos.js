@@ -47,6 +47,48 @@ async function posView({ el, q }) {
   const tbody = h('tbody');
   const totals = h('div', { class: 'total-box' });
   const changeBox = h('div', { class: 'muted' });
+  // المسودات: فتح مسودة محفوظة لإكمالها أو اعتمادها
+  let draftId = null;
+  const draftNote = h('div');
+  const draftsBtn = h('button', { class: 'btn', onclick: () => showDrafts() }, 'المسودات');
+  const refreshDraftCount = async () => {
+    try {
+      const r = await get('/docs', { type: 'sale', status: 'draft', limit: 1 });
+      draftsBtn.textContent = r.total ? `المسودات (${r.total})` : 'المسودات';
+    } catch { /* بلا اتصال */ }
+  };
+  const resetForm = () => {
+    cart.length = 0; cashIn.value = ''; cardIn.value = ''; invDiscPct.value = ''; invDiscAmt.value = ''; notes.value = '';
+    draftId = null; draftNote.replaceChildren();
+  };
+  async function showDrafts() {
+    const r = await run(() => get('/docs', { type: 'sale', status: 'draft', limit: 100 }));
+    if (!r) return;
+    const m = modal('مسودات فواتير البيع', r.rows.length ? h('div', { class: 'table-wrap' }, h('table', null,
+      h('thead', null, h('tr', null, ['الرقم', 'التاريخ', 'العميل', 'الإجمالي', ''].map((x) => h('th', null, x)))),
+      h('tbody', null, r.rows.map((d) => h('tr', null, h('td', null, d.number), h('td', null, d.date), h('td', null, d.party_name || '—'), h('td', null, M(d.total)),
+        h('td', null, h('button', { class: 'btn small primary', onclick: async () => { m.close(); await loadDraft(d.id); } }, 'فتح'))))))) : h('p', { class: 'muted' }, 'لا توجد مسودات'));
+  }
+  async function loadDraft(id) {
+    if (cart.length && !confirm('في الفاتورة الحالية أصناف لم تُحفظ. استبدالها بالمسودة؟')) return;
+    const d = await run(() => get('/docs/' + id));
+    if (!d) return;
+    if (d.status !== 'draft') return toast('هذه الفاتورة لم تعد مسودة', 'bad');
+    resetForm();
+    for (const l of d.lines) {
+      const item = await get('/items/' + l.item_id);
+      cart.push({ item, unit_id: l.unit_id, qty: l.qty, price: l.price, discount_pct: l.line_discount && l.value ? Number((l.line_discount / l.value * 100).toFixed(2)) : '' });
+    }
+    custSel.value = d.party_id ? String(d.party_id) : '';
+    if (d.warehouse_id) whSel.value = String(d.warehouse_id);
+    notes.value = d.notes || '';
+    invDiscPct.value = d.invoice_discount_bp ?? '';
+    invDiscAmt.value = d.invoice_discount_bp == null && d.invoice_discount_amount ? d.invoice_discount_amount : '';
+    draftId = d.id;
+    draftNote.replaceChildren(h('div', { class: 'note warn', style: { marginBottom: '8px' } }, `تعمل على المسودة ${d.number} — الحفظ يحدّثها والاعتماد يعتمدها `,
+      h('button', { class: 'btn small', onclick: () => { resetForm(); draw(); } }, 'فاتورة جديدة بدلًا منها')));
+    draw();
+  }
 
   const taxOf = (it) => (it.tax_rate_bp != null ? it.tax_rate_bp : s.default_tax_rate) || 0;
   const picker = itemPicker({ autofocus: true, inStockOnly: true, warehouseId: () => whSel.value, onPick: (it) => {
@@ -142,16 +184,17 @@ async function posView({ el, q }) {
     const key = crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2);
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const doc = await api('POST', '/sales', body, { idem: key });
+        const doc = draftId ? await api('PUT', '/sales/' + draftId, body) : await api('POST', '/sales', body, { idem: key });
         toast(approve ? `تم اعتماد الفاتورة ${doc.number}` : `حُفظت المسودة ${doc.number}`, 'ok');
-        cart.length = 0; cashIn.value = ''; cardIn.value = ''; invDiscPct.value = ''; invDiscAmt.value = ''; notes.value = '';
+        resetForm();
+        refreshDraftCount();
         send = submitter();
         draw();
         if (approve) done(doc, print);
         picker.input.focus();
         return;
       } catch (e) {
-        if (e.code === 'NETWORK' && approve) {
+        if (e.code === 'NETWORK' && approve && !draftId) {
           try {
             enqueue({ key, url: '/sales', body, label: `بيع ${cart.length} بند`, total: calc().total });
           } catch (x) { toast('تعذر الحفظ دون اتصال: ' + x.message, 'bad'); return; }
@@ -193,6 +236,7 @@ async function posView({ el, q }) {
 
   el.append(h('div', { class: 'pos' },
     h('div', null,
+      draftNote,
       h('div', { class: 'card' }, picker.el, h('div', { class: 'small muted', style: { marginTop: '6px' } },
         h('span', { class: 'kbd' }, 'F2'), ' بحث · ', h('span', { class: 'kbd' }, 'Enter'), ' إضافة · ', h('span', { class: 'kbd' }, 'F4'), ' مسودة · ',
         h('span', { class: 'kbd' }, 'F9'), ' اعتماد · ', h('span', { class: 'kbd' }, 'F10'), ' اعتماد وطباعة')),
@@ -213,8 +257,11 @@ async function posView({ el, q }) {
         h('div', { class: 'actions', style: { marginTop: '12px' } },
           h('button', { class: 'btn ok', onclick: () => submit(true) }, 'اعتماد'),
           h('button', { class: 'btn primary', onclick: () => submit(true, 'thermal') }, 'اعتماد وطباعة'),
-          h('button', { class: 'btn', onclick: () => submit(false) }, 'حفظ مسودة'))))));
+          h('button', { class: 'btn', onclick: () => submit(false) }, 'حفظ مسودة'),
+          draftsBtn)))));
   draw();
+  refreshDraftCount();
+  if (q.draft) loadDraft(Number(q.draft));
   if (navigator.onLine) refreshCatalog(whSel.value);
   void lookup; void send;
 }
