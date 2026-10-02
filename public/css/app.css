@@ -20,13 +20,13 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #12171d; --panel: #1b222b; --ink: #e6ebf1; --muted: #9aa6b4; --line: #2c3642; --brand: #4f9ad0; --brand-ink: #0c1218;
-    --brand-soft: #1c2f3f; --ok: #5cc795; --ok-soft: #173326; --warn: #e3b14d; --warn-soft: #3a2e14; --bad: #f08a83; --bad-soft: #3d1f1d;
+    --brand-soft: #1c2f3f; --ok: #5cc795; --ok-ink: #0b1f15; --ok-soft: #173326; --warn: #e3b14d; --warn-soft: #3a2e14; --bad: #f08a83; --bad-soft: #3d1f1d;
     --shadow: none;
   }
 }
 :root[data-theme="dark"] {
   --bg: #12171d; --panel: #1b222b; --ink: #e6ebf1; --muted: #9aa6b4; --line: #2c3642; --brand: #4f9ad0; --brand-ink: #0c1218;
-  --brand-soft: #1c2f3f; --ok: #5cc795; --ok-soft: #173326; --warn: #e3b14d; --warn-soft: #3a2e14; --bad: #f08a83; --bad-soft: #3d1f1d;
+  --brand-soft: #1c2f3f; --ok: #5cc795; --ok-ink: #0b1f15; --ok-soft: #173326; --warn: #e3b14d; --warn-soft: #3a2e14; --bad: #f08a83; --bad-soft: #3d1f1d;
   --shadow: none;
 }
 * { box-sizing: border-box; }
@@ -98,7 +98,7 @@ textarea { min-height: 70px; }
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--line); background: var(--panel); border-radius: 6px; padding: 7px 14px; cursor: pointer; min-height: 36px; white-space: nowrap; }
 .btn:hover { border-color: var(--brand); }
 .btn.primary { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }
-.btn.ok { background: var(--ok); color: #fff; border-color: var(--ok); }
+.btn.ok { background: var(--ok); color: var(--ok-ink, #fff); border-color: var(--ok); }
 .btn.danger { color: var(--bad); border-color: var(--bad); }
 .btn.small { padding: 3px 9px; min-height: 28px; font-size: 13px; }
 .btn[disabled] { opacity: .55; cursor: not-allowed; }
@@ -199,3 +199,5 @@ tr.clickable { cursor: pointer; }
 .quick .ic { font-size: 26px; line-height: 1; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 10px; background: var(--brand-soft); }
 .quick small { display: block; font-weight: 400; font-size: 12px; color: var(--muted); margin-top: 2px; }
 tbody tr.sel td { background: var(--brand-soft); }
+
+.back-btn { white-space: nowrap; }

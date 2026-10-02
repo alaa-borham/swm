@@ -147,8 +147,16 @@ function layout() {
   window.addEventListener('queue-changed', updateNet);
   const sessionBadge = h('span', { class: 'who' });
   if (state.session) sessionBadge.append(h('a', { href: '#/sessions', class: 'badge ok' }, 'وردية مفتوحة ' + state.session.number));
+  // زر الرجوع: يعود للصفحة السابقة داخل النظام، وإلا للصفحة الرئيسية
+  const backBtn = h('button', { class: 'btn small back-btn', 'aria-label': 'رجوع', title: 'رجوع', onclick: () => {
+    if (navDepth > 0) { goingBack = true; history.back(); } else location.hash = '#/' + defaultRoute();
+  } }, '→ رجوع');
+  const syncBack = () => { const r = location.hash.replace(/^#\/?/, ''); backBtn.style.visibility = !r || r === defaultRoute() ? 'hidden' : 'visible'; };
+  window.addEventListener('hashchange', syncBack);
+  setTimeout(syncBack, 0);
   const top = h('header', { class: 'top' },
     h('button', { class: 'btn small menu-btn', 'aria-label': 'القائمة', onclick: () => side.classList.toggle('open') }, '☰'),
+    backBtn,
     h('div', { class: 'title' }, ''), net, sessionBadge,
     h('span', { class: 'who' }, state.me.full_name),
     h('a', { class: 'btn small', href: '#/password' }, 'كلمة المرور'),
@@ -260,6 +268,9 @@ async function queuePage({ el }) {
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => null);
 Offline.startAutoSync();
+// عمق التنقل داخل النظام لزر الرجوع
+let navDepth = 0, goingBack = false;
+window.addEventListener('hashchange', () => { if (goingBack) { navDepth = Math.max(0, navDepth - 1); goingBack = false; } else navDepth++; });
 window.addEventListener('hashchange', route);
 window.addEventListener('auth-required', () => { if (state.me) { state.me = null; loginView('انتهت الجلسة؛ سجّل الدخول مجددًا'); } });
 window.addEventListener('session-changed', async () => { await refreshMe(); layout(); route(); });
