@@ -61,6 +61,17 @@ const MIGRATIONS = {
     // عميل متاح لكل المناديب
     addColumn(db, 'parties', 'all_reps', 'INTEGER NOT NULL DEFAULT 0');
   },
+  8: (db) => {
+    // روابط مشاركة الفواتير للعملاء (رمز عشوائي، صلاحية محدودة، دون تسجيل دخول)
+    db.exec(`CREATE TABLE IF NOT EXISTS doc_shares (
+        token TEXT PRIMARY KEY,
+        doc_id INTEGER NOT NULL REFERENCES docs(id),
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        user_id INTEGER REFERENCES users(id)
+      );
+      CREATE INDEX IF NOT EXISTS doc_shares_doc ON doc_shares(doc_id);`);
+  },
 };
 const SCHEMA_VERSION = Math.max(1, ...Object.keys(MIGRATIONS).map(Number));
 

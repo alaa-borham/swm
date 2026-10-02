@@ -341,13 +341,16 @@ export async function viewDoc(id, format = 'a4', { count = false } = {}) {
     // أول طباعة/مشاركة فقط تُسجَّل في عداد الطباعة (النسخ التالية تُعلَّم «نسخة»)
     const markPrinted = async () => { if (!printed) { printed = true; await api('POST', `/docs/${id}/print`, {}).catch(() => null); } };
     const canThermal = ['sale', 'sale_return', 'receipt'].includes(d.type);
+    const canShareLink = ['sale', 'sale_return', 'receipt'].includes(d.type) && d.status === 'approved';
     const fmtBtn = (f, label) => h('button', { class: 'btn' + (fmt === f ? ' primary' : ''), onclick: async () => { fmt = f; await render(false); bar.replaceWith(toolbar()); } }, label);
     const toolbar = () => (bar = h('div', { class: 'print-toolbar' },
       h('button', { class: 'btn ok', onclick: async () => { await markPrinted(); window.print(); } }, 'طباعة'),
-      h('button', { class: 'btn', onclick: async () => { await markPrinted(); shareAsImage(area.firstElementChild, `${d.number}.png`, fmt); } }, 'مشاركة صورة'),
+      canShareLink ? h('button', { class: 'btn primary', onclick: () => shareDoc(d, area.firstElementChild, fmt) }, 'مشاركة') : null,
+      canShareLink ? h('button', { class: 'btn', onclick: () => whatsappDoc(d) }, 'واتساب') : null,
+      h('button', { class: 'btn', onclick: async () => { await markPrinted(); shareAsImage(area.firstElementChild, `${d.number}.png`, fmt); } }, 'حفظ صورة'),
       canThermal ? fmtBtn('a4', 'A4') : null, canThermal ? fmtBtn('thermal', 'حراري') : null,
       h('button', { class: 'btn', onclick: close }, 'إغلاق'),
-      h('span', { class: 'small' }, 'إن لم تظهر قائمة الطباعة على الجوال: استخدم «مشاركة صورة» وأرسلها لتطبيق الطابعة (مثل RawBT) أو واتساب أو احفظها.')));
+      h('span', { class: 'small' }, '«مشاركة» يرسل رابط الفاتورة عبر واتساب أو أي تطبيق، ويفتحه العميل دون تسجيل دخول. «حفظ صورة» لتطبيق الطابعة (مثل RawBT).')));
     let bar;
     document.querySelector('.print-toolbar')?.remove();
     document.body.classList.add('printing', 'print-preview');
@@ -372,6 +375,34 @@ export async function printDoc(id, format = 'a4') {
     window.addEventListener('afterprint', done);
     setTimeout(() => window.print(), 50);
   } catch (e) { toast(e.message, 'bad'); }
+}
+
+/** رابط مشاركة الفاتورة: صورة + رابط عبر قائمة المشاركة إن دعمها الجوال، وإلا رابط فقط، وإلا واتساب */
+async function shareLink(d) {
+  const r = await api('POST', `/docs/${d.id}/share`, {});
+  const text = `${r.org_name}\n${d.label} ${r.number}\nالإجمالي: ${money(r.total)}\nعرض الفاتورة: ${r.url}`;
+  return { ...r, text };
+}
+async function shareDoc(d, node, fmt) {
+  try {
+    const r = await shareLink(d);
+    if (navigator.share) {
+      try { await navigator.share({ title: `${d.label} ${r.number}`, text: r.text }); return; } catch (e) { if (e && e.name === 'AbortError') return; }
+    }
+    window.open('https://wa.me/?text=' + encodeURIComponent(r.text), '_blank');
+  } catch (e) { toast(e.message || 'تعذرت المشاركة', 'bad'); }
+  void node; void fmt;
+}
+/** فتح محادثة واتساب مع العميل مباشرة ورابط الفاتورة جاهز للإرسال */
+async function whatsappDoc(d) {
+  try {
+    const r = await shareLink(d);
+    let phone = String(r.phone || '').replace(/[^0-9]/g, '');
+    if (phone.startsWith('00')) phone = phone.slice(2);
+    else if (phone.startsWith('0')) phone = r.country_code + phone.slice(1);
+    if (!phone) toast('لا يوجد رقم هاتف للعميل؛ اختر جهة الاتصال في واتساب', 'warn');
+    window.open(`https://wa.me/${phone}?text=` + encodeURIComponent(r.text), '_blank');
+  } catch (e) { toast(e.message || 'تعذر فتح واتساب', 'bad'); }
 }
 
 /** تحويل الإيصال إلى صورة PNG ومشاركتها (أو تنزيلها) — بديل عندما يمنع المتصفح الطباعة */
@@ -414,7 +445,7 @@ async function shareAsImage(node, filename, format) {
   }
 }
 
-function a4(d, s, copy) {
+export function a4(d, s, copy) {
   const isItems = d.lines.some((l) => l.item_name);
   return h('div', { class: 'print-a4' },
     h('div', { class: 'head' },
@@ -433,7 +464,7 @@ function a4(d, s, copy) {
     h('p', { style: { marginTop: '24px', textAlign: 'center' } }, s.invoice_footer || ''));
 }
 
-function thermal(d, s, copy) {
+export function thermal(d, s, copy) {
   const taxInv = s.einvoice_qr && ['sale', 'sale_return'].includes(d.type);
   const title = taxInv ? (d.type === 'sale' ? 'فاتورة ضريبية مبسطة' : 'إشعار دائن (مرتجع)') : d.label;
   const row = (k, v, bold) => h('div', { class: 'tr' + (bold ? ' b' : '') }, h('span', null, k), h('span', null, v));

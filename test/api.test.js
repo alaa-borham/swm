@@ -387,3 +387,36 @@ test('خصم الفاتورة: يفعّله المدير، واستخدامه م
     assert.equal(lineOnly.body.lines[0].line_discount, 1);
   } finally { await t.close(); }
 });
+
+test('مشاركة الفاتورة برابط: صفحة عامة بلا دخول وبلا تكاليف، والمسودة والشراء لا يُشاركان', async () => {
+  const t = await boot();
+  try {
+    const item = (await t.admin.post('/items', { name: 'شاي', base_unit: 'حبة', track_expiry: 0, sell_price: 10 })).body;
+    await t.admin.post('/opening-stock', { warehouse_id: 1, lines: [{ item_id: item.id, qty: 10, unit_cost: 4 }] });
+    const c = (await t.admin.post('/parties', { name: 'عميل', is_customer: 1, phone: '0501234567' })).body;
+    const sale = (await t.admin.post('/sales', { party_id: c.id, lines: [{ item_id: item.id, qty: 2 }], payments: [] })).body;
+    const sh = await t.admin.post(`/docs/${sale.id}/share`);
+    assert.equal(sh.status, 200, JSON.stringify(sh.body));
+    assert.match(sh.body.url, /\/r\/[a-f0-9]{48}$/);
+    assert.equal(sh.body.phone, '0501234567');
+    assert.equal((await t.admin.post(`/docs/${sale.id}/share`)).body.url, sh.body.url, 'نفس الرابط عند التكرار');
+    const token = sh.body.url.split('/r/')[1];
+    const root = t.base.replace(/\/api$/, '');
+    const page = await fetch(`${root}/r/${token}`);
+    assert.equal(page.status, 200);
+    const pub = await fetch(`${root}/public/receipt/${token}`);
+    assert.equal(pub.status, 200);
+    const j = await pub.json();
+    assert.equal(j.doc.number, sale.number);
+    assert.equal(j.doc.total, 20);
+    assert.equal(j.doc.cost, undefined, 'لا تكلفة');
+    assert.equal(j.doc.lines[0].cost, undefined, 'لا تكلفة للبند');
+    assert.equal((await fetch(`${root}/public/receipt/${'0'.repeat(48)}`)).status, 404);
+    assert.equal((await fetch(`${root}/r/abc`)).status, 404);
+    const draft = (await t.admin.post('/sales', { party_id: c.id, draft: true, lines: [{ item_id: item.id, qty: 1 }], payments: [] })).body;
+    if (draft.status === 'draft') assert.equal((await t.admin.post(`/docs/${draft.id}/share`)).status >= 400, true, 'المسودة لا تُشارك');
+    const sup = (await t.admin.post('/parties', { name: 'مورد', is_supplier: 1 })).body;
+    const pur = (await t.admin.post('/purchases', { party_id: sup.id, warehouse_id: 1, approve: true, lines: [{ item_id: item.id, qty: 1, price: 4 }] })).body;
+    assert.equal((await t.admin.post(`/docs/${pur.id}/share`)).status >= 400, true, 'الشراء لا يُشارك');
+  } finally { await t.close(); }
+});

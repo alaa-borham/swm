@@ -269,3 +269,9 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: .85; }
   .print-toolbar .small { color: var(--muted); flex-basis: 100%; }
 }
 @media print { .print-toolbar { display: none !important; } }
+/* صفحة الفاتورة العامة */
+body.public-receipt { background: #f4f6f9; }
+body.public-receipt .print-area { display: block; background: #fff; color: #000; max-width: 820px; margin: 70px auto 24px; padding: 16px; border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,.08); }
+body.public-receipt .public-bar { background: #1f5f8b; color: #fff; border: 0; }
+body.public-receipt .public-bar .small { color: #fff; flex-basis: auto; font-weight: 700; }
+@media print { body.public-receipt .print-area { margin: 0; box-shadow: none; padding: 0; max-width: none; } }

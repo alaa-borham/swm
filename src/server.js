@@ -62,6 +62,45 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
   });
   app.use(express.static(path.join(__dirname, '..', 'public'), { index: 'index.html', maxAge: 0 }));
 
+  // صفحة الفاتورة العامة عبر رابط المشاركة (بلا تسجيل دخول؛ الرمز عشوائي ومحدود المدة)
+  const SHAREABLE = ['sale', 'sale_return', 'receipt'];
+  const sharedDoc = (token) => {
+    const row = /^[a-f0-9]{48}$/.test(String(token)) ? db.prepare('SELECT * FROM doc_shares WHERE token=?').get(token) : null;
+    if (!row || row.expires_at < new Date().toISOString()) return null;
+    return row;
+  };
+  app.get('/r/:token', (req, res) => {
+    if (!sharedDoc(req.params.token)) return res.status(404).type('text/plain; charset=utf-8').send('الرابط غير صالح أو انتهت صلاحيته');
+    res.sendFile(path.join(__dirname, '..', 'public', 'receipt.html'));
+  });
+  app.get('/public/receipt/:token', async (req, res, next) => {
+    try {
+      const row = sharedDoc(req.params.token);
+      if (!row) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'الرابط غير صالح أو انتهت صلاحيته' } });
+      const ctx = Ctx.system(db, { today });
+      const doc = D.fullDoc(ctx, row.doc_id);
+      if (!SHAREABLE.includes(doc.type) || doc.status !== 'approved') return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'المستند غير متاح' } });
+      // لا تُكشف التكاليف أو بيانات داخلية للعميل
+      delete doc.cost; delete doc.allocations; delete doc.related; delete doc.attachments; delete doc.created_by_name; delete doc.approved_by_name;
+      for (const l of doc.lines) { delete l.cost; delete l.extra_cost; delete l.batch_id; }
+      const s = ctx.settings();
+      let qr = null;
+      if (s.einvoice_qr === '1' && ['sale', 'sale_return'].includes(doc.type)) { try { qr = (await require('./core/einvoice').qrSvg(ctx, D.loadDoc(ctx, row.doc_id))).svg; } catch (_) { qr = null; } }
+      res.set('Cache-Control', 'no-store').json({ doc, qr, settings: {
+        org_name: s.org_name, org_address: s.org_address, org_phone: s.org_phone, org_tax_number: s.org_tax_number, org_cr_number: s.org_cr_number,
+        org_logo_url: s.org_logo ? '/public/logo' : null, invoice_footer: s.invoice_footer, receipt_width_mm: Number(s.receipt_width_mm),
+        money_decimals: getMoneyDecimals(), einvoice_qr: s.einvoice_qr === '1', currency: s.currency,
+      } });
+    } catch (e) { next(e); }
+  });
+
+  app.get('/public/logo', (req, res) => {
+    const v = db.prepare("SELECT value FROM settings WHERE key='org_logo'").get()?.value;
+    const m = v && /^data:(image\/(?:png|jpeg|webp));base64,(.+)$/.exec(v);
+    if (!m) return res.status(404).end();
+    res.set('Content-Type', m[1]).set('Cache-Control', 'public, max-age=3600').send(Buffer.from(m[2], 'base64'));
+  });
+
   // Webhook حالات تسليم واتساب من Meta (خارج /api: لا جلسة، ويُتحقق من توقيع Meta)
   app.get('/webhooks/whatsapp', (req, res) => {
     const token = (db.prepare("SELECT value FROM settings WHERE key='whatsapp_verify_token'").get() || {}).value;
@@ -314,6 +353,27 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
     if (!(ctx.branchScope && toBranch === ctx.branchScope)) ctx.checkBranch(doc.branch_id);
   };
   api.get('/docs', h((ctx, req) => R.listDocs(ctx, req.query)));
+  // إنشاء رابط مشاركة للفاتورة (صالح 30 يومًا)
+  api.post('/docs/:id/share', h((ctx, req) => {
+    const doc = D.loadDoc(ctx, id(req));
+    canView(ctx, doc);
+    if (!SHAREABLE.includes(doc.type) || doc.status !== 'approved') fail('VALIDATION', 'المشاركة متاحة لفواتير البيع والمرتجعات وسندات القبض المعتمدة');
+    // يُعاد نفس الرابط ما دام صالحًا لأسبوع على الأقل
+    const ex = db.prepare('SELECT token, expires_at FROM doc_shares WHERE doc_id=? AND expires_at>? ORDER BY expires_at DESC LIMIT 1').get(doc.id, new Date(Date.now() + 7 * 864e5).toISOString());
+    const token = ex?.token || crypto.randomBytes(24).toString('hex');
+    const exp = ex?.expires_at || new Date(Date.now() + 30 * 864e5).toISOString();
+    if (!ex) {
+      db.prepare('INSERT INTO doc_shares(token,doc_id,created_at,expires_at,user_id) VALUES(?,?,?,?,?)').run(token, doc.id, ctx.now(), exp, ctx.userId);
+      ctx.audit('doc.share', { entity: 'doc', entity_id: doc.id, doc_number: doc.number });
+    }
+    const party = doc.party_id ? db.prepare('SELECT name, phone FROM parties WHERE id=?').get(doc.party_id) : null;
+    // خلف وكيل (Railway) قد يكون req.protocol = http؛ أصل الطلب من المتصفح أدق
+    const origin = req.get('origin');
+    let base = `${req.protocol}://${req.get('host')}`;
+    try { if (origin && new URL(origin).host === req.get('host')) base = new URL(origin).origin; } catch (_) { /* أصل غير صالح */ }
+    return { url: `${base}/r/${token}`, expires_at: exp, number: doc.number, total: fromMinor(doc.total), party_name: party?.name || null, phone: party?.phone || null,
+      org_name: ctx.setting('org_name'), country_code: ctx.setting('whatsapp_country_code') || '966' };
+  }));
   api.get('/docs/:id', h((ctx, req) => {
     const doc = D.loadDoc(ctx, id(req));
     canView(ctx, doc);
