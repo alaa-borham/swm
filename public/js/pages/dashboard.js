@@ -1,3 +1,4 @@
+import { icon as svgIcon } from '../icons.js';
 import { h, get, M, money, pageHead, inp, field, today, monthStart, can, Q, branchFilter } from '../lib.js';
 
 export async function render({ el, isCurrent }) {
@@ -13,18 +14,18 @@ export async function render({ el, isCurrent }) {
   };
   // اختصارات العمليات اليومية حسب صلاحيات المستخدم
   const shortcuts = [
-    ['sales.create', '#/pos', '🛒', 'فاتورة بيع', 'بيع لعميل نقدًا أو آجل'],
-    ['sales.view', '#/sales', '📋', 'قائمة الفواتير', 'فواتير البيع والمسودات'],
-    ['parties.manage', '#/parties?type=customer&new=customer', '👤', 'عميل جديد', 'إضافة عميل'],
-    ['purchases.create', '#/purchase', '🧾', 'فاتورة شراء', 'استلام بضاعة من مورد'],
-    ['items.view', '#/items', '📦', 'الأصناف والباركود', 'الأصناف والأسعار'],
-    ['stock.view', '#/stock', '📊', 'رصيد المخزون', 'الكميات المتاحة بالمستودعات'],
-    ['stock.transfer', '#/reps', '🚚', 'تسليم بضاعة لمندوب', 'تحويل إلى مخزون المندوب'],
-    ['cash.receipt', '#/receipt', '💵', 'تحصيل من عميل', 'سند قبض دفعة'],
+    ['sales.create', '#/pos', 'sales', 'فاتورة بيع', 'بيع لعميل نقدًا أو آجل'],
+    ['sales.view', '#/sales', 'list', 'قائمة الفواتير', 'فواتير البيع والمسودات'],
+    ['parties.manage', '#/parties?type=customer&new=customer', 'user', 'عميل جديد', 'إضافة عميل'],
+    ['purchases.create', '#/purchase', 'invoice', 'فاتورة شراء', 'استلام بضاعة من مورد'],
+    ['items.view', '#/items', 'barcode', 'الأصناف والباركود', 'الأصناف والأسعار'],
+    ['stock.view', '#/stock', 'boxes', 'رصيد المخزون', 'الكميات المتاحة بالمستودعات'],
+    ['stock.transfer', '#/reps', 'truck', 'تسليم بضاعة لمندوب', 'تحويل إلى مخزون المندوب'],
+    ['cash.receipt', '#/receipt', 'in', 'تحصيل من عميل', 'سند قبض دفعة'],
   ].filter(([p]) => can(p));
   const { canAddStock, addStockModal } = await import('./addstock.js');
-  const quickAdd = canAddStock() ? h('button', { type: 'button', class: 'quick', onclick: () => addStockModal(null, () => load()) }, h('span', { class: 'ic', 'aria-hidden': 'true' }, '➕'), h('span', null, 'إضافة رصيد', h('small', null, 'صنف جاهز للبيع'))) : null;
-  if (shortcuts.length || quickAdd) el.append(h('div', { class: 'quick-actions' }, shortcuts.map(([, href, icon, label, sub]) => h('a', { class: 'quick', href }, h('span', { class: 'ic', 'aria-hidden': 'true' }, icon), h('span', null, label, h('small', null, sub)))), quickAdd));
+  const quickAdd = canAddStock() ? h('button', { type: 'button', class: 'quick', onclick: () => addStockModal(null, () => load()) }, h('span', { class: 'ic', 'aria-hidden': 'true' }, svgIcon('plus', 24)), h('span', null, 'إضافة رصيد', h('small', null, 'صنف جاهز للبيع'))) : null;
+  if (shortcuts.length || quickAdd) el.append(h('div', { class: 'quick-actions' }, shortcuts.map(([, href, icon, label, sub]) => h('a', { class: 'quick', href }, h('span', { class: 'ic', 'aria-hidden': 'true' }, svgIcon(icon, 24)), h('span', null, label, h('small', null, sub)))), quickAdd));
   el.append(h('form', { class: 'row card filters', style: { padding: '12px' }, onsubmit: (e) => { e.preventDefault(); load(); } },
     field('من', from), field('إلى', to), branch ? field('الفرع', branch) : null, h('button', { class: 'btn primary' }, 'عرض')), body);
   await load();

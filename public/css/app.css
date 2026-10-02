@@ -24,6 +24,11 @@
     --shadow: none;
   }
 }
+:root[data-theme="gray"] {
+  --bg: #2b2e33; --panel: #36393f; --ink: #eceef1; --muted: #b3b8c0; --line: #4a4e56; --brand: #8fb4d6; --brand-ink: #1b1d21;
+  --brand-soft: #41464e; --ok: #7fcfa3; --ok-ink: #12271b; --ok-soft: #31423a; --warn: #e8c06a; --warn-soft: #4a4232; --bad: #f2a29b; --bad-soft: #4d3634;
+  --shadow: 0 1px 3px rgba(0,0,0,.25);
+}
 :root[data-theme="dark"] {
   --bg: #12171d; --panel: #1b222b; --ink: #e6ebf1; --muted: #9aa6b4; --line: #2c3642; --brand: #4f9ad0; --brand-ink: #0c1218;
   --brand-soft: #1c2f3f; --ok: #5cc795; --ok-ink: #0b1f15; --ok-soft: #173326; --warn: #e3b14d; --warn-soft: #3a2e14; --bad: #f08a83; --bad-soft: #3d1f1d;
@@ -202,3 +207,20 @@ tbody tr.sel td { background: var(--brand-soft); }
 
 .back-btn { white-space: nowrap; }
 .side .org small.ver { display: block; opacity: .6; font-size: 11px; margin-top: 2px; direction: ltr; text-align: right; }
+
+/* الأيقونات */
+.ico { display: inline-flex; flex: none; width: 18px; height: 18px; align-items: center; justify-content: center; }
+.ico svg { display: block; }
+.side a.nav { display: flex; align-items: center; gap: 10px; }
+.side a.nav .ico { opacity: .75; }
+.side a.nav.active .ico { opacity: 1; }
+.nav-group > span:first-child { display: inline-flex; align-items: center; gap: 10px; }
+.nav-group .ico { color: var(--brand); }
+.top .theme-btn { display: inline-flex; align-items: center; gap: 6px; }
+.btn .ico { width: 16px; height: 16px; }
+.btn .ico svg { width: 16px; height: 16px; }
+.theme-menu { position: absolute; top: 52px; left: 16px; z-index: 40; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.25); padding: 6px; min-width: 170px; }
+.theme-menu button { display: flex; width: 100%; align-items: center; gap: 10px; background: none; border: 0; padding: 8px 10px; border-radius: 6px; cursor: pointer; text-align: right; }
+.theme-menu button:hover, .theme-menu button[aria-checked="true"] { background: var(--brand-soft); }
+.quick .ic { color: var(--brand); }
+@media (max-width: 900px) { .top .theme-label { display: none; } }

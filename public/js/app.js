@@ -2,7 +2,8 @@
 import { h, clear, state, api, get, toast, can, inp, field } from './lib.js';
 
 // يُرفع مع كل تحديث للواجهة لمعرفة النسخة التي يعمل بها الجهاز
-const UI_VERSION = 48;
+const UI_VERSION = 49;
+import { icon, GROUP_ICONS, ROUTE_ICONS } from './icons.js';
 import * as Dash from './pages/dashboard.js';
 import * as Pos from './pages/pos.js';
 import * as Docs from './pages/docs.js';
@@ -124,11 +125,11 @@ function layout() {
     // المندوب يتعامل مع العملاء فقط
     const vis = items.filter(([r]) => allowed(r) && !(state.rep && !can('parties.all') && r === 'parties?type=supplier'));
     if (!vis.length) continue;
-    const links = vis.map(([r, label]) => h('a', { class: 'nav', href: '#/' + r, 'data-route': r, onclick: () => side.classList.remove('open') }, label));
+    const links = vis.map(([r, label]) => h('a', { class: 'nav', href: '#/' + r, 'data-route': r, onclick: () => side.classList.remove('open') }, icon(ROUTE_ICONS[r]), h('span', null, label)));
     if (!group) { side.append(...links); continue; }
     const body = h('div', { class: 'nav-items', id: 'nav-' + group, role: 'group' }, links);
     const head = h('button', { type: 'button', class: 'nav-group', 'aria-expanded': 'false', 'aria-controls': 'nav-' + group, 'data-group': group },
-      h('span', null, group), h('span', { class: 'chev', 'aria-hidden': 'true' }, '‹'));
+      h('span', null, icon(GROUP_ICONS[group]), group), h('span', { class: 'chev', 'aria-hidden': 'true' }, '‹'));
     const setOpen = (o) => { head.setAttribute('aria-expanded', String(o)); body.classList.toggle('open', o); };
     head.addEventListener('click', () => {
       const o = head.getAttribute('aria-expanded') !== 'true';
@@ -163,6 +164,7 @@ function layout() {
     backBtn,
     h('div', { class: 'title' }, ''), net, sessionBadge,
     h('span', { class: 'who' }, state.me.full_name),
+    themeBtn(),
     h('a', { class: 'btn small', href: '#/password' }, 'كلمة المرور'),
     h('button', { class: 'btn small', onclick: async () => {
       if (Offline.pendingCount() && !(await confirmBox('عمليات غير مرسلة', 'توجد مبيعات محفوظة على الجهاز لم تُرسل بعد. ستبقى على الجهاز وتُرسل عند الدخول مجددًا. متابعة الخروج؟'))) return;
@@ -293,3 +295,27 @@ window.addEventListener('hashchange', route);
 window.addEventListener('auth-required', () => { if (state.me) { state.me = null; loginView('انتهت الجلسة؛ سجّل الدخول مجددًا'); } });
 window.addEventListener('session-changed', async () => { await refreshMe(); layout(); route(); });
 boot();
+
+// ---------- المظهر: تلقائي / فاتح / داكن / رمادي ----------
+const THEMES = [['auto', 'تلقائي (حسب الجهاز)', 'auto'], ['light', 'فاتح', 'sun'], ['dark', 'داكن', 'moon'], ['gray', 'رمادي', 'contrast']];
+function currentTheme() { try { return localStorage.getItem('frs-theme') || 'auto'; } catch (_) { return 'auto'; } }
+function applyTheme(t) {
+  if (t === 'auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', t);
+  try { localStorage.setItem('frs-theme', t); } catch (_) { /* ignore */ }
+}
+function themeBtn() {
+  const cur = () => THEMES.find(([k]) => k === currentTheme()) || THEMES[0];
+  const btn = h('button', { type: 'button', class: 'btn small theme-btn', title: 'المظهر', 'aria-label': 'المظهر', 'aria-haspopup': 'menu' });
+  const paint = () => btn.replaceChildren(icon(cur()[2], 16), h('span', { class: 'theme-label' }, cur()[1].split(' ')[0]));
+  paint();
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const old = document.querySelector('.theme-menu');
+    if (old) { old.remove(); return; }
+    const menu = h('div', { class: 'theme-menu', role: 'menu' }, THEMES.map(([k, label, ic]) => h('button', { type: 'button', role: 'menuitemradio', 'aria-checked': String(k === currentTheme()),
+      onclick: () => { applyTheme(k); paint(); menu.remove(); } }, icon(ic, 16), label)));
+    document.body.appendChild(menu);
+    setTimeout(() => document.addEventListener('click', () => menu.remove(), { once: true }), 0);
+  });
+  return btn;
+}
