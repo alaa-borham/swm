@@ -25,9 +25,9 @@
   }
 }
 :root[data-theme="gray"] {
-  --bg: #5f656e; --panel: #727881; --ink: #f4f6f8; --muted: #d5d9de; --line: #868c95; --brand: #bcd6ee; --brand-ink: #1c2530;
-  --brand-soft: #677787; --ok: #9fe0bb; --ok-ink: #12271b; --ok-soft: #5d7468; --warn: #f3d27f; --warn-soft: #7a7058; --bad: #ffb4ad; --bad-soft: #80605e;
-  --shadow: 0 1px 3px rgba(0, 0, 0, .18);
+  --bg: #454c56; --panel: #5a626e; --ink: #ffffff; --muted: #e3e7ec; --line: #78818e; --brand: #a9d3fb; --brand-ink: #0f1d2b;
+  --brand-soft: #6a7b8f; --ok: #8fe8b2; --ok-ink: #0d2416; --ok-soft: #4e6b5c; --warn: #ffd97d; --warn-soft: #6f6750; --bad: #ffb1a9; --bad-soft: #75595a;
+  --shadow: 0 1px 3px rgba(0, 0, 0, .28), 0 4px 12px rgba(0, 0, 0, .12);
 }
 :root[data-theme="dark"] {
   --bg: #12171d; --panel: #1b222b; --ink: #e6ebf1; --muted: #9aa6b4; --line: #2c3642; --brand: #4f9ad0; --brand-ink: #0c1218;
