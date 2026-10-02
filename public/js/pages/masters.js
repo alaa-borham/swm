@@ -90,7 +90,12 @@ export async function itemForm({ el, params }) {
 
 // ===================== الأطراف =====================
 export async function parties({ el, q, isCurrent }) {
-  pageHead('العملاء والموردون', can('parties.manage') ? h('button', { class: 'btn primary', onclick: () => partyForm() }, 'طرف جديد') : null);
+  const title = q.type === 'supplier' ? 'الموردون' : q.type === 'customer' ? 'العملاء' : 'العملاء والموردون';
+  const head = pageHead(title,
+    can('parties.manage') && q.type !== 'customer' ? h('button', { class: 'btn primary', onclick: () => partyForm(null, 'supplier') }, '+ مورد جديد') : null,
+    can('parties.manage') && q.type !== 'supplier' ? h('button', { class: q.type === 'customer' ? 'btn primary' : 'btn', onclick: () => partyForm(null, 'customer') }, '+ عميل جديد') : null);
+  if (head) el.append(head);
+  if (q.new && can('parties.manage')) setTimeout(() => partyForm(null, q.new), 50);
   const qIn = inp({ placeholder: 'الاسم أو الهاتف', value: q.q || '' });
   const type = sel([{ value: '', label: 'الكل' }, { value: 'customer', label: 'العملاء' }, { value: 'supplier', label: 'الموردون' }], q.type || '');
   const body = h('div');
@@ -108,17 +113,18 @@ export async function parties({ el, q, isCurrent }) {
   await load();
 }
 
-async function partyForm(p) {
+/** نموذج الطرف. kind يحدد النوع الافتراضي للجديد، وonSaved يُستدعى بدل الانتقال لصفحة الطرف */
+export async function partyForm(p, kind = 'customer', onSaved) {
   const reps = await lookup('reps');
   const f = {
     name: inp({ value: p?.name || '' }), phone: inp({ value: p?.phone || '' }), address: inp({ value: p?.address || '' }), tax_number: inp({ value: p?.tax_number || '' }),
-    is_customer: h('input', { type: 'checkbox', checked: p ? !!p.is_customer : true }), is_supplier: h('input', { type: 'checkbox', checked: !!p?.is_supplier }), whatsapp_opt_in: h('input', { type: 'checkbox', checked: !!p?.whatsapp_opt_in }),
+    is_customer: h('input', { type: 'checkbox', checked: p ? !!p.is_customer : kind === 'customer' }), is_supplier: h('input', { type: 'checkbox', checked: p ? !!p.is_supplier : kind === 'supplier' }), whatsapp_opt_in: h('input', { type: 'checkbox', checked: !!p?.whatsapp_opt_in }),
     credit_limit: inp({ type: 'number', value: p?.credit_limit ?? '', placeholder: 'فارغ = بلا حد' }), payment_terms_days: inp({ type: 'number', value: p?.payment_terms_days ?? 0 }),
     rep_id: sel([{ value: '', label: '—' }, ...reps.map((r) => ({ value: r.id, label: r.name }))], p?.rep_id || ''), notes: inp({ value: p?.notes || '' }),
     active: h('input', { type: 'checkbox', checked: p ? !!p.active : true }),
   };
   const { modal } = await import('../lib.js');
-  const m = modal(p ? 'تعديل ' + p.name : 'طرف جديد', h('div', null, h('div', { class: 'grid' },
+  const m = modal(p ? 'تعديل ' + p.name : kind === 'supplier' ? 'مورد جديد' : 'عميل جديد', h('div', null, h('div', { class: 'grid' },
     field('الاسم', f.name, { req: true }), field('الهاتف', f.phone), field('العنوان', f.address), field('الرقم الضريبي', f.tax_number),
     field('الحد الائتماني', f.credit_limit), field('مدة السداد (يوم)', f.payment_terms_days), field('المندوب المسؤول', f.rep_id), field('ملاحظات', f.notes)),
   h('div', { class: 'row', style: { marginTop: '10px' } }, h('label', { class: 'check' }, f.is_customer, 'عميل'), h('label', { class: 'check' }, f.is_supplier, 'مورد'), h('label', { class: 'check' }, f.active, 'نشط'), h('label', { class: 'check' }, f.whatsapp_opt_in, 'وافق على استلام رسائل واتساب')),
@@ -129,7 +135,7 @@ async function partyForm(p) {
     const r = await run(() => (p ? api('PUT', '/parties/' + p.id, body) : api('POST', '/parties', body)), 'تم الحفظ');
     if (!r) return false;
     invalidate('customers', 'suppliers');
-    location.hash = '#/party/' + r.id + '?t=' + Date.now();
+    if (onSaved) onSaved(r); else location.hash = '#/party/' + r.id + '?t=' + Date.now();
     return true;
   } }]);
   return m.done;

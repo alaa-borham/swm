@@ -75,12 +75,12 @@ const NAV = [
   ['المخزون', [['stock', 'رصيد المخزون'], ['alerts', 'تنبيهات المخزون'], ['transfer', 'تحويل / تسليم عهدة'], ['transfers', 'سجل التحويلات'], ['counts', 'الجرد'], ['damage', 'تسجيل تالف'], ['item-card', 'بطاقة صنف']]],
   ['المالية', [['receipt', 'سند قبض'], ['payment', 'سند صرف'], ['expenses', 'المصروفات'], ['cash', 'الصناديق والبنوك'], ['cash-transfer', 'تحويل نقدي / توريد'], ['cash-docs', 'سجل السندات'], ['journal', 'قيد يدوي']]],
   ['المناديب', [['reps', 'المناديب والعهد'], ['commissions', 'العمولات']]],
-  ['البيانات الأساسية', [['items', 'الأصناف والباركود'], ['parties', 'العملاء والموردون'], ['warehouses', 'الفروع والمستودعات والحسابات'], ['categories', 'التصنيفات']]],
+  ['البيانات الأساسية', [['items', 'الأصناف والباركود'], ['parties?type=customer', 'العملاء'], ['parties?type=supplier', 'الموردون'], ['warehouses', 'الفروع والمستودعات والحسابات'], ['categories', 'التصنيفات']]],
   ['المراجعة', [['reports', 'التقارير'], ['whatsapp', 'رسائل واتساب'], ['import', 'الاستيراد'], ['backup', 'النسخ الاحتياطي'], ['audit', 'سجل التدقيق']]],
   ['الإدارة', [['settings', 'الإعدادات'], ['users', 'المستخدمون والأدوار'], ['opening', 'الأرصدة الافتتاحية'], ['period', 'إقفال الفترات']]],
 ];
 
-function routePerm(name) { const r = ROUTES.find((x) => x[0] === name); return r ? r[2] : null; }
+function routePerm(name) { const r = ROUTES.find((x) => x[0] === name.split('?')[0]); return r ? r[2] : null; }
 function allowed(name) {
   if (name === 'reports') return ['reports.sales', 'reports.purchases', 'reports.stock', 'reports.finance', 'profit.view', 'reps.view'].some(can);
   const p = routePerm(name);
@@ -167,7 +167,7 @@ async function route() {
   const [name, ...params] = pathPart.split('/');
   const q = Object.fromEntries(new URLSearchParams(query));
   const r = ROUTES.find((x) => x[0] === name);
-  document.querySelectorAll('.side a.nav').forEach((a) => a.classList.toggle('active', a.dataset.route === name));
+  document.querySelectorAll('.side a.nav').forEach((a) => a.classList.toggle('active', a.dataset.route === raw || (a.dataset.route === name && !document.querySelector(`.side a.nav[data-route="${CSS.escape(raw)}"]`))));
   // افتح القسم الذي يحتوي الصفحة الحالية
   const act = document.querySelector('.side a.nav.active');
   const sec = act && act.closest('.nav-section');

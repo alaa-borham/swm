@@ -1,4 +1,5 @@
 // فاتورة الشراء والاستلام، ومرتجع المشتريات.
+import { partyForm } from './masters.js';
 import { h, clear, state, get, api, submitter, toast, run, M, Q, inp, sel, field, num, itemPicker, partySelect, warehouseSelect, cashSelect, pageHead, can, askReason, today } from '../lib.js';
 
 export async function form({ el, params, q }) {
@@ -10,6 +11,7 @@ export async function form({ el, params, q }) {
   pageHead(editing ? `تعديل مسودة ${editing.number}` : po ? `استلام من طلب الشراء ${po.po.number}` : 'فاتورة شراء واستلام');
   const data = editing?.data || {};
   const supplier = await partySelect('supplier', editing?.party_id || po?.po.party_id || '', po ? { disabled: true } : {});
+  const supplierField = withQuickAdd(supplier, !po);
   const invNo = inp({ value: editing?.supplier_invoice_no || '' });
   const date = inp({ type: 'date', value: editing?.date || today() });
   const due = inp({ type: 'date', value: editing?.due_date || '' });
@@ -119,7 +121,7 @@ export async function form({ el, params, q }) {
 
   el.append(
     h('div', { class: 'card' }, h('div', { class: 'grid' },
-      field('المورد', supplier, { req: true }), field('رقم فاتورة المورد', invNo), field('التاريخ', date, { req: true }), field('الاستحقاق', due),
+      field('المورد', supplierField, { req: true }), field('رقم فاتورة المورد', invNo), field('التاريخ', date, { req: true }), field('الاستحقاق', due),
       field('مستودع الاستلام', wh, { req: true }), field('ملاحظات', notes))),
     h('div', { class: 'card' }, picker.el, h('div', { class: 'table-wrap', style: { marginTop: '10px' } }, h('table', null,
       h('thead', null, h('tr', null, ['الصنف', 'الوحدة', 'الكمية', 'تكلفة الوحدة', 'خصم', 'ضريبة %', 'الدفعة', 'الإنتاج', 'الانتهاء', ''].map((x) => h('th', null, x)))), tbody))),
@@ -165,6 +167,7 @@ export async function orderForm({ el, params }) {
   if (editing && editing.status !== 'draft') { location.hash = '#/doc/' + editing.id; return; }
   pageHead(editing ? `تعديل طلب الشراء ${editing.number}` : 'طلب شراء جديد');
   const supplier = await partySelect('supplier', editing?.party_id || '');
+  const supplierField = withQuickAdd(supplier, true);
   const date = inp({ type: 'date', value: editing?.date || today() });
   const expected = inp({ type: 'date', value: editing?.due_date || '' });
   const wh = await warehouseSelect(editing?.warehouse_id || '');
@@ -202,10 +205,21 @@ export async function orderForm({ el, params }) {
     if (d) location.hash = '#/doc/' + d.id;
   };
   el.append(h('div', { class: 'note' }, 'طلب الشراء لا يغيّر المخزون أو الحسابات. الاستلام يتم من صفحة الطلب بفاتورة شراء جزئية أو كاملة، ولا يُقبل استلام أكثر من المطلوب.'),
-    h('div', { class: 'card' }, h('div', { class: 'grid' }, field('المورد', supplier, { req: true }), field('التاريخ', date), field('التوريد المتوقع', expected), field('مستودع الاستلام', wh), field('ملاحظات', notes))),
+    h('div', { class: 'card' }, h('div', { class: 'grid' }, field('المورد', supplierField, { req: true }), field('التاريخ', date), field('التوريد المتوقع', expected), field('مستودع الاستلام', wh), field('ملاحظات', notes))),
     h('div', { class: 'card' }, picker.el, h('div', { class: 'table-wrap', style: { marginTop: '10px' } }, h('table', null,
       h('thead', null, h('tr', null, ['الصنف', 'الوحدة', 'الكمية', 'السعر المتفق', 'ضريبة %', ''].map((x) => h('th', null, x)))), tbody)),
     h('p', null, 'القيمة التقريبية قبل الضريبة: ', total)),
     h('div', { class: 'actions' }, can('purchases.approve') ? h('button', { class: 'btn ok', onclick: () => save(true) }, 'اعتماد الطلب') : null, h('button', { class: 'btn', onclick: () => save(false) }, 'حفظ مسودة')));
   draw();
+}
+
+/** قائمة المورد مع زر إضافة مورد جديد دون مغادرة الشاشة */
+function withQuickAdd(select, enabled) {
+  if (!enabled || !can('parties.manage')) return select;
+  return h('div', { class: 'row', style: { gap: '6px', flexWrap: 'nowrap' } }, select,
+    h('button', { type: 'button', class: 'btn', title: 'مورد جديد', onclick: () => partyForm(null, 'supplier', (p) => {
+      select.append(h('option', { value: p.id }, p.name + (p.phone ? ' — ' + p.phone : '')));
+      select.value = String(p.id);
+      select.dispatchEvent(new Event('change'));
+    }) }, '+ مورد'));
 }
