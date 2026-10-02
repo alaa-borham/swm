@@ -538,7 +538,11 @@ function addCommissionPlan(ctx, repId, { rate_pct, valid_from, reason }) {
     const from = checkDate(valid_from, 'تاريخ السريان');
     const r = ctx.requireReason(reason, 'تغيير خطة العمولة');
     ctx.db.prepare('UPDATE commission_plans SET valid_to=? WHERE rep_id=? AND valid_to IS NULL AND valid_from<?').run(require('../lib/dates').addDays(from, -1), repId, from);
-    const id = ctx.db.prepare('INSERT INTO commission_plans(rep_id,rate_bp,valid_from) VALUES(?,?,?)').run(repId, toBp(rate_pct, 'نسبة العمولة'), from).lastInsertRowid;
+    // تغيير ثانٍ في نفس يوم السريان يعدّل الخطة نفسها بدل إنشاء خطتين متداخلتين
+    const same = ctx.db.prepare('SELECT id FROM commission_plans WHERE rep_id=? AND valid_from=? AND valid_to IS NULL').get(repId, from);
+    const id = same
+      ? (ctx.db.prepare('UPDATE commission_plans SET rate_bp=? WHERE id=?').run(toBp(rate_pct, 'نسبة العمولة'), same.id), same.id)
+      : ctx.db.prepare('INSERT INTO commission_plans(rep_id,rate_bp,valid_from) VALUES(?,?,?)').run(repId, toBp(rate_pct, 'نسبة العمولة'), from).lastInsertRowid;
     ctx.audit('commission_plan.create', { entity: 'rep', entity_id: repId, reason: r, after: { rate_pct, valid_from } });
     return id;
   });

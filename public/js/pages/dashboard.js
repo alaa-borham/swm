@@ -19,7 +19,7 @@ export async function render({ el, isCurrent }) {
     ['purchases.create', '#/purchase', '🧾', 'فاتورة شراء', 'استلام بضاعة من مورد'],
     ['items.view', '#/items', '📦', 'الأصناف والباركود', 'الأصناف والأسعار'],
     ['stock.view', '#/stock', '📊', 'رصيد المخزون', 'الكميات المتاحة بالمستودعات'],
-    ['cash.receipt', '#/receipt', '💵', 'سند قبض', 'دفعة من عميل'],
+    ['cash.receipt', '#/receipt', '💵', 'تحصيل من عميل', 'سند قبض دفعة'],
   ].filter(([p]) => can(p));
   const { canAddStock, addStockModal } = await import('./addstock.js');
   const quickAdd = canAddStock() ? h('button', { type: 'button', class: 'quick', onclick: () => addStockModal(null, () => load()) }, h('span', { class: 'ic', 'aria-hidden': 'true' }, '➕'), h('span', null, 'إضافة رصيد', h('small', null, 'صنف جاهز للبيع'))) : null;

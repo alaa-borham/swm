@@ -13,12 +13,15 @@ export async function list({ el }) {
       } }, 'إضافة')), h('p', { class: 'small muted' }, 'يُنشأ تلقائيًا مستودع خاص بمخزون المندوب وحساب نقدي لعهدته. اربط مستخدمًا بدور "المندوب" بهذا المندوب من صفحة المستخدمين.')));
   }
   const r = await get('/reports/reps', { from: '2000-01-01', to: today() });
-  el.append(table({ columns: [{ key: 'name', label: 'المندوب', render: (x) => h('a', { href: '#/rep/' + x.rep_id }, x.name) }, ...r.columns.slice(1)], rows: r.rows, totals: r.totals, onRow: (x) => { location.hash = '#/rep/' + x.rep_id; } }));
+  const canEdit = can('warehouses.manage');
+  el.append(table({ columns: [{ key: 'name', label: 'المندوب', render: (x) => h('a', { href: '#/rep/' + x.rep_id }, x.name) }, ...r.columns.slice(1),
+    ...(canEdit ? [{ key: 'e', label: '', render: (x) => (x.rep_id ? h('button', { class: 'btn small', onclick: (e) => { e.stopPropagation(); editRep(x.rep_id, () => location.reload()); } }, 'تعديل') : '') }] : [])],
+  rows: r.rows, totals: r.totals, onRow: (x) => { if (x.rep_id) location.hash = '#/rep/' + x.rep_id; } }));
 }
 
 export async function view({ el, params }) {
   const rep = await get('/reps/' + params[0]);
-  pageHead(`المندوب ${rep.name}`, can('stock.transfer') ? h('a', { class: 'btn', href: '#/transfer' }, 'تسليم بضاعة') : null,
+  const head = pageHead(`المندوب ${rep.name}`, can('warehouses.manage') ? h('button', { class: 'btn primary', onclick: () => editRep(rep.id, () => location.reload()) }, 'تعديل البيانات وكلمة المرور') : null, can('stock.transfer') ? h('a', { class: 'btn', href: '#/transfer' }, 'تسليم بضاعة') : null,
     can('cash.transfer') ? h('a', { class: 'btn', href: '#/cash-transfer' }, 'توريد نقد') : null,
     can('commissions.manage') ? h('a', { class: 'btn', href: '#/commissions?rep=' + rep.id }, 'العمولات') : null);
   const from = inp({ type: 'date', value: monthStart() });
@@ -47,6 +50,7 @@ export async function view({ el, params }) {
       if (reason && await run(() => api('POST', `/reps/${rep.id}/plans`, { rate_pct: num(rate.value), valid_from: vf.value, reason }), 'حُفظت الخطة')) location.reload();
     } }, 'إضافة خطة')));
   }
+  if (head) el.append(head);
   el.append(h('form', { class: 'row card filters', style: { padding: '12px' }, onsubmit: (e) => { e.preventDefault(); load(); } }, field('من', from), field('إلى', to), h('button', { class: 'btn primary' }, 'عرض')), body, plans);
   await load();
 }
@@ -96,4 +100,48 @@ async function pay(d, done) {
     [{ label: 'دفع', class: 'primary', onClick: async () => !!(await run(() => send('POST', `/commissions/${d.id}/pay`, { cash_account_id: Number(acc.value), amount: num(amt.value) }), 'تم الدفع')) }]);
   if (await m.done) done();
   void Q; void toast;
+}
+
+/** تعديل بيانات المندوب: الاسم والهاتف والمنطقة والحالة ونسبة العمولة وحساب دخوله وكلمة المرور */
+export async function editRep(repId, onSaved) {
+  const rep = await get('/reps/' + repId);
+  const users = can('users.manage') ? await get('/users') : [];
+  const user = users.find((u) => u.rep_id === rep.id);
+  const current = [...rep.plans].reverse().find((p) => !p.valid_to) || rep.plans[rep.plans.length - 1];
+  const f = {
+    name: inp({ value: rep.name }), phone: inp({ value: rep.phone || '' }), area: inp({ value: rep.area || '' }),
+    active: h('input', { type: 'checkbox', checked: !!rep.active }),
+    rate: inp({ type: 'number', value: current ? current.rate_bp : '', placeholder: '%' }),
+    rateReason: inp({ placeholder: 'مثال: اتفاق جديد' }),
+    username: inp({ value: user ? user.username : '', disabled: !!user || null, autocomplete: 'off' }),
+    password: inp({ type: 'password', placeholder: user ? 'اتركها فارغة لعدم التغيير' : 'كلمة المرور', autocomplete: 'new-password' }),
+  };
+  const rateReasonField = field('سبب تغيير النسبة', f.rateReason, { req: true });
+  rateReasonField.style.display = 'none';
+  f.rate.addEventListener('input', () => { rateReasonField.style.display = num(f.rate.value) !== (current ? current.rate_bp : null) ? '' : 'none'; });
+  const canPlans = can('commissions.plans');
+  const login = can('users.manage') ? h('div', null, h('h4', { style: { margin: '14px 0 6px' } }, 'حساب الدخول للمندوب'),
+    h('div', { class: 'grid' }, field('اسم المستخدم', f.username, { req: !user }), field(user ? 'كلمة مرور جديدة' : 'كلمة المرور', f.password, { req: !user })),
+    h('p', { class: 'small muted', style: { margin: '4px 0 0' } }, user
+      ? 'عند تعيين كلمة مرور جديدة يُطلب من المندوب تغييرها عند أول دخول، وتُغلق جلساته المفتوحة.'
+      : 'لا يوجد حساب دخول لهذا المندوب. اكتب اسم مستخدم وكلمة مرور (8 أحرف على الأقل بأرقام وحروف) لإنشائه، أو اتركهما فارغين.')) : null;
+  modal('تعديل بيانات المندوب', h('div', null,
+    h('div', { class: 'grid' }, field('الاسم', f.name, { req: true }), field('الهاتف', f.phone), field('المنطقة', f.area),
+      canPlans ? field('نسبة العمولة %', f.rate) : null, canPlans ? rateReasonField : null),
+    h('label', { class: 'check', style: { marginTop: '8px' } }, f.active, 'نشط'), login),
+  [{ label: 'حفظ', class: 'primary', onClick: async () => {
+    const newRate = num(f.rate.value);
+    const rateChanged = canPlans && newRate != null && newRate !== (current ? current.rate_bp : null);
+    if (rateChanged && f.rateReason.value.trim().length < 3) { toast('اكتب سبب تغيير النسبة', 'bad'); return false; }
+    if (!user && (f.username.value || f.password.value) && !(f.username.value && f.password.value)) { toast('اكتب اسم المستخدم وكلمة المرور معًا', 'bad'); return false; }
+    const ok = await run(async () => {
+      await api('PUT', '/reps/' + rep.id, { name: f.name.value, phone: f.phone.value, area: f.area.value, active: f.active.checked ? 1 : 0 });
+      if (rateChanged) await api('POST', `/reps/${rep.id}/plans`, { rate_pct: newRate, valid_from: today(), reason: f.rateReason.value.trim() });
+      if (user && f.password.value) await api('PUT', '/users/' + user.id, { password: f.password.value });
+      if (!user && f.username.value && f.password.value) await api('POST', '/users', { username: f.username.value, full_name: f.name.value, password: f.password.value, roles: ['rep'], rep_id: rep.id });
+      return true;
+    }, 'حُفظت بيانات المندوب');
+    if (ok) { invalidate('reps'); onSaved?.(); }
+    return !!ok;
+  } }]);
 }
