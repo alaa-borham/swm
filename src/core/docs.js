@@ -247,7 +247,7 @@ function fullDoc(ctx, id) {
       a.target_doc_id,t.number target_number,t.type target_type
     FROM allocations a JOIN docs s ON s.id=a.source_doc_id JOIN docs t ON t.id=a.target_doc_id
     WHERE a.source_doc_id=? OR a.target_doc_id=? ORDER BY a.id`).all(id, id).map(present);
-  out.related = ctx.db.prepare('SELECT id,type,number,date,status,total FROM docs WHERE (ref_doc_id=? OR reversal_of=?) AND id<>? ORDER BY id').all(id, id, id).map(present);
+  out.related = ctx.db.prepare('SELECT id,type,number,date,status,total FROM docs WHERE (ref_doc_id=? OR reversal_of=?) AND id<>? ORDER BY id').all(id, id, id).map(present).map((r) => ({ ...r, type_label: DOC_LABELS[r.type] || r.type }));
   const names = ctx.db.prepare(`SELECT
       (SELECT name FROM parties WHERE id=?) party_name,
       (SELECT name FROM warehouses WHERE id=?) warehouse_name,

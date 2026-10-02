@@ -187,3 +187,21 @@ test('الصناديق: تعديل الاسم وحذف غير المستخدم �
     assert.equal((await t.admin.del('/cash-accounts/' + c2.id)).status, 200);
   } finally { await t.close(); }
 });
+
+test('فاتورة الشراء: نقدًا تُسدد كامل الإجمالي، وآجل تبقى دينًا', async () => {
+  const t = await boot();
+  try {
+    const sup = (await t.admin.post('/parties', { name: 'مورد', is_supplier: 1 })).body;
+    const item = (await t.admin.post('/items', { name: 'سكر', base_unit: 'حبة', track_expiry: 0 })).body;
+    t.db.prepare("UPDATE cash_accounts SET kind='bank' WHERE id=1").run(); // تجاوز فحص رصيد الصندوق في الاختبار
+    const base = { party_id: sup.id, lines: [{ item_id: item.id, unit_id: item.units[0].id, qty: 3, price: 10, tax_rate_pct: 15 }] };
+    const cash = await t.admin.post('/purchases', { ...base, approve: true, payment: { mode: 'cash', cash_account_id: 1 } });
+    assert.equal(cash.status, 200, JSON.stringify(cash.body));
+    const c = (await t.admin.get('/docs/' + cash.body.id)).body;
+    assert.equal(c.total, 34.5);
+    assert.equal(c.open_amount, 0, 'مسددة بالكامل');
+    assert.equal(c.due_date, c.date);
+    const credit = await t.admin.post('/purchases', { ...base, approve: true });
+    assert.equal((await t.admin.get('/docs/' + credit.body.id)).body.open_amount, 34.5);
+  } finally { await t.close(); }
+});

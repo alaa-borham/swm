@@ -21,6 +21,21 @@ export async function form({ el, params, q }) {
   const basis = sel([{ value: 'value', label: 'بنسبة قيمة البند' }, { value: 'qty', label: 'بنسبة الكمية' }], data.extra_cost_basis || 'value');
   const payAmt = inp({ type: 'number', placeholder: '0', value: data.payment?.amount || '' });
   const payAcc = await cashSelect(data.payment?.cash_account_id || '', {});
+  // طريقة الدفع: نقدًا = سداد كامل الإجمالي عند الاعتماد، آجل = بلا سداد، جزئي = مبلغ محدد
+  const payMode = sel([{ value: 'credit', label: 'آجل (على حساب المورد)' }, { value: 'cash', label: 'نقدًا (سداد كامل عند الاستلام)' }, { value: 'partial', label: 'دفع جزئي' }],
+    data.payment?.mode || (data.payment?.amount ? 'partial' : 'credit'));
+  const payAmtField = field('المبلغ المدفوع الآن', payAmt);
+  const payAccField = field('من حساب', payAcc);
+  const dueField = field('الاستحقاق (موعد سداد الآجل)', due);
+  const payHint = h('p', { class: 'small muted', style: { margin: '6px 0 0' } });
+  const syncPay = () => {
+    const m = payMode.value;
+    payAmtField.style.display = m === 'partial' ? '' : 'none';
+    payAccField.style.display = m === 'credit' ? 'none' : '';
+    dueField.style.display = m === 'cash' ? 'none' : '';
+    payHint.textContent = { credit: 'يُسجَّل كامل إجمالي الفاتورة دينًا للمورد ويُسدد لاحقًا بسند صرف.', cash: 'عند الاعتماد يُسدد كامل إجمالي الفاتورة (بعد الضريبة) من الحساب المختار.', partial: 'يُسدد المبلغ المكتوب الآن ويبقى الباقي دينًا للمورد حتى تاريخ الاستحقاق.' }[m];
+  };
+  payMode.addEventListener('change', syncPay);
   const cart = [];
   const extras = (data.extras || []).map((e) => ({ description: e.description, amount: e.amount / 10 ** (state.settings.money_decimals ?? 2) || '', cash_account_id: e.cash_account_id || '' }));
   if (editing) {
@@ -91,11 +106,13 @@ export async function form({ el, params, q }) {
   const save = async (approve) => {
     if (!supplier.value) return toast('اختر المورد', 'bad');
     if (!cart.length) return toast('أضف بندًا', 'bad');
+    if (payMode.value === 'partial' && !num(payAmt.value)) return toast('اكتب المبلغ المدفوع أو اختر آجل', 'bad');
+    if (payMode.value !== 'credit' && !payAcc.value) return toast('اختر الحساب الذي يُدفع منه', 'bad');
     const body = {
       party_id: Number(supplier.value), supplier_invoice_no: invNo.value || null, date: date.value, due_date: due.value || null, warehouse_id: Number(wh.value),
       notes: notes.value || null, invoice_discount_amount: invDisc.value || null, extra_cost_basis: basis.value,
       extra_costs: extras.filter((e) => num(e.amount)).map((e) => ({ description: e.description || 'تكلفة إضافية', amount: num(e.amount), cash_account_id: e.cash_account_id ? Number(e.cash_account_id) : null })),
-      payment: num(payAmt.value) ? { amount: num(payAmt.value), cash_account_id: Number(payAcc.value) } : null,
+      payment: payMode.value === 'cash' ? { mode: 'cash', cash_account_id: Number(payAcc.value) } : payMode.value === 'partial' && num(payAmt.value) ? { mode: 'partial', amount: num(payAmt.value), cash_account_id: Number(payAcc.value) } : null,
       lines: cart.map((l) => ({ item_id: l.item.id, unit_id: l.unit_id, qty: num(l.qty), price: num(l.price) ?? 0, discount_amount: l.discount_amount || null,
         tax_rate_pct: l.tax === '' || l.tax == null ? null : num(l.tax), batch_no: l.batch_no || null, prod_date: l.prod_date || null, expiry_date: l.expiry_date || null, po_line_id: l.po_line_id || null })),
       po_id: poId || null,
@@ -121,7 +138,7 @@ export async function form({ el, params, q }) {
 
   el.append(
     h('div', { class: 'card' }, h('div', { class: 'grid' },
-      field('المورد', supplierField, { req: true }), field('رقم فاتورة المورد', invNo), field('التاريخ', date, { req: true }), field('الاستحقاق', due),
+      field('المورد', supplierField, { req: true }), field('رقم فاتورة المورد', invNo), field('التاريخ', date, { req: true }), dueField,
       field('مستودع الاستلام', wh, { req: true }), field('ملاحظات', notes))),
     h('div', { class: 'card' }, picker.el, h('div', { class: 'table-wrap', style: { marginTop: '10px' } }, h('table', null,
       h('thead', null, h('tr', null, ['الصنف', 'الوحدة', 'الكمية', 'تكلفة الوحدة', 'خصم', 'ضريبة %', 'رقم التشغيلة', 'الإنتاج', 'الانتهاء', ''].map((x) => h('th', null, x)))), tbody))),
@@ -129,13 +146,13 @@ export async function form({ el, params, q }) {
       h('div', { class: 'card' }, h('h3', null, 'تكاليف الشراء التابعة (نقل، تحميل…)'), extrasBox,
         h('div', { class: 'row' }, field('أساس التوزيع', basis), h('button', { class: 'btn small', onclick: () => { extras.push({ description: '', amount: '', cash_account_id: '' }); drawExtras(); } }, '+ تكلفة'))),
       h('div', { class: 'card' }, h('h3', null, 'الخصم والسداد'), h('div', { class: 'row' }, field('خصم على الفاتورة', invDisc)),
-        h('div', { class: 'row', style: { marginTop: '8px' } }, field('المدفوع للمورد عند الاستلام (من إجمالي الفاتورة)', payAmt), field('من حساب', payAcc)), h('div', { style: { marginTop: '10px' } }, summary))),
+        h('div', { class: 'row', style: { marginTop: '8px' } }, field('طريقة الدفع', payMode), payAmtField, payAccField), payHint, h('div', { style: { marginTop: '10px' } }, summary))),
     h('div', { class: 'actions' },
       can('purchases.approve') ? h('button', { class: 'btn ok', onclick: () => save(true) }, 'اعتماد الاستلام والفاتورة') : null,
       h('button', { class: 'btn', onclick: () => save(false) }, 'حفظ مسودة')),
     h('p', { class: 'small muted' }, 'المسودة لا تؤثر في المخزون أو الحسابات. عند الاعتماد يُثبت الاستلام مرة واحدة ويزداد المخزون وتُثبت تكلفة الدفعات ومستحق المورد.'));
   invDisc.addEventListener('input', totalsOnly);
-  draw();
+  draw(); syncPay();
 }
 
 export async function purchaseReturn({ el, params }) {

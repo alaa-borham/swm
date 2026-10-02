@@ -164,7 +164,8 @@ export async function view({ el, params }) {
     d.type === 'transfer' && d.data?.transit ? ['حالة النقل', { in_transit: h('span', { class: 'badge warn' }, 'بالطريق'), received: h('span', { class: 'badge ok' }, 'مستلم'), cancelled: h('span', { class: 'badge bad' }, 'ملغي') }[d.data.transit]] : null,
     d.data?.shortages ? ['نقص الاستلام', d.data.shortages.join('، ')] : null,
     d.ref_doc_id ? ['المستند الأصلي', h('a', { href: '#/doc/' + d.ref_doc_id }, d.ref_doc_number)] : null,
-    d.due_date ? ['الاستحقاق', d.due_date] : null, d.expense_category_name ? ['التصنيف', d.expense_category_name] : null,
+    d.type === 'purchase' ? ['طريقة الدفع', { cash: 'نقدًا', partial: 'دفع جزئي', credit: 'آجل' }[d.data?.payment?.mode || (d.data?.payment?.amount ? 'partial' : 'credit')]] : null,
+    d.due_date && !(d.type === 'purchase' && d.data?.payment?.mode === 'cash') ? ['الاستحقاق', d.due_date] : null, d.expense_category_name ? ['التصنيف', d.expense_category_name] : null,
     d.type === 'purchase_order' ? ['حالة الاستلام', poBadge(d.data?.po_state)] : null,
     d.data?.closed_reason ? ['سبب الإغلاق', d.data.closed_reason] : null,
     d.payment_status ? ['السداد', badge(PAY_STATUS, d.payment_status)] : null,
@@ -209,7 +210,7 @@ export async function view({ el, params }) {
       { key: 'reversed', label: '', render: (a) => (a.reversed ? h('span', { class: 'badge bad' }, 'ملغي') : '') }], rows: d.allocations })));
   }
   if (d.related.length) parts.push(h('div', { class: 'card' }, h('h3', null, 'مستندات مرتبطة'), table({ columns: [
-    { key: 'number', label: 'الرقم', render: (r) => h('a', { href: '#/doc/' + r.id }, r.number) }, { key: 'date', label: 'التاريخ' }, { key: 'type', label: 'النوع', render: (r) => (state.meta?.doc_labels?.[r.type] || r.type) },
+    { key: 'number', label: 'الرقم', render: (r) => h('a', { href: '#/doc/' + r.id }, r.number) }, { key: 'date', label: 'التاريخ' }, { key: 'type', label: 'النوع', render: (r) => r.type_label || state.meta?.doc_labels?.[r.type] || r.type },
     { key: 'total', label: 'المبلغ', type: 'money' }, { key: 'status', label: 'الحالة', render: (r) => badge(STATUS, r.status) }], rows: d.related })));
   if (state.settings.whatsapp_enabled && can('messages.send') && ['sale', 'receipt'].includes(d.type)) {
     const msgs = await get('/messages', { doc_id: d.id }).catch(() => []);

@@ -87,7 +87,7 @@ function storePurchase(ctx, input, existing) {
     ledger_account: 'AP', ledger_side: 'C', subtotal: b.totals.subtotal, discount: b.totals.discount, net: b.totals.net, tax: b.totals.tax,
     extra_cost: b.extraTotal, total: b.total, cost: b.lines.reduce((s, l) => s + l.cost, 0), prices_include_tax: b.opts.pricesIncludeTax ? 1 : 0,
     invoice_discount_bp: b.opts.invoiceDiscountBp, invoice_discount_amount: b.opts.invoiceDiscountAmount, notes: input.notes || null,
-    due_date: input.due_date ? checkDate(input.due_date, 'تاريخ الاستحقاق') : addDays(b.date, b.party.payment_terms_days || 0),
+    due_date: input.payment?.mode === 'cash' ? b.date : input.due_date ? checkDate(input.due_date, 'تاريخ الاستحقاق') : addDays(b.date, b.party.payment_terms_days || 0),
     data: { extras: b.extras, extra_cost_basis: b.basis, tax_recoverable: b.recoverable, payment: input.payment || null },
     ref_doc_id: po ? po.id : null,
   };
@@ -299,10 +299,13 @@ function approveInTx(ctx, doc, input = {}) {
   }
   ledger.post(ctx, doc, jl, 'فاتورة شراء واستلام');
   const pay = input.payment || data.payment;
-  if (pay && pay.amount != null && Number(pay.amount) > 0) {
+  // نقدًا: يُسدد كامل الإجمالي النهائي المحسوب بالخادم؛ جزئي: المبلغ المحدد
+  const payAmount = pay ? (pay.mode === 'cash' ? fromMinor(doc.total) : pay.amount) : null;
+  if (pay && payAmount != null && Number(payAmount) > 0) {
+    if (!pay.cash_account_id) fail('VALIDATION', 'اختر الحساب الذي يُدفع منه');
     P.cashDocInTx(ctx, 'payment', {
-      account: 'AP', date: doc.date, party_id: doc.party_id, amount: pay.amount, cash_account_id: pay.cash_account_id, method: pay.method,
-      ref_doc_id: doc.id, allocations: [{ doc_id: doc.id, amount: pay.amount }], notes: `سداد ${doc.number}`,
+      account: 'AP', date: doc.date, party_id: doc.party_id, amount: payAmount, cash_account_id: pay.cash_account_id, method: pay.method,
+      ref_doc_id: doc.id, allocations: [{ doc_id: doc.id, amount: payAmount }], notes: `سداد ${doc.number}`,
     });
   }
   applyPoReceipt(ctx, doc, 1);
