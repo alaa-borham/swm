@@ -272,10 +272,10 @@ function partyFields(input, ex = {}) {
   return f;
 }
 
-/** رقم العميل التالي: C + 5 أرقام متسلسلة */
+/** رقم العميل التالي: A1، A2، A3... */
 function nextPartyCode(ctx) {
-  const n = ctx.db.prepare("SELECT MAX(CAST(SUBSTR(code,2) AS INTEGER)) n FROM parties WHERE code GLOB 'C[0-9]*'").get().n || 0;
-  return 'C' + String(n + 1).padStart(5, '0');
+  const n = ctx.db.prepare("SELECT MAX(CAST(SUBSTR(code,2) AS INTEGER)) n FROM parties WHERE code GLOB 'A[0-9]*' AND NOT SUBSTR(code,2) GLOB '*[^0-9]*'").get().n || 0;
+  return 'A' + (n + 1);
 }
 
 function createParty(ctx, input) {

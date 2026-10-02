@@ -80,6 +80,12 @@ const MIGRATIONS = {
     rows.forEach((r, i) => up.run('C' + String(i + 1).padStart(5, '0'), r.id));
     db.exec('CREATE UNIQUE INDEX IF NOT EXISTS parties_code ON parties(code)');
   },
+  10: (db) => {
+    // صيغة أبسط لرقم العميل: A1، A2، A3... بدل C00001
+    const rows = db.prepare("SELECT id, code FROM parties WHERE code GLOB 'C[0-9][0-9][0-9][0-9][0-9]'").all();
+    const up = db.prepare('UPDATE parties SET code=? WHERE id=?');
+    for (const r of rows) up.run('A' + Number(r.code.slice(1)), r.id);
+  },
 };
 const SCHEMA_VERSION = Math.max(1, ...Object.keys(MIGRATIONS).map(Number));
 
