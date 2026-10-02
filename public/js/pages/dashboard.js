@@ -17,6 +17,7 @@ export async function render({ el, isCurrent }) {
     ['parties.manage', '#/parties?type=customer&new=customer', '👤', 'عميل جديد', 'إضافة عميل'],
     ['purchases.create', '#/purchase', '🧾', 'فاتورة شراء', 'استلام بضاعة من مورد'],
     ['items.view', '#/items', '📦', 'الأصناف والباركود', 'الأصناف والأسعار'],
+    ['stock.view', '#/stock', '📊', 'رصيد المخزون', 'الكميات المتاحة بالمستودعات'],
     ['cash.receipt', '#/receipt', '💵', 'سند قبض', 'دفعة من عميل'],
   ].filter(([p]) => can(p));
   if (shortcuts.length) el.append(h('div', { class: 'quick-actions' }, shortcuts.map(([, href, icon, label, sub]) => h('a', { class: 'quick', href }, h('span', { class: 'ic', 'aria-hidden': 'true' }, icon), h('span', null, label, h('small', null, sub))))));
