@@ -92,6 +92,7 @@ input, select, textarea { background: var(--panel); border: 1px solid var(--line
 input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
 input[type=checkbox] { width: auto; min-height: 0; }
 input.num-in { direction: ltr; text-align: right; }
+input[type=date], input[type=month] { direction: ltr; text-align: right; }
 textarea { min-height: 70px; }
 .check { display: flex; align-items: center; gap: 6px; }
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--line); background: var(--panel); border-radius: 6px; padding: 7px 14px; cursor: pointer; min-height: 36px; white-space: nowrap; }

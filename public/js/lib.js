@@ -255,13 +255,17 @@ export async function cashSelect(value, attrs = {}, filter = () => true, { empty
 }
 
 /** منتقي صنف بالبحث بالاسم أو الباركود */
-export function itemPicker({ onPick, warehouseId, placeholder = 'ابحث بالاسم أو امسح الباركود', autofocus }) {
+export function itemPicker({ onPick, warehouseId, placeholder = 'ابحث بالاسم أو امسح الباركود', autofocus, allowCreate }) {
   const input = inp({ class: 'search', placeholder, autocomplete: 'off', autofocus });
   const box = h('div', { class: 'results hidden' });
-  let results = [], idx = 0, timer;
+  let results = [], idx = 0, timer, empty = '';
   const render = () => {
     clear(box);
-    box.classList.toggle('hidden', !results.length);
+    box.classList.toggle('hidden', !results.length && !empty);
+    if (!results.length && empty) {
+      box.appendChild(h('div', { class: 'r', style: { cursor: 'default' } }, h('span', { class: 'muted' }, empty === ' ' ? 'لا توجد أصناف مسجلة بعد' : `لا يوجد صنف باسم "${empty}"`),
+        allowCreate && can('items.manage') ? h('button', { type: 'button', class: 'btn small primary', onclick: () => quickItem(empty.trim()) }, '+ صنف جديد') : null));
+    }
     results.forEach((it, i) => {
       const unit = it.units.find((u) => u.id === it.selected_unit_id) || it.units[0];
       box.appendChild(h('div', { class: 'r' + (i === idx ? ' sel' : ''), onclick: () => pick(i) },
@@ -269,10 +273,10 @@ export function itemPicker({ onPick, warehouseId, placeholder = 'ابحث بال
         h('span', { class: 'small' }, it.sellable_qty != null ? ['متاح ', Q(it.sellable_qty), ' ', it.base_unit, ' · '] : '', unit ? [unit.name, ' ', M(unit.sell_price)] : '')));
     });
   };
-  const pick = (i) => { const it = results[i]; if (!it) return; results = []; render(); input.value = ''; onPick(it); input.focus(); };
-  const search = async (exact) => {
+  const pick = (i) => { const it = results[i]; if (!it) return; results = []; empty = ''; render(); input.value = ''; onPick(it); input.focus(); };
+  const search = async (exact, browse) => {
     const q = input.value.trim();
-    if (!q) { results = []; render(); return; }
+    if (!q && !browse) { results = []; empty = ''; render(); return; }
     try {
       const wid = typeof warehouseId === 'function' ? warehouseId() : warehouseId;
       try {
@@ -282,12 +286,32 @@ export function itemPicker({ onPick, warehouseId, placeholder = 'ابحث بال
         results = (await import('./offline.js')).searchCatalog(q);
       }
       idx = 0;
+      empty = results.length ? '' : (q || ' ');
       if (exact && results.length === 1) return pick(0);
-      if (exact && !results.length) toast('لا يوجد صنف بهذا الاسم أو الباركود', 'bad');
+      if (exact && !results.length && !allowCreate) toast('لا يوجد صنف بهذا الاسم أو الباركود', 'bad');
       render();
     } catch (e) { toast(e.message, 'bad'); }
   };
   input.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => search(false), 250); });
+  // عند الضغط على الحقل وهو فارغ تظهر قائمة الأصناف للاختيار منها
+  input.addEventListener('click', () => { if (!input.value.trim()) search(false, true); });
+  input.addEventListener('blur', () => setTimeout(() => { if (!box.contains(document.activeElement) && !input.value.trim()) { results = []; empty = ''; render(); } }, 200));
+  // إنشاء صنف سريع دون مغادرة الشاشة؛ يُضاف مباشرة بعد الحفظ
+  const quickItem = (name) => {
+    const isCode = /^\d{6,}$/.test(name);
+    const f = { name: inp({ value: isCode ? '' : name }), base_unit: inp({ value: 'حبة' }), sell_price: inp({ type: 'number', placeholder: '0' }),
+      barcode: inp({ value: isCode ? name : '', placeholder: 'اختياري' }), track_expiry: h('input', { type: 'checkbox', checked: true }) };
+    modal('صنف جديد', h('div', null, h('div', { class: 'grid' }, field('اسم الصنف', f.name, { req: true }), field('وحدة الأساس', f.base_unit, { req: true }),
+      field('سعر البيع', f.sell_price), field('الباركود', f.barcode)), h('label', { class: 'check' }, f.track_expiry, 'له تاريخ انتهاء'),
+    h('p', { class: 'small muted' }, 'باقي البيانات (التصنيف، الوحدات الأخرى، الحد الأدنى للسعر...) يمكن إكمالها لاحقًا من صفحة الأصناف.')),
+    [{ label: 'حفظ وإضافة', class: 'primary', onClick: async () => {
+      const it = await run(() => api('POST', '/items', { name: f.name.value, base_unit: f.base_unit.value, sell_price: f.sell_price.value || 0, barcode: f.barcode.value || undefined, track_expiry: f.track_expiry.checked ? 1 : 0 }), 'أُضيف الصنف');
+      if (!it) return false;
+      it.selected_unit_id = it.units.find((u) => u.is_base).id;
+      results = [it]; pick(0);
+      return true;
+    } }]);
+  };
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { e.preventDefault(); clearTimeout(timer); if (results.length && box.offsetParent) pick(idx); else search(true); }
     else if (e.key === 'ArrowDown') { idx = Math.min(idx + 1, results.length - 1); render(); e.preventDefault(); }

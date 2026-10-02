@@ -37,7 +37,7 @@ export async function form({ el, params, q }) {
   const tbody = h('tbody');
   const extrasBox = h('div');
   const summary = h('div', { class: 'total-box' });
-  const picker = itemPicker({ placeholder: 'أضف صنفًا بالاسم أو الباركود', onPick: (it) => {
+  const picker = itemPicker({ placeholder: 'اضغط هنا لاختيار صنف، أو اكتب الاسم أو الباركود', allowCreate: true, onPick: (it) => {
     const pu = it.units.find((u) => u.id === it.selected_unit_id && u.for_purchase) || it.units.find((u) => u.for_purchase) || it.units[0];
     cart.push({ item: it, unit_id: pu.id, qty: 1, price: '', discount_amount: '', tax: it.tax_rate_bp ?? '', batch_no: '', prod_date: '', expiry_date: '' });
     draw();
@@ -176,7 +176,7 @@ export async function orderForm({ el, params }) {
   if (editing) for (const l of editing.lines) cart.push({ item: await get('/items/' + l.item_id), unit_id: l.unit_id, qty: l.qty, price: l.price, tax: l.tax_rate_bp });
   const tbody = h('tbody');
   const total = h('b');
-  const picker = itemPicker({ placeholder: 'أضف صنفًا', onPick: (it) => {
+  const picker = itemPicker({ placeholder: 'اضغط هنا لاختيار صنف، أو اكتب الاسم', allowCreate: true, onPick: (it) => {
     const pu = it.units.find((u) => u.id === it.selected_unit_id && u.for_purchase) || it.units.find((u) => u.for_purchase) || it.units[0];
     cart.push({ item: it, unit_id: pu.id, qty: 1, price: '', tax: it.tax_rate_bp ?? '' });
     draw();
