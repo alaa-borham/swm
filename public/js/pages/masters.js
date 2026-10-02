@@ -40,6 +40,8 @@ export async function itemForm({ el, params }) {
   };
   const units = it ? it.units.map((u) => ({ ...u })) : [{ is_base: 1, name: '', factor: 1, barcode: '', sell_price: '', for_sale: 1, for_purchase: 1, active: 1 }];
   const ubody = h('tbody');
+  const canPP = can('cost.view') || can('purchases.create');
+  const ppOf = (u) => (canPP ? num(u.purchase_price) ?? null : undefined);
   const drawUnits = () => {
     clear(ubody);
     units.forEach((u, i) => {
@@ -49,6 +51,7 @@ export async function itemForm({ el, params }) {
         h('td', null, u.is_base ? '1' : inp({ type: 'number', value: u.factor, oninput: s('factor'), style: { width: '90px' } })),
         h('td', null, inp({ value: u.barcode || '', oninput: s('barcode') })),
         h('td', null, inp({ type: 'number', value: u.sell_price, oninput: s('sell_price'), style: { width: '100px' } })),
+        canPP ? h('td', null, inp({ type: 'number', value: u.purchase_price ?? '', placeholder: 'اختياري', oninput: s('purchase_price'), style: { width: '100px' } })) : null,
         h('td', null, h('input', { type: 'checkbox', checked: !!u.for_sale, onchange: s('for_sale', 1) })),
         h('td', null, h('input', { type: 'checkbox', checked: !!u.for_purchase, onchange: s('for_purchase', 1) })),
         h('td', null, u.is_base ? '' : h('input', { type: 'checkbox', checked: !!u.active, onchange: s('active', 1) })),
@@ -65,10 +68,10 @@ export async function itemForm({ el, params }) {
       expiry_alert_days: f.expiry_alert_days.value, min_price: f.min_price.value, max_discount_pct: f.max_discount_pct.value, tax_rate_pct: f.tax_rate_pct.value, active: f.active.checked ? 1 : 0,
     };
     if (it) {
-      body.units = units.map((u) => ({ id: u.id, is_base: u.is_base, name: u.is_base ? f.base_unit.value : u.name, factor: u.factor, barcode: u.barcode || null, sell_price: num(u.sell_price) ?? 0, for_sale: u.for_sale ? 1 : 0, for_purchase: u.for_purchase ? 1 : 0, active: u.active ? 1 : 0 }));
+      body.units = units.map((u) => ({ id: u.id, is_base: u.is_base, name: u.is_base ? f.base_unit.value : u.name, factor: u.factor, barcode: u.barcode || null, sell_price: num(u.sell_price) ?? 0, purchase_price: ppOf(u), for_sale: u.for_sale ? 1 : 0, for_purchase: u.for_purchase ? 1 : 0, active: u.active ? 1 : 0 }));
     } else {
-      body.barcode = base.barcode || null; body.sell_price = num(base.sell_price) ?? 0;
-      body.units = units.filter((u) => !u.is_base).map((u) => ({ name: u.name, factor: num(u.factor), barcode: u.barcode || null, sell_price: num(u.sell_price) ?? 0, for_sale: u.for_sale ? 1 : 0, for_purchase: u.for_purchase ? 1 : 0 }));
+      body.barcode = base.barcode || null; body.sell_price = num(base.sell_price) ?? 0; body.purchase_price = ppOf(base);
+      body.units = units.filter((u) => !u.is_base).map((u) => ({ name: u.name, factor: num(u.factor), barcode: u.barcode || null, sell_price: num(u.sell_price) ?? 0, purchase_price: ppOf(u), for_sale: u.for_sale ? 1 : 0, for_purchase: u.for_purchase ? 1 : 0 }));
     }
     const r = await run(() => (it ? api('PUT', '/items/' + it.id, body) : send('POST', '/items', body)), 'تم الحفظ');
     if (r) location.hash = '#/items?q=' + encodeURIComponent(r.code);
@@ -81,7 +84,7 @@ export async function itemForm({ el, params }) {
       can('cost.view') ? field('أدنى سعر بيع', f.min_price) : null, field('حد الخصم %', f.max_discount_pct)),
     h('div', { class: 'row', style: { marginTop: '10px' } }, h('label', { class: 'check' }, f.track_expiry, 'إلزام تتبع الدفعات وتاريخ الانتهاء'), h('label', { class: 'check' }, f.active, 'نشط'))),
     h('div', { class: 'card' }, h('h3', null, 'الوحدات والباركود والأسعار'),
-      h('div', { class: 'table-wrap' }, h('table', null, h('thead', null, h('tr', null, ['الوحدة', 'المعامل (كم وحدة أساس)', 'الباركود', 'سعر البيع', 'للبيع', 'للشراء', 'نشطة', ''].map((x) => h('th', null, x)))), ubody)),
+      h('div', { class: 'table-wrap' }, h('table', null, h('thead', null, h('tr', null, ['الوحدة', 'المعامل (كم وحدة منتج)', 'الباركود', 'سعر البيع', canPP ? 'سعر الشراء' : null, 'للبيع', 'للشراء', 'نشطة', ''].filter((x) => x !== null).map((x) => h('th', null, x)))), ubody)),
       h('button', { class: 'btn small', style: { marginTop: '8px' }, onclick: () => { units.push({ name: '', factor: '', barcode: '', sell_price: '', for_sale: 1, for_purchase: 1, active: 1 }); drawUnits(); } }, '+ وحدة'),
       h('p', { class: 'small muted' }, 'مثال: وحدة المنتج "حبة"، والكرتون معامله 12. تغيير الاسم أو السعر أو المعامل لا يغيّر المستندات التاريخية.')),
     h('button', { class: 'btn ok', onclick: save }, 'حفظ'));

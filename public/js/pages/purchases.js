@@ -54,7 +54,7 @@ export async function form({ el, params, q }) {
   const summary = h('div', { class: 'total-box' });
   const picker = itemPicker({ placeholder: 'اضغط هنا لاختيار صنف، أو اكتب الاسم أو الباركود', allowCreate: true, onPick: (it) => {
     const pu = it.units.find((u) => u.id === it.selected_unit_id && u.for_purchase) || it.units.find((u) => u.for_purchase) || it.units[0];
-    cart.push({ item: it, unit_id: pu.id, qty: 1, price: it.quick_cost?.[pu.id] ?? '', discount_amount: '', tax: it.tax_rate_bp ?? '', batch_no: '', prod_date: '', expiry_date: '' });
+    cart.push({ item: it, unit_id: pu.id, qty: 1, price: it.quick_cost?.[pu.id] ?? pu.purchase_price ?? '', discount_amount: '', tax: it.tax_rate_bp ?? '', batch_no: '', prod_date: '', expiry_date: '' });
     draw();
   } });
 
@@ -68,7 +68,7 @@ export async function form({ el, params, q }) {
       sub += value;
       tbody.append(h('tr', null,
         h('td', null, l.item.name),
-        h('td', null, sel(units.map((u) => ({ value: u.id, label: `${u.name}${u.factor !== 1 ? ' (' + u.factor + ' ' + l.item.base_unit + ')' : ''}` })), l.unit_id, { onchange: (e) => { l.unit_id = Number(e.target.value); } })),
+        h('td', null, sel(units.map((u) => ({ value: u.id, label: `${u.name}${u.factor !== 1 ? ' (' + u.factor + ' ' + l.item.base_unit + ')' : ''}` })), l.unit_id, { onchange: (e) => { switchUnit(l, Number(e.target.value)); draw(); } })),
         h('td', null, inp({ type: 'number', value: l.qty, style: { width: '80px' }, oninput: set('qty') })),
         h('td', null, inp({ type: 'number', value: l.price, style: { width: '90px' }, oninput: set('price'), placeholder: 'تكلفة الوحدة' })),
         h('td', null, inp({ type: 'number', value: l.discount_amount, style: { width: '80px' }, oninput: set('discount_amount') })),
@@ -195,7 +195,7 @@ export async function orderForm({ el, params }) {
   const total = h('b');
   const picker = itemPicker({ placeholder: 'اضغط هنا لاختيار صنف، أو اكتب الاسم', allowCreate: true, onPick: (it) => {
     const pu = it.units.find((u) => u.id === it.selected_unit_id && u.for_purchase) || it.units.find((u) => u.for_purchase) || it.units[0];
-    cart.push({ item: it, unit_id: pu.id, qty: 1, price: it.quick_cost?.[pu.id] ?? '', tax: it.tax_rate_bp ?? '' });
+    cart.push({ item: it, unit_id: pu.id, qty: 1, price: it.quick_cost?.[pu.id] ?? pu.purchase_price ?? '', tax: it.tax_rate_bp ?? '' });
     draw();
   } });
   const sum = () => { total.replaceChildren(M(cart.reduce((a, l) => a + (num(l.qty) || 0) * (num(l.price) || 0), 0))); };
@@ -204,7 +204,7 @@ export async function orderForm({ el, params }) {
     cart.forEach((l, i) => {
       const set = (k) => (e) => { l[k] = e.target.value; sum(); };
       tbody.append(h('tr', null, h('td', null, l.item.name),
-        h('td', null, sel(l.item.units.filter((u) => u.for_purchase).map((u) => ({ value: u.id, label: u.name })), l.unit_id, { onchange: (e) => { l.unit_id = Number(e.target.value); } })),
+        h('td', null, sel(l.item.units.filter((u) => u.for_purchase).map((u) => ({ value: u.id, label: u.name })), l.unit_id, { onchange: (e) => { switchUnit(l, Number(e.target.value)); draw(); } })),
         h('td', null, inp({ type: 'number', value: l.qty, style: { width: '90px' }, oninput: set('qty') })),
         h('td', null, inp({ type: 'number', value: l.price, style: { width: '100px' }, oninput: set('price') })),
         h('td', null, inp({ type: 'number', value: l.tax, style: { width: '70px' }, oninput: set('tax') })),
@@ -239,4 +239,12 @@ function withQuickAdd(select, enabled) {
       select.value = String(p.id);
       select.dispatchEvent(new Event('change'));
     }) }, '+ مورد'));
+}
+
+/** تغيير وحدة سطر الشراء: يُقترح سعر شراء الوحدة الجديدة إذا كان السعر فارغًا أو هو المقترح للوحدة السابقة */
+function switchUnit(l, unitId) {
+  const prev = l.item.units.find((u) => u.id === l.unit_id);
+  const next = l.item.units.find((u) => u.id === unitId);
+  if (l.price === '' || l.price == null || (prev && prev.purchase_price != null && Number(l.price) === Number(prev.purchase_price))) l.price = next?.purchase_price ?? '';
+  l.unit_id = unitId;
 }

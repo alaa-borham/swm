@@ -324,8 +324,8 @@ export function itemPicker({ onPick, warehouseId, placeholder = 'ابحث بال
     unitsBox, h('button', { type: 'button', class: 'btn small', style: { marginTop: '8px' }, onclick: addUnit }, '+ إضافة وحدة أخرى'),
     h('p', { class: 'small muted' }, 'سعر الشراء يُكتب في الفاتورة تلقائيًا. سعر البيع وباقي البيانات (التصنيف، الحد الأدنى للسعر...) تُضبط من صفحة الأصناف.')),
     [{ label: 'حفظ وإضافة', class: 'primary', onClick: async () => {
-      const units = extra.map((u) => ({ name: u.name.value, factor: u.factor.value, barcode: u.barcode.value || undefined }));
-      const it = await run(() => api('POST', '/items', { name: f.name.value, base_unit: f.base_unit.value, sell_price: 0, barcode: f.barcode.value || undefined, track_expiry: f.track_expiry.checked ? 1 : 0, units }), 'أُضيف الصنف');
+      const units = extra.map((u) => ({ name: u.name.value, factor: u.factor.value, barcode: u.barcode.value || undefined, purchase_price: u.cost.value || undefined }));
+      const it = await run(() => api('POST', '/items', { name: f.name.value, base_unit: f.base_unit.value, sell_price: 0, purchase_price: f.cost.value || undefined, barcode: f.barcode.value || undefined, track_expiry: f.track_expiry.checked ? 1 : 0, units }), 'أُضيف الصنف');
       if (!it) return false;
       // سعر الشراء المُدخل لكل وحدة يُمرَّر للسطر؛ وتُختار أول وحدة أخرى لها سعر وإلا وحدة المنتج
       const base = it.units.find((u) => u.is_base);

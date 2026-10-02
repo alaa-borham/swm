@@ -55,18 +55,22 @@ function saveUnits(ctx, item, units) {
     const vals = {
       name, factor, barcode: s(u.barcode), sell_price: u.sell_price == null || u.sell_price === '' ? 0 : toMinor(u.sell_price, `سعر ${name}`),
       for_sale: bool(u.for_sale, 1), for_purchase: bool(u.for_purchase, 1), active: bool(u.active, 1),
+      purchase_price: u.purchase_price == null || u.purchase_price === '' ? null : toMinor(u.purchase_price, `سعر شراء ${name}`),
     };
+    if (vals.purchase_price != null && vals.purchase_price < 0) fail('VALIDATION', 'السعر لا يكون سالبًا');
     if (vals.sell_price < 0) fail('VALIDATION', 'السعر لا يكون سالبًا');
     uniqueGuard(() => {
       if (u.id) {
         const ex = ctx.db.prepare('SELECT * FROM item_units WHERE id=? AND item_id=?').get(u.id, item.id);
         if (!ex) notFound('الوحدة');
         if (ex.is_base) vals.factor = 1000;
-        ctx.db.prepare('UPDATE item_units SET name=?,factor=?,barcode=?,sell_price=?,for_sale=?,for_purchase=?,active=? WHERE id=?')
-          .run(vals.name, vals.factor, vals.barcode, vals.sell_price, vals.for_sale, vals.for_purchase, ex.is_base ? 1 : vals.active, ex.id);
+        // سعر الشراء لا يُمسح إذا لم يُرسل (مستخدم لا يراه)
+        const pp = u.purchase_price === undefined ? ex.purchase_price : vals.purchase_price;
+        ctx.db.prepare('UPDATE item_units SET name=?,factor=?,barcode=?,sell_price=?,purchase_price=?,for_sale=?,for_purchase=?,active=? WHERE id=?')
+          .run(vals.name, vals.factor, vals.barcode, vals.sell_price, pp, vals.for_sale, vals.for_purchase, ex.is_base ? 1 : vals.active, ex.id);
       } else {
-        ctx.db.prepare('INSERT INTO item_units(item_id,name,factor,barcode,sell_price,is_base,for_sale,for_purchase,active) VALUES(?,?,?,?,?,?,?,?,?)')
-          .run(item.id, vals.name, vals.factor, vals.barcode, vals.sell_price, u.is_base ? 1 : 0, vals.for_sale, vals.for_purchase, vals.active);
+        ctx.db.prepare('INSERT INTO item_units(item_id,name,factor,barcode,sell_price,purchase_price,is_base,for_sale,for_purchase,active) VALUES(?,?,?,?,?,?,?,?,?,?)')
+          .run(item.id, vals.name, vals.factor, vals.barcode, vals.sell_price, vals.purchase_price, u.is_base ? 1 : 0, vals.for_sale, vals.for_purchase, vals.active);
       }
     }, `الباركود ${vals.barcode || ''} أو اسم الوحدة ${name} مستخدم مسبقًا`);
   }
@@ -84,7 +88,7 @@ function createItem(ctx, input) {
     `كود الصنف ${code} مستخدم مسبقًا`);
     if (!code) ctx.db.prepare('UPDATE items SET code=? WHERE id=?').run(`IT${String(id).padStart(5, '0')}`, id);
     const item = ctx.db.prepare('SELECT * FROM items WHERE id=?').get(id);
-    const units = [{ is_base: 1, name: f.base_unit, barcode: input.barcode, sell_price: input.sell_price ?? 0 }, ...(input.units || []).filter((u) => !u.is_base)];
+    const units = [{ is_base: 1, name: f.base_unit, barcode: input.barcode, sell_price: input.sell_price ?? 0, purchase_price: input.purchase_price }, ...(input.units || []).filter((u) => !u.is_base)];
     saveUnits(ctx, item, units);
     ctx.audit('item.create', { entity: 'item', entity_id: id, after: { ...f, code: item.code } });
     return getItemFull(ctx, id);
@@ -114,12 +118,18 @@ function updateItem(ctx, id, input) {
   });
 }
 
+/** سعر الشراء يراه من يرى التكلفة أو ينشئ المشتريات فقط */
+function hidePurchasePrice(ctx, units) {
+  if (!ctx.has('cost.view') && !ctx.has('purchases.create')) units.forEach((u) => delete u.purchase_price);
+}
+
 function getItemFull(ctx, id) {
   const it = ctx.db.prepare(`SELECT i.*, c.name category_name FROM items i LEFT JOIN categories c ON c.id=i.category_id WHERE i.id=?`).get(id);
   if (!it) notFound('الصنف');
   const out = present(it);
   out.units = ctx.db.prepare('SELECT * FROM item_units WHERE item_id=? ORDER BY is_base DESC, factor').all(id).map(present);
   if (!ctx.has('cost.view')) delete out.min_price;
+  hidePurchasePrice(ctx, out.units);
   return out;
 }
 
@@ -139,6 +149,7 @@ function listItems(ctx, { q, active, category_id, limit = 200, offset = 0 } = {}
       const o = present(r);
       o.units = units.all(r.id).map(present);
       if (!ctx.has('cost.view')) delete o.min_price;
+      hidePurchasePrice(ctx, o.units);
       return o;
     }),
   };

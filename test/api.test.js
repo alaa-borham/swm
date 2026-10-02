@@ -218,3 +218,16 @@ test('البحث للبيع: لا تظهر إلا الأصناف التي لها
     assert.equal((await t.admin.get(`/items/lookup?q=${encodeURIComponent('صنف')}&warehouse_id=1`)).body.length, 2, 'الشراء يرى كل الأصناف');
   } finally { await t.close(); }
 });
+
+test('سعر الشراء للوحدات: يُحفظ ولا يظهر للكاشير', async () => {
+  const t = await boot();
+  try {
+    const it = (await t.admin.post('/items', { name: 'جبنة', base_unit: 'حبة', track_expiry: 0, sell_price: 10, purchase_price: 7, units: [{ name: 'كرتون', factor: 12, purchase_price: 80 }] })).body;
+    assert.deepEqual(it.units.map((u) => u.purchase_price), [7, 80]);
+    const upd = (await t.admin.put('/items/' + it.id, { name: 'جبنة', base_unit: 'حبة', units: it.units.map((u) => ({ ...u, purchase_price: u.is_base ? 7.5 : undefined })) })).body;
+    assert.deepEqual(upd.units.map((u) => u.purchase_price), [7.5, 80], 'عدم الإرسال لا يمسح السعر');
+    await t.admin.post('/users', { username: 'cashier', full_name: 'كاشير', password: 'Cash1234', roles: ['cashier'] });
+    const c = await t.client('cashier', 'Cash1234');
+    assert.equal((await c.get('/items/' + it.id)).body.units[0].purchase_price, undefined);
+  } finally { await t.close(); }
+});

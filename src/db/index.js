@@ -42,6 +42,10 @@ const MIGRATIONS = {
       CREATE INDEX IF NOT EXISTS messages_party ON messages(party_id, created_at);
       CREATE UNIQUE INDEX IF NOT EXISTS messages_provider ON messages(provider_id) WHERE provider_id IS NOT NULL;`);
   },
+  4: (db) => {
+    // سعر الشراء الافتراضي لكل وحدة (يُقترح في فاتورة وطلب الشراء)
+    addColumn(db, 'item_units', 'purchase_price', 'INTEGER');
+  },
 };
 const SCHEMA_VERSION = Math.max(1, ...Object.keys(MIGRATIONS).map(Number));
 

@@ -207,7 +207,7 @@ function itemTaxBp(ctx, item, override) {
 
 // ---------- عرض بشري ----------
 const MONEY_FIELDS = ['subtotal', 'discount', 'net', 'tax', 'extra_cost', 'total', 'cost', 'invoice_discount_amount', 'price', 'value',
-  'line_discount', 'doc_discount', 'amount', 'open_amount', 'opening_amount', 'expected_amount', 'counted_amount', 'variance', 'sell_price',
+  'line_discount', 'doc_discount', 'amount', 'open_amount', 'opening_amount', 'expected_amount', 'counted_amount', 'variance', 'sell_price', 'purchase_price',
   'min_price', 'credit_limit', 'base', 'balance'];
 const QTY_FIELDS = ['qty', 'base_qty', 'returned_qty', 'system_qty', 'counted_qty', 'factor', 'reorder_level'];
 const BP_FIELDS = ['tax_rate_bp', 'invoice_discount_bp', 'max_discount_bp', 'rate_bp', 'default_tax_rate_bp'];
