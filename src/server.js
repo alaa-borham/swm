@@ -221,7 +221,7 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
 
   // ---------- البيانات الأساسية ----------
   api.get('/items', h((ctx, req) => M.listItems(ctx, req.query)));
-  api.get('/items/lookup', h((ctx, req) => M.lookupItem(ctx, req.query.q || '', req.query.warehouse_id ? Number(req.query.warehouse_id) : null)));
+  api.get('/items/lookup', h((ctx, req) => M.lookupItem(ctx, req.query.q || '', req.query.warehouse_id ? Number(req.query.warehouse_id) : null, req.query.in_stock === '1')));
   api.get('/items/catalog', h((ctx, req) => M.posCatalog(ctx, req.query.warehouse_id ? Number(req.query.warehouse_id) : null)));
   api.get('/items/:id', h((ctx, req) => { ctx.require('items.view'); return M.getItemFull(ctx, id(req)); }));
   api.get('/items/:id/batches', h((ctx, req) => R.stockReport(ctx, { by: 'batch', item_id: id(req), warehouse_id: req.query.warehouse_id })));

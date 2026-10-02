@@ -205,3 +205,16 @@ test('فاتورة الشراء: نقدًا تُسدد كامل الإجمالي
     assert.equal((await t.admin.get('/docs/' + credit.body.id)).body.open_amount, 34.5);
   } finally { await t.close(); }
 });
+
+test('البحث للبيع: لا تظهر إلا الأصناف التي لها رصيد في المستودع', async () => {
+  const t = await boot();
+  try {
+    const a = (await t.admin.post('/items', { name: 'صنف برصيد', base_unit: 'حبة', track_expiry: 0, sell_price: 5 })).body;
+    await t.admin.post('/items', { name: 'صنف بلا رصيد', base_unit: 'حبة', track_expiry: 0, sell_price: 5 });
+    await t.admin.post('/opening-stock', { warehouse_id: 1, lines: [{ item_id: a.id, qty: 2, unit_cost: 1 }] });
+    const names = async (q) => (await t.admin.get(`/items/lookup?q=${encodeURIComponent(q)}&warehouse_id=1&in_stock=1`)).body.map((x) => x.name);
+    assert.deepEqual(await names('صنف'), ['صنف برصيد']);
+    assert.deepEqual(await names(''), ['صنف برصيد'], 'قائمة التصفح');
+    assert.equal((await t.admin.get(`/items/lookup?q=${encodeURIComponent('صنف')}&warehouse_id=1`)).body.length, 2, 'الشراء يرى كل الأصناف');
+  } finally { await t.close(); }
+});

@@ -53,7 +53,7 @@ export async function transfer({ el }) {
   const transit = h('input', { type: 'checkbox' });
   const cart = [];
   const tbody = h('tbody');
-  const picker = itemPicker({ warehouseId: () => from.value, onPick: (it) => { cart.push({ item: it, unit_id: it.selected_unit_id, qty: 1 }); draw(); } });
+  const picker = itemPicker({ inStockOnly: true, warehouseId: () => from.value, onPick: (it) => { cart.push({ item: it, unit_id: it.selected_unit_id, qty: 1 }); draw(); } });
   const draw = () => {
     clear(tbody);
     cart.forEach((l, i) => tbody.append(h('tr', null, h('td', null, l.item.name, l.item.sellable_qty != null ? h('div', { class: 'small muted' }, 'متاح ', Q(l.item.sellable_qty)) : ''),

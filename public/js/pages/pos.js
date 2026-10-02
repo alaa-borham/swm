@@ -49,7 +49,7 @@ async function posView({ el, q }) {
   const changeBox = h('div', { class: 'muted' });
 
   const taxOf = (it) => (it.tax_rate_bp != null ? it.tax_rate_bp : s.default_tax_rate) || 0;
-  const picker = itemPicker({ autofocus: true, warehouseId: () => whSel.value, onPick: (it) => {
+  const picker = itemPicker({ autofocus: true, inStockOnly: true, warehouseId: () => whSel.value, onPick: (it) => {
     const unitId = it.selected_unit_id;
     const ex = it.scale_qty ? null : cart.find((l) => l.item.id === it.id && l.unit_id === unitId);
     if (ex) ex.qty = Number(ex.qty) + 1;

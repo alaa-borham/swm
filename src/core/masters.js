@@ -177,7 +177,7 @@ function parseScaleBarcode(ctx, code) {
   return { code: pluCode.replace(/^0+(?=\d)/, ''), pluRaw: pluCode, raw, mode: s.scale_mode === 'price' ? 'price' : 'weight' };
 }
 
-function lookupItem(ctx, q, warehouseId) {
+function lookupItem(ctx, q, warehouseId, inStock) {
   ctx.require('items.view');
   const { sellableQty } = require('./inventory');
   const res = [];
@@ -191,7 +191,7 @@ function lookupItem(ctx, q, warehouseId) {
       // الوزن بالجرام ← كجم؛ أو السعر ← الكمية = السعر ÷ سعر وحدة الأساس
       full.scale_qty = scale.mode === 'weight' ? scale.raw / 1000 : (base.sell_price ? Number((scale.raw / 10 ** require('../lib/money').getMoneyDecimals() / base.sell_price).toFixed(full.qty_decimals)) : 0);
       if (warehouseId) full.sellable_qty = sellableQty(ctx, it.id, warehouseId) / 1000;
-      return [full];
+      return inStock && warehouseId && !(full.sellable_qty > 0) ? [] : [full];
     }
   }
   const byBarcode = ctx.db.prepare(`SELECT u.*, i.name item_name, i.active item_active FROM item_units u JOIN items i ON i.id=u.item_id
@@ -199,7 +199,9 @@ function lookupItem(ctx, q, warehouseId) {
   let items;
   if (byBarcode) items = [{ id: byBarcode.item_id, unit_id: byBarcode.id }];
   else {
-    items = ctx.db.prepare(`SELECT id FROM items WHERE active=1 AND (name LIKE ? OR code=?) ORDER BY name LIMIT 20`).all(`%${q}%`, q)
+    // للبيع: الأصناف التي لها رصيد في المستودع فقط
+    const stock = inStock && warehouseId ? " AND EXISTS (SELECT 1 FROM batches b WHERE b.item_id=items.id AND b.warehouse_id=? AND b.qty>0 AND b.status='ok')" : '';
+    items = ctx.db.prepare(`SELECT id FROM items WHERE active=1 AND (name LIKE ? OR code=?)${stock} ORDER BY name LIMIT 20`).all(`%${q}%`, q, ...(stock ? [warehouseId] : []))
       .map((r) => ({ id: r.id, unit_id: null }));
   }
   for (const it of items) {
@@ -207,6 +209,7 @@ function lookupItem(ctx, q, warehouseId) {
     if (!full.active) continue;
     full.selected_unit_id = it.unit_id || full.units.find((u) => u.is_base).id;
     if (warehouseId) full.sellable_qty = sellableQty(ctx, it.id, warehouseId) / 1000;
+    if (inStock && warehouseId && !(full.sellable_qty > 0)) continue;
     res.push(full);
   }
   return res;
