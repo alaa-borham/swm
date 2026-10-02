@@ -51,6 +51,13 @@ export async function view({ el, params }) {
     } }, 'إضافة خطة')));
   }
   if (head) el.append(head);
+  // حساب الدخول المرتبط بالمندوب (للتأكد أن المندوب يدخل بالحساب الصحيح)
+  if (can('users.manage')) {
+    const u = (await get('/users').catch(() => [])).find((x) => x.rep_id === rep.id);
+    el.append(h('div', { class: 'note' + (u ? '' : ' warn') }, u
+      ? ['حساب دخول المندوب: ', h('b', null, u.username), u.active ? '' : ' (موقوف)', ' — يرى العملاء المسندين أدناه ومخزونه فقط.']
+      : 'لا يوجد حساب دخول مرتبط بهذا المندوب؛ أنشئه من «تعديل البيانات وكلمة المرور» حتى يرى عملاءه ومخزونه.'));
+  }
   // عملاء المندوب: من يبيع لهم ويحصّل منهم
   const custCard = h('div', { class: 'card' });
   const loadCustomers = async () => {

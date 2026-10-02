@@ -50,6 +50,13 @@ const MIGRATIONS = {
     // نسبة الربح على سعر الشراء لحساب سعر البيع تلقائيًا (×100)
     addColumn(db, 'item_units', 'profit_margin_bp', 'INTEGER');
   },
+  6: (db) => {
+    // نقل مستودع المندوب وعهدته إلى فرع حساب دخوله (كانت تُنشأ في الفرع الرئيسي فتُرفض مبيعاته)
+    db.exec(`UPDATE warehouses SET branch_id=(SELECT u.branch_id FROM users u JOIN reps r ON r.id=u.rep_id WHERE r.warehouse_id=warehouses.id AND u.branch_id IS NOT NULL LIMIT 1)
+        WHERE kind='rep' AND EXISTS (SELECT 1 FROM users u JOIN reps r ON r.id=u.rep_id WHERE r.warehouse_id=warehouses.id AND u.branch_id IS NOT NULL);
+      UPDATE cash_accounts SET branch_id=(SELECT u.branch_id FROM users u JOIN reps r ON r.id=u.rep_id WHERE r.custody_account_id=cash_accounts.id AND u.branch_id IS NOT NULL LIMIT 1)
+        WHERE kind='rep_custody' AND EXISTS (SELECT 1 FROM users u JOIN reps r ON r.id=u.rep_id WHERE r.custody_account_id=cash_accounts.id AND u.branch_id IS NOT NULL);`);
+  },
 };
 const SCHEMA_VERSION = Math.max(1, ...Object.keys(MIGRATIONS).map(Number));
 

@@ -211,7 +211,10 @@ export function table({ columns, rows, totals, onRow, empty = 'لا توجد ب�
 
 // ---------- القوائم المرجعية (مع تخزين مؤقت) ----------
 export async function lookup(name, force) {
-  if (!force && state.cache.has(name)) return state.cache.get(name);
+  // العملاء والموردون يتغيرون كثيرًا (إسناد لمندوب، إضافة): تُحدَّث كل 30 ثانية، والباقي كل 5 دقائق
+  const ttl = ['customers', 'suppliers'].includes(name) ? 30e3 : 300e3;
+  const at = state.cacheAt?.get(name) || 0;
+  if (!force && state.cache.has(name) && Date.now() - at < ttl) return state.cache.get(name);
   const urls = {
     warehouses: '/warehouses', allWarehouses: '/warehouses?all=1', cash: '/cash-accounts', categories: '/categories', expcats: '/expense-categories', reps: '/reps',
     customers: '/parties?type=customer&active=1&limit=1000', suppliers: '/parties?type=supplier&active=1&limit=1000', branches: '/branches',
@@ -230,6 +233,7 @@ export async function lookup(name, force) {
     data = cached;
   }
   state.cache.set(name, data);
+  (state.cacheAt ||= new Map()).set(name, Date.now());
   return data;
 }
 export function invalidate(...names) { for (const n of names) state.cache.delete(n); }

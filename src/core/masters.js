@@ -444,10 +444,11 @@ function deleteWarehouse(ctx, id) {
 function listCashAccounts(ctx) {
   const rows = ctx.db.prepare(`SELECT c.*, r.name rep_name,
       (SELECT COALESCE(SUM(debit-credit),0) FROM journal_lines WHERE account='CASH' AND cash_account_id=c.id) bal
-    FROM cash_accounts c LEFT JOIN reps r ON r.id=c.rep_id ${ctx.branchScope ? 'WHERE c.branch_id=' + Number(ctx.branchScope) : ''} ORDER BY c.active DESC, c.kind, c.name`).all();
+    FROM cash_accounts c LEFT JOIN reps r ON r.id=c.rep_id ${ctx.branchScope ? "WHERE c.branch_id=" + Number(ctx.branchScope) + " OR c.kind='bank'" : ''} ORDER BY c.active DESC, c.kind, c.name`).all();
   const { fromMinor } = require('../lib/money');
   const showBal = ctx.has('cash.view');
-  return rows.map((r) => ({ ...r, balance: showBal ? fromMinor(r.bal) : undefined, bal: undefined }));
+  // طرق السداد (البنوك/الشبكة) متاحة لكل الفروع للاختيار، ورصيدها يظهر لفرعها فقط
+  return rows.map((r) => ({ ...r, balance: showBal && (!ctx.branchScope || r.branch_id === ctx.branchScope) ? fromMinor(r.bal) : undefined, bal: undefined }));
 }
 
 function saveCashAccount(ctx, input, id) {

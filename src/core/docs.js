@@ -37,8 +37,10 @@ function insertDoc(ctx, type, fields) {
   // فرع المستند: من المستودع ثم الحساب النقدي ثم فرع المستخدم
   if (!f.branch_id) {
     const w = f.warehouse_id ? ctx.db.prepare('SELECT branch_id FROM warehouses WHERE id=?').get(f.warehouse_id) : null;
-    const c = !w && f.cash_account_id ? ctx.db.prepare('SELECT branch_id FROM cash_accounts WHERE id=?').get(f.cash_account_id) : null;
-    f.branch_id = (w && w.branch_id) || (c && c.branch_id) || ctx.branchScope || null;
+    const c = !w && f.cash_account_id ? ctx.db.prepare('SELECT branch_id, kind FROM cash_accounts WHERE id=?').get(f.cash_account_id) : null;
+    // طرق السداد البنكية مشتركة بين الفروع: السند يتبع فرع المستخدم
+    const cb = c && c.kind === 'bank' && ctx.branchScope ? ctx.branchScope : c && c.branch_id;
+    f.branch_id = (w && w.branch_id) || cb || ctx.branchScope || null;
   }
   ctx.checkBranch(f.branch_id);
   if (f.data && typeof f.data !== 'string') f.data = JSON.stringify(f.data);

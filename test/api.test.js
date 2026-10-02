@@ -270,3 +270,24 @@ test('الرقم الضريبي: رفض الرقم غير الصحيح عند ت
     assert.equal((await t.admin.get('/settings')).body.einvoice_qr, '1', 'يُفعّل تلقائيًا مع رقم صحيح');
   } finally { await t.close(); }
 });
+
+test('المندوب المرتبط بفرع: يرى طرق السداد (البنوك) ويبيع بها، ويرى عملاءه المسندين', async () => {
+  const t = await boot();
+  try {
+    const br = (await t.admin.post('/branches', { name: 'جده' })).body;
+    const mada = (await t.admin.post('/cash-accounts', { name: 'مدى', kind: 'bank' })).body;
+    const rep = (await t.admin.post('/reps', { name: 'مصطفى' })).body;
+    await t.admin.post('/users', { username: 'mostafa', full_name: 'مصطفى', password: 'Rep12345', roles: ['rep'], rep_id: rep.id, branch_id: br.id });
+    const c = (await t.admin.post('/parties', { name: 'البوادي', is_customer: 1 })).body;
+    const item = (await t.admin.post('/items', { name: 'حلاوه', base_unit: 'حبة', track_expiry: 0, sell_price: 10 })).body;
+    await t.admin.post('/opening-stock', { warehouse_id: 1, lines: [{ item_id: item.id, qty: 20, unit_cost: 5 }] });
+    await t.admin.post('/transfers', { from_warehouse_id: 1, to_warehouse_id: rep.warehouse_id, lines: [{ item_id: item.id, unit_id: item.units[0].id, qty: 10 }] });
+    const r = await t.client('mostafa', 'Rep12345');
+    assert.deepEqual((await r.get('/parties?type=customer')).body.rows.map((p) => p.name), [], 'قبل الإسناد');
+    await t.admin.post(`/reps/${rep.id}/customers`, { party_ids: [c.id] });
+    assert.deepEqual((await r.get('/parties?type=customer')).body.rows.map((p) => p.name), ['البوادي']);
+    assert.ok((await r.get('/cash-accounts')).body.some((a) => a.id === mada.id), 'مدى ظاهر للمندوب');
+    const sale = await r.post('/sales', { party_id: c.id, warehouse_id: rep.warehouse_id, lines: [{ item_id: item.id, qty: 2 }], payments: [{ method: 'card', cash_account_id: mada.id, amount: 20 }] });
+    assert.equal(sale.status, 200, JSON.stringify(sale.body));
+  } finally { await t.close(); }
+});

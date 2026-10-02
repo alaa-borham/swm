@@ -41,6 +41,16 @@ function validRoles(roles) {
   return roles;
 }
 
+/** مستودع المندوب وعهدته يتبعان فرع حساب دخوله، وإلا رُفضت مبيعاته كعملية خارج الفرع */
+function syncRepBranch(db, userId) {
+  const u = db.prepare('SELECT rep_id, branch_id FROM users WHERE id=?').get(userId);
+  if (!u || !u.rep_id || !u.branch_id) return;
+  const r = db.prepare('SELECT warehouse_id, custody_account_id FROM reps WHERE id=?').get(u.rep_id);
+  if (!r) return;
+  if (r.warehouse_id) db.prepare('UPDATE warehouses SET branch_id=? WHERE id=?').run(u.branch_id, r.warehouse_id);
+  if (r.custody_account_id) db.prepare('UPDATE cash_accounts SET branch_id=? WHERE id=?').run(u.branch_id, r.custody_account_id);
+}
+
 function createUser(ctx, { username, full_name, password, roles, rep_id, branch_id }) {
   ctx.require('users.manage');
   return ctx.tx(() => {
@@ -54,6 +64,7 @@ function createUser(ctx, { username, full_name, password, roles, rep_id, branch_
     if (branch_id && !ctx.db.prepare('SELECT 1 FROM branches WHERE id=?').get(branch_id)) fail('VALIDATION', 'الفرع غير موجود');
     const id = ctx.db.prepare('INSERT INTO users(username,full_name,password_hash,roles,rep_id,branch_id,must_change_password,created_at) VALUES(?,?,?,?,?,?,1,?)')
       .run(un, full_name, hashPassword(password), JSON.stringify(roles), rep_id || null, branch_id || null, ctx.now()).lastInsertRowid;
+    syncRepBranch(ctx.db, id);
     ctx.audit('user.create', { entity: 'user', entity_id: id, after: { username: un, full_name, roles, rep_id, branch_id } });
     return publicUser(ctx.db.prepare('SELECT * FROM users WHERE id=?').get(id));
   });
@@ -78,6 +89,7 @@ function updateUser(ctx, id, { full_name, roles, rep_id, branch_id, active, pass
       ctx.db.prepare('UPDATE users SET password_hash=?, must_change_password=1 WHERE id=?').run(hashPassword(password), id);
     }
     if ((active !== undefined && !active) || password) ctx.db.prepare('DELETE FROM sessions WHERE user_id=?').run(id);
+    syncRepBranch(ctx.db, id);
     const after = publicUser(ctx.db.prepare('SELECT * FROM users WHERE id=?').get(id));
     ctx.audit('user.update', { entity: 'user', entity_id: id, before, after: { ...after, password_changed: !!password } });
     return after;
@@ -150,4 +162,5 @@ function ensureAdmin(db, password) {
   return pw;
 }
 
-module.exports = { hashPassword, verifyPassword, createUser, updateUser, listUsers, changeOwnPassword, login, authenticate, logout, ensureAdmin, publicUser };
+module.exports = {
+  syncRepBranch, hashPassword, verifyPassword, createUser, updateUser, listUsers, changeOwnPassword, login, authenticate, logout, ensureAdmin, publicUser };
