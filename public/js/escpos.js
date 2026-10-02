@@ -15,7 +15,8 @@ export async function renderCanvas(node, { width = null, scale = 2 } = {}) {
   const rect = node.getBoundingClientRect();
   const pad = width ? 4 : 12;
   const w = Math.ceil(rect.width) + pad * 2;
-  const hgt = Math.ceil(rect.height) + pad * 2;
+  // ارتفاع إضافي احتياطًا: قد يختلف الخط داخل الصورة عن الشاشة فيطول الإيصال؛ الأبيض الزائد يُقص عند التحويل
+  const hgt = Math.ceil(rect.height * (width ? 1.6 : 1)) + pad * 2 + (width ? 200 : 0);
   const html = new XMLSerializer().serializeToString(clone);
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${hgt}"><foreignObject width="100%" height="100%">`
     + `<div xmlns="http://www.w3.org/1999/xhtml" dir="rtl" class="print-area" style="display:block;background:#fff;color:#000;padding:${pad}px;font-family:Tahoma,Arial,sans-serif">`
@@ -81,6 +82,15 @@ const BLE_SERVICES = [
 ];
 let bleChar = null;
 
+// سرعة الإرسال: كمية البيانات قبل كل توقف، ومدة التوقف (تُحفظ على الجهاز)
+export const BLE_SPEEDS = {
+  normal: { label: 'عادية', block: 512, pause: 40 },
+  slow: { label: 'بطيئة', block: 256, pause: 80 },
+  slowest: { label: 'بطيئة جدًا', block: 128, pause: 120 },
+};
+export const bleSpeed = () => { try { return localStorage.getItem('ble_speed') || 'slow'; } catch (_) { return 'slow'; } };
+export const setBleSpeed = (v) => { try { localStorage.setItem('ble_speed', v); } catch (_) { /* تخزين غير متاح */ } };
+
 export const canBluetooth = () => !!navigator.bluetooth;
 
 async function findWritable(server) {
@@ -93,7 +103,7 @@ async function findWritable(server) {
 }
 
 /** طباعة مباشرة عبر Web Bluetooth (أول مرة يختار المستخدم الطابعة) */
-export async function printViaBluetooth(bytes) {
+export async function printViaBluetooth(bytes, onProgress) {
   if (!navigator.bluetooth) throw new Error('المتصفح لا يدعم البلوتوث؛ استخدم Chrome على أندرويد أو تطبيق RawBT');
   if (!bleChar || !bleChar.service.device.gatt.connected) {
     const device = bleChar?.service.device || await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: BLE_SERVICES });
@@ -101,17 +111,25 @@ export async function printViaBluetooth(bytes) {
     bleChar = await findWritable(server);
     if (!bleChar) { device.gatt.disconnect(); throw new Error('الطابعة لا تدعم البلوتوث منخفض الطاقة (BLE)؛ استخدم تطبيق RawBT'); }
   }
-  // الطابعة تطبع أبطأ مما يصل البلوتوث، فإن أُرسل كل شيء دفعة واحدة امتلأت ذاكرتها وتوقفت في منتصف الإيصال.
-  // نرسل قطعًا صغيرة بتأكيد الاستلام إن أمكن، مع مهلة قصيرة، ونتوقف قليلًا بين كل ~2 كيلوبايت ليلحق رأس الطباعة.
-  const withResp = !!bleChar.properties.write;
-  const chunk = 100;
+  // قطع 20 بايت (تناسب أي اتصال BLE دون كتابة طويلة)، مع توقف دوري حسب السرعة المختارة حتى لا تمتلئ ذاكرة الطابعة،
+  // وإعادة المحاولة عند خطأ عابر بدل التوقف في منتصف الإيصال.
+  const speed = BLE_SPEEDS[bleSpeed()] || BLE_SPEEDS.normal;
+  const noResp = !!bleChar.properties.writeWithoutResponse;
+  const chunk = 20;
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const writeOnce = (part) => (noResp ? bleChar.writeValueWithoutResponse(part) : bleChar.writeValueWithResponse(part));
   for (let i = 0, sent = 0; i < bytes.length; i += chunk) {
-    const part = bytes.subarray(i, i + chunk);
-    if (withResp) await bleChar.writeValueWithResponse(part); else await bleChar.writeValueWithoutResponse(part);
-    await wait(withResp ? 8 : 25);
+    const part = bytes.slice(i, i + chunk);
+    for (let attempt = 0; ; attempt++) {
+      try { await writeOnce(part); break; } catch (e) {
+        if (attempt >= 4) throw new Error(`انقطع الإرسال للطابعة عند ${Math.round((i / bytes.length) * 100)}٪ — اختر سرعة أبطأ وأعد المحاولة`);
+        await wait(200 * (attempt + 1));
+        if (!bleChar.service.device.gatt.connected) { const server = await bleChar.service.device.gatt.connect(); bleChar = await findWritable(server); }
+      }
+    }
     sent += part.length;
-    if (sent >= 2048) { sent = 0; await wait(120); }
+    if (sent >= speed.block) { sent = 0; onProgress?.(i / bytes.length); await wait(speed.pause); }
   }
+  onProgress?.(1);
   await wait(300);
 }

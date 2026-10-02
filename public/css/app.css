@@ -272,6 +272,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: .85; }
   body.print-preview .print-area { display: block; background: #fff; color: #000; min-height: 100vh; padding: 130px 12px 24px; }
   body.print-preview .print-thermal { max-width: 100%; }
   .print-toolbar { position: fixed; top: 0; inset-inline: 0; z-index: 50; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; background: var(--chrome, var(--panel)); color: var(--ink); border-bottom: 1px solid var(--line); }
+  .print-toolbar .ble-speed { width: auto; min-width: 0; padding: 6px 8px; }
   .print-toolbar .small { color: var(--muted); flex-basis: 100%; }
 }
 @media print { .print-toolbar { display: none !important; } }

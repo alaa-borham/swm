@@ -1,6 +1,6 @@
 // سجل المستندات، عرض المستند وإجراءاته، مرتجع المبيعات، والطباعة.
 import { h, clear, dt, N, state, get, api, submitter, toast, run, M, Q, money, qty, inp, sel, field, num, table, badge, STATUS, PAY_STATUS, pageHead, can, askReason, today, monthStart, cashSelect, partySelect, modal } from '../lib.js';
-import { renderCanvas, paperDots, canvasToEscPos, printViaRawBT, printViaBluetooth, canBluetooth, isAndroid } from '../escpos.js';
+import { renderCanvas, paperDots, canvasToEscPos, printViaRawBT, printViaBluetooth, canBluetooth, isAndroid, BLE_SPEEDS, bleSpeed, setBleSpeed } from '../escpos.js';
 
 const TYPE_TITLES = {
   sale: 'فواتير البيع', sale_return: 'مرتجعات المبيعات', purchase: 'فواتير الشراء', transfer: 'سجل التحويلات', 'receipt,payment,cash_transfer': 'سجل السندات',
@@ -346,13 +346,15 @@ export async function viewDoc(id, format = 'a4', { count = false } = {}) {
     const fmtBtn = (f, label) => h('button', { class: 'btn' + (fmt === f ? ' primary' : ''), onclick: async () => { fmt = f; await render(false); bar.replaceWith(toolbar()); } }, label);
     const toolbar = () => (bar = h('div', { class: 'print-toolbar' },
       h('button', { class: 'btn ok', onclick: async () => { await markPrinted(); if (fmt === 'thermal' && isAndroid()) await thermalPrint(area.firstElementChild, 'rawbt'); else window.print(); } }, 'طباعة'),
-      fmt === 'thermal' && canBluetooth() ? h('button', { class: 'btn', onclick: async () => { await markPrinted(); await thermalPrint(area.firstElementChild, 'ble'); } }, 'بلوتوث مباشر') : null,
+      fmt === 'thermal' && canBluetooth() ? h('button', { class: 'btn', onclick: async (e) => { const btn = e.currentTarget; await markPrinted(); await thermalPrint(area.firstElementChild, 'ble', btn); } }, 'بلوتوث مباشر') : null,
+      fmt === 'thermal' && canBluetooth() ? h('select', { class: 'ble-speed', title: 'سرعة الإرسال للطابعة', onchange: (e) => setBleSpeed(e.target.value) },
+        Object.entries(BLE_SPEEDS).map(([k, v]) => h('option', { value: k, selected: k === bleSpeed() }, 'سرعة: ' + v.label))) : null,
       canShareLink ? h('button', { class: 'btn primary', onclick: () => shareDoc(d, area.firstElementChild, fmt) }, 'مشاركة') : null,
       canShareLink ? h('button', { class: 'btn', onclick: () => whatsappDoc(d) }, 'واتساب') : null,
       h('button', { class: 'btn', onclick: async () => { await markPrinted(); shareAsImage(area.firstElementChild, `${d.number}.png`, fmt); } }, 'حفظ صورة'),
       canThermal ? fmtBtn('a4', 'A4') : null, canThermal ? fmtBtn('thermal', 'حراري') : null,
       h('button', { class: 'btn', onclick: close }, 'إغلاق'),
-      h('span', { class: 'small' }, isAndroid() && fmt === 'thermal' ? '«طباعة» ترسل الإيصال لطابعة البلوتوث عبر تطبيق RawBT (ثبّته مرة واحدة واقرنه بالطابعة). «بلوتوث مباشر» يطبع دون تطبيق إن كانت الطابعة تدعم BLE.' : '«مشاركة» يرسل رابط الفاتورة عبر واتساب أو أي تطبيق، ويفتحه العميل دون تسجيل دخول.')));
+      h('span', { class: 'small' }, isAndroid() && fmt === 'thermal' ? '«بلوتوث مباشر» يطبع دون تطبيق. إن توقفت الطابعة قبل نهاية الإيصال اختر سرعة أبطأ. «طباعة» تستخدم تطبيق RawBT.' : '«مشاركة» يرسل رابط الفاتورة عبر واتساب أو أي تطبيق، ويفتحه العميل دون تسجيل دخول.')));
     let bar;
     document.querySelector('.print-toolbar')?.remove();
     document.body.classList.add('printing', 'print-preview');
@@ -408,16 +410,20 @@ async function whatsappDoc(d) {
 }
 
 /** طباعة الإيصال على طابعة بلوتوث حرارية: RawBT أو Web Bluetooth */
-async function thermalPrint(node, via) {
+async function thermalPrint(node, via, btn) {
+  const label = btn?.textContent;
   try {
-    toast('جارٍ تجهيز الإيصال للطابعة…');
+    if (btn) { btn.disabled = true; btn.textContent = 'تجهيز…'; }
     const canvas = await renderCanvas(node, { width: paperDots(state.settings.receipt_width_mm) });
     const bytes = canvasToEscPos(canvas);
-    if (via === 'ble') { await printViaBluetooth(bytes); toast('أُرسل الإيصال للطابعة', 'ok'); } else printViaRawBT(bytes);
+    if (via === 'ble') {
+      await printViaBluetooth(bytes, (p) => { if (btn) btn.textContent = `إرسال ${Math.round(p * 100)}٪`; });
+      toast('أُرسل الإيصال كاملًا للطابعة', 'ok');
+    } else printViaRawBT(bytes);
   } catch (e) {
     if (e && e.name === 'NotFoundError') return; // أغلق المستخدم نافذة اختيار الطابعة
     toast(e.message || 'تعذرت الطباعة', 'bad');
-  }
+  } finally { if (btn) { btn.disabled = false; btn.textContent = label; } }
 }
 
 /** تحويل الإيصال إلى صورة PNG ومشاركتها (أو تنزيلها) — بديل عندما يمنع المتصفح الطباعة */
