@@ -330,3 +330,35 @@ test('عميل لكل المناديب: يظهر لكل مندوب ويبيع ل
     assert.deepEqual((await a.get('/parties?type=customer')).body.rows.map((p) => p.name), ['خاص أ']);
   } finally { await t.close(); }
 });
+
+test('استيراد الأصناف من القالب: سعر الشراء ونسبة الربح ووحدة الإدخال، والقالب القديم مقبول', async () => {
+  const t = await boot();
+  try {
+    const ExcelJS = require('exceljs');
+    const tpl = await t.admin.get('/import/template/items');
+    assert.equal(tpl.status, 200);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(tpl.body));
+    assert.deepEqual(wb.worksheets.map((w) => w.name), ['الأصناف', 'مثال', 'التعليمات']);
+    const ex = wb.getWorksheet('مثال');
+    ex.eachRow((row, n) => { if (n > 1) wb.worksheets[0].addRow(row.values.slice(1)); });
+    const data = Buffer.from(await wb.xlsx.writeBuffer()).toString('base64');
+    const pv = await t.admin.post('/import/preview', { kind: 'items', filename: 'a.xlsx', data });
+    assert.equal(pv.status, 200, JSON.stringify(pv.body));
+    assert.equal(pv.body.invalid, 0, JSON.stringify(pv.body.rows.map((r) => r._errors)));
+    assert.equal(pv.body.valid, 4);
+    assert.equal((await t.admin.post('/import/commit', { kind: 'items', filename: 'a.xlsx', data })).status, 200);
+    const items = (await t.admin.get('/items')).body.rows;
+    const sugar = items.find((i) => i.name === 'سكر الأسرة 1 كجم');
+    const [piece, carton] = sugar.units;
+    assert.equal(piece.purchase_price, 4.5); assert.equal(piece.sell_price, 5.4, 'من نسبة الربح');
+    assert.equal(carton.factor, 10); assert.equal(carton.purchase_price, 42); assert.equal(carton.sell_price, 50.4);
+    assert.deepEqual([piece.for_purchase, carton.for_purchase], [0, 1], 'وحدة الإدخال كرتون');
+    const rice = items.find((i) => i.name === 'أرز بسمتي 5 كجم');
+    assert.equal(rice.units[0].sell_price, 39); assert.equal(rice.units[0].for_purchase, 1);
+    // القالب القديم بأسماء الأعمدة السابقة
+    const csv = 'الاسم,وحدة الأساس,سعر الأساس\nملح,حبة,2\n';
+    const old = await t.admin.post('/import/commit', { kind: 'items', filename: 'old.csv', data: Buffer.from(csv).toString('base64') });
+    assert.equal(old.status, 200, JSON.stringify(old.body));
+  } finally { await t.close(); }
+});

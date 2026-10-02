@@ -9,7 +9,11 @@ const F = require('./finance');
 const TEMPLATES = {
   items: {
     label: 'الأصناف',
-    columns: ['الكود', 'الاسم', 'التصنيف', 'وحدة الأساس', 'دقة الكمية', 'باركود الأساس', 'سعر الأساس', 'وحدة 2', 'معامل وحدة 2', 'باركود وحدة 2', 'سعر وحدة 2', 'الضريبة %', 'حد إعادة الطلب', 'تتبع الصلاحية'],
+    columns: ['الكود', 'الاسم', 'التصنيف', 'وحدة المنتج', 'دقة الكمية', 'باركود وحدة المنتج', 'سعر شراء وحدة المنتج', 'نسبة الربح %', 'سعر بيع وحدة المنتج',
+      'وحدة 2', 'معامل وحدة 2', 'باركود وحدة 2', 'سعر شراء وحدة 2', 'سعر بيع وحدة 2', 'وحدة الإدخال', 'الضريبة %', 'حد إعادة الطلب', 'تتبع الصلاحية'],
+    // أسماء أعمدة القالب القديم مقبولة
+    aliases: { 'وحدة الأساس': 'وحدة المنتج', 'باركود الأساس': 'باركود وحدة المنتج', 'سعر الأساس': 'سعر بيع وحدة المنتج', 'سعر وحدة 2': 'سعر بيع وحدة 2' },
+    required: ['الاسم', 'وحدة المنتج'],
   },
   parties: {
     label: 'العملاء والموردون',
@@ -69,9 +73,9 @@ function mapRows(kind, rows) {
   const tpl = TEMPLATES[kind];
   if (!tpl) fail('VALIDATION', 'نوع الاستيراد غير معروف');
   if (!rows.length) fail('VALIDATION', 'الملف فارغ');
-  const header = rows[0].map((h) => String(h).trim());
+  const header = rows[0].map((h) => { const t = String(h).trim(); return (tpl.aliases && tpl.aliases[t]) || t; });
   const idx = tpl.columns.map((c) => header.indexOf(c));
-  const missing = tpl.columns.filter((c, i) => idx[i] < 0 && ['الاسم', 'وحدة الأساس', 'كود الصنف', 'الكمية بوحدة الأساس'].includes(c));
+  const missing = tpl.columns.filter((c, i) => idx[i] < 0 && (tpl.required || ['الاسم', 'كود الصنف', 'الكمية بوحدة الأساس']).includes(c));
   if (missing.length) fail('VALIDATION', `أعمدة ناقصة: ${missing.join('، ')}`);
   return rows.slice(1).map((r, n) => {
     const o = { _row: n + 2 };
@@ -89,8 +93,8 @@ function preview(ctx, kind, rows) {
     const errors = [];
     if (kind === 'items') {
       if (!r['الاسم']) errors.push('الاسم مطلوب');
-      if (!r['وحدة الأساس']) errors.push('وحدة الأساس مطلوبة');
-      for (const k of ['الكود', 'باركود الأساس', 'باركود وحدة 2']) {
+      if (!r['وحدة المنتج']) errors.push('وحدة المنتج مطلوبة');
+      for (const k of ['الكود', 'باركود وحدة المنتج', 'باركود وحدة 2']) {
         const v = r[k];
         if (!v) continue;
         const key = (k === 'الكود' ? 'code:' : 'bc:') + v;
@@ -99,7 +103,9 @@ function preview(ctx, kind, rows) {
         if (k !== 'الكود' && ctx.db.prepare('SELECT 1 FROM item_units WHERE barcode=?').get(v)) errors.push(`الباركود ${v} موجود مسبقًا`);
       }
       if (r['وحدة 2'] && !(Number(r['معامل وحدة 2']) > 0)) errors.push('معامل الوحدة الثانية مطلوب');
-      for (const k of ['سعر الأساس', 'سعر وحدة 2', 'الضريبة %', 'حد إعادة الطلب', 'دقة الكمية']) if (r[k] !== '' && !Number.isFinite(Number(r[k]))) errors.push(`${k} ليس رقمًا`);
+      for (const k of ['سعر شراء وحدة المنتج', 'نسبة الربح %', 'سعر بيع وحدة المنتج', 'سعر شراء وحدة 2', 'سعر بيع وحدة 2', 'الضريبة %', 'حد إعادة الطلب', 'دقة الكمية']) if (r[k] !== '' && !Number.isFinite(Number(r[k]))) errors.push(`${k} ليس رقمًا`);
+      if (r['وحدة الإدخال'] && !['', 'وحدة المنتج', 'الأساس', 'وحدة 2', r['وحدة المنتج'], r['وحدة 2']].includes(r['وحدة الإدخال'])) errors.push('وحدة الإدخال يجب أن تكون اسم وحدة المنتج أو اسم الوحدة 2');
+      if (r['وحدة الإدخال'] && [r['وحدة 2'], 'وحدة 2'].includes(r['وحدة الإدخال']) && !r['وحدة 2']) errors.push('وحدة الإدخال هي الوحدة 2 لكن الوحدة 2 فارغة');
     } else if (kind === 'parties') {
       if (!r['الاسم']) errors.push('الاسم مطلوب');
       if (!yes(r['عميل']) && !yes(r['مورد'])) errors.push('حدد عميل أو مورد');
@@ -133,11 +139,16 @@ function commit(ctx, kind, rows, opts = {}) {
           cat = ctx.db.prepare('SELECT id FROM categories WHERE name=?').get(r['التصنيف']);
           if (!cat) cat = { id: ctx.db.prepare('INSERT INTO categories(name) VALUES(?)').run(r['التصنيف']).lastInsertRowid };
         }
+        // وحدة الإدخال (الشراء): الوحدة 2 إن حُددت باسمها أو بـ«وحدة 2»، وإلا وحدة المنتج
+        const entry2 = !!r['وحدة 2'] && [r['وحدة 2'], 'وحدة 2'].includes(r['وحدة الإدخال']);
         M.createItem(ctx, {
-          code: r['الكود'] || null, name: r['الاسم'], category_id: cat ? cat.id : null, base_unit: r['وحدة الأساس'], qty_decimals: Number(r['دقة الكمية'] || 0),
-          barcode: r['باركود الأساس'] || null, sell_price: r['سعر الأساس'] || 0, tax_rate_pct: r['الضريبة %'] === '' ? null : r['الضريبة %'],
+          code: r['الكود'] || null, name: r['الاسم'], category_id: cat ? cat.id : null, base_unit: r['وحدة المنتج'], qty_decimals: Number(r['دقة الكمية'] || 0),
+          barcode: r['باركود وحدة المنتج'] || null, sell_price: r['سعر بيع وحدة المنتج'] || 0, tax_rate_pct: r['الضريبة %'] === '' ? null : r['الضريبة %'],
+          purchase_price: r['سعر شراء وحدة المنتج'] === '' ? undefined : r['سعر شراء وحدة المنتج'], profit_margin: r['نسبة الربح %'] === '' ? undefined : r['نسبة الربح %'],
+          base_for_purchase: entry2 ? 0 : 1,
           reorder_level: r['حد إعادة الطلب'] || 0, track_expiry: r['تتبع الصلاحية'] === '' ? 1 : (yes(r['تتبع الصلاحية']) ? 1 : 0),
-          units: r['وحدة 2'] ? [{ name: r['وحدة 2'], factor: r['معامل وحدة 2'], barcode: r['باركود وحدة 2'] || null, sell_price: r['سعر وحدة 2'] || 0 }] : [],
+          units: r['وحدة 2'] ? [{ name: r['وحدة 2'], factor: r['معامل وحدة 2'], barcode: r['باركود وحدة 2'] || null, sell_price: r['سعر بيع وحدة 2'] || 0,
+            purchase_price: r['سعر شراء وحدة 2'] === '' ? undefined : r['سعر شراء وحدة 2'], profit_margin: r['نسبة الربح %'] === '' ? undefined : r['نسبة الربح %'], for_purchase: entry2 ? 1 : 0 }] : [],
         });
         n++;
       }
@@ -168,10 +179,65 @@ async function templateXlsx(kind) {
   const tpl = TEMPLATES[kind];
   if (!tpl) fail('VALIDATION', 'نوع غير معروف');
   const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet(tpl.label, { views: [{ rightToLeft: true }] });
+  // الورقة الأولى هي التي تُستورد: العناوين فقط وتُملأ من الصف الثاني
+  const ws = wb.addWorksheet(tpl.label, { views: [{ rightToLeft: true, state: 'frozen', ySplit: 1 }] });
   ws.addRow(tpl.columns);
-  ws.getRow(1).font = { bold: true };
-  ws.columns.forEach((c) => { c.width = 18; });
+  const head = ws.getRow(1);
+  head.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+  head.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F4E79' } };
+  head.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+  head.height = 32;
+  ws.columns.forEach((c, i) => { c.width = Math.max(14, String(tpl.columns[i]).length + 4); });
+  if (kind === 'items') {
+    const col = (name) => tpl.columns.indexOf(name) + 1;
+    const req = ['الاسم', 'وحدة المنتج'];
+    for (const n of req) ws.getCell(1, col(n)).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC00000' } };
+    ws.getColumn(col('الاسم')).width = 28;
+    // قوائم منسدلة وتحقق من الأرقام لـ 1000 صف
+    for (let r = 2; r <= 1001; r++) {
+      ws.getCell(r, col('تتبع الصلاحية')).dataValidation = { type: 'list', allowBlank: true, formulae: ['"نعم,لا"'] };
+      ws.getCell(r, col('دقة الكمية')).dataValidation = { type: 'list', allowBlank: true, formulae: ['"0,1,2,3"'] };
+      for (const n of ['سعر شراء وحدة المنتج', 'نسبة الربح %', 'سعر بيع وحدة المنتج', 'معامل وحدة 2', 'سعر شراء وحدة 2', 'سعر بيع وحدة 2', 'الضريبة %', 'حد إعادة الطلب']) {
+        ws.getCell(r, col(n)).dataValidation = { type: 'decimal', operator: 'greaterThanOrEqual', allowBlank: true, formulae: [0], showErrorMessage: true, error: 'أدخل رقمًا موجبًا' };
+      }
+      for (const n of ['الكود', 'باركود وحدة المنتج', 'باركود وحدة 2']) ws.getCell(r, col(n)).numFmt = '@';
+    }
+    // ورقة مثال (لا تُستورد)
+    const ex = wb.addWorksheet('مثال', { views: [{ rightToLeft: true }] });
+    ex.addRow(tpl.columns).font = { bold: true };
+    const rows = [
+      ['', 'سكر الأسرة 1 كجم', 'مواد تموينية', 'حبة', 0, '6281000000017', 4.5, 20, '', 'كرتون', 10, '6281000000024', 42, '', 'كرتون', 15, 20, 'لا'],
+      ['', 'أرز بسمتي 5 كجم', 'مواد تموينية', 'كيس', 0, '6281000000031', 30, '', 39, '', '', '', '', '', '', 15, 10, 'لا'],
+      ['', 'حليب طويل الأجل 1 لتر', 'ألبان', 'حبة', 0, '6281000000048', 4, 25, '', 'كرتون', 12, '6281000000055', 45, 60, 'كرتون', 15, 24, 'نعم'],
+      ['', 'جبنة بيضاء', 'ألبان', 'كجم', 3, '', 22, 30, '', '', '', '', '', '', '', 15, 5, 'نعم'],
+    ];
+    rows.forEach((r) => ex.addRow(r));
+    ex.columns.forEach((c, i) => { c.width = i === 1 ? 28 : Math.max(14, String(tpl.columns[i]).length + 4); });
+    // التعليمات
+    const help = wb.addWorksheet('التعليمات', { views: [{ rightToLeft: true }] });
+    help.getColumn(1).width = 26; help.getColumn(2).width = 95;
+    help.addRow(['طريقة الاستيراد', 'املأ الورقة الأولى «الأصناف» من الصف الثاني (صف لكل صنف)، ثم من النظام: المراجعة ← الاستيراد ← الأصناف ← اختر الملف ← معاينة ← اعتماد.']).font = { bold: true };
+    help.addRow(['', 'لا تغيّر أسماء الأعمدة. الأعمدة الحمراء إلزامية والباقي اختياري. ورقة «مثال» للتوضيح فقط ولا تُستورد.']);
+    help.addRow([]);
+    const notes = [
+      ['الكود', 'اختياري؛ يُنشأ تلقائيًا إن تُرك فارغًا (IT00001...). يجب ألا يتكرر.'],
+      ['الاسم', 'إلزامي. اسم الصنف كما يظهر في الفواتير.'],
+      ['التصنيف', 'اختياري؛ يُنشأ التصنيف تلقائيًا إن لم يكن موجودًا.'],
+      ['وحدة المنتج', 'إلزامي. أصغر وحدة يُحسب بها المخزون: حبة، كيس، كجم، لتر...'],
+      ['دقة الكمية', '0 للأعداد الصحيحة (حبة)، و3 للوزن بالكيلو (مثل 1.250 كجم).'],
+      ['باركود وحدة المنتج', 'اختياري؛ يجب ألا يتكرر. يُكتب كنص حتى لا تحذف الأصفار.'],
+      ['سعر شراء وحدة المنتج', 'اختياري؛ يُقترح تلقائيًا في فاتورة الشراء.'],
+      ['نسبة الربح %', 'اختياري؛ إن تُرك سعر البيع فارغًا يُحسب: سعر البيع = سعر الشراء + النسبة (لكل وحدة).'],
+      ['سعر بيع وحدة المنتج', 'اختياري إن وُجد سعر شراء ونسبة ربح؛ وإن كُتب يُعتمد كما هو.'],
+      ['وحدة 2 / معامل وحدة 2', 'وحدة أكبر اختيارية مثل كرتون، والمعامل = كم وحدة منتج داخلها (مثال: 12).'],
+      ['باركود / أسعار وحدة 2', 'اختيارية بنفس قواعد وحدة المنتج.'],
+      ['وحدة الإدخال', 'الوحدة التي يُشترى بها الصنف: اكتب اسم الوحدة 2 (مثل كرتون) أو اتركها فارغة لتكون وحدة المنتج.'],
+      ['الضريبة %', 'اختياري؛ فارغ = النسبة العامة في الإعدادات (15%). اكتب 0 للصنف المعفى.'],
+      ['حد إعادة الطلب', 'اختياري؛ عند نزول الرصيد عنه يظهر تنبيه «أصناف ناقصة» (بوحدة المنتج).'],
+      ['تتبع الصلاحية', 'نعم = يُطلب تاريخ الانتهاء عند الشراء ويُمنع بيع المنتهي. فارغ = نعم.'],
+    ];
+    notes.forEach(([k, v]) => { const row = help.addRow([k, v]); row.getCell(1).font = { bold: true }; row.alignment = { wrapText: true, vertical: 'top' }; });
+  }
   return wb.xlsx.writeBuffer();
 }
 
