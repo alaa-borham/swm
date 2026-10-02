@@ -299,15 +299,40 @@ export function itemPicker({ onPick, warehouseId, placeholder = 'ابحث بال
   // إنشاء صنف سريع دون مغادرة الشاشة؛ يُضاف مباشرة بعد الحفظ
   const quickItem = (name) => {
     const isCode = /^\d{6,}$/.test(name);
-    const f = { name: inp({ value: isCode ? '' : name }), base_unit: inp({ value: 'حبة' }), sell_price: inp({ type: 'number', placeholder: '0' }),
+    const f = { name: inp({ value: isCode ? '' : name }), base_unit: inp({ value: 'حبة' }), cost: inp({ type: 'number', placeholder: 'اختياري' }),
       barcode: inp({ value: isCode ? name : '', placeholder: 'اختياري' }), track_expiry: h('input', { type: 'checkbox', checked: true }) };
-    modal('صنف جديد', h('div', null, h('div', { class: 'grid' }, field('اسم الصنف', f.name, { req: true }), field('وحدة الأساس', f.base_unit, { req: true }),
-      field('سعر البيع', f.sell_price), field('الباركود', f.barcode)), h('label', { class: 'check' }, f.track_expiry, 'له تاريخ انتهاء'),
-    h('p', { class: 'small muted' }, 'باقي البيانات (التصنيف، الوحدات الأخرى، الحد الأدنى للسعر...) يمكن إكمالها لاحقًا من صفحة الأصناف.')),
+    // وحدات إضافية: الاسم، وكم وحدة منتج تحتوي، وسعرها وباركودها
+    const extra = [];
+    const unitsBox = h('div');
+    const unitName = () => f.base_unit.value.trim() || 'وحدة المنتج';
+    const drawUnits = () => {
+      clear(unitsBox);
+      extra.forEach((u, i) => unitsBox.appendChild(h('div', { class: 'grid', style: { alignItems: 'end', marginTop: '8px', paddingTop: '8px', borderTop: '1px dashed var(--line)' } },
+        field('اسم الوحدة', u.name, { req: true }), field(`تحتوي كم ${unitName()}`, u.factor, { req: true }), field('سعر شرائها', u.cost), field('باركودها', u.barcode),
+        h('button', { type: 'button', class: 'btn small danger', onclick: () => { extra.splice(i, 1); drawUnits(); } }, 'حذف الوحدة'))));
+    };
+    f.base_unit.addEventListener('input', () => extra.forEach((u, i) => { const l = unitsBox.children[i]?.querySelectorAll('label')[1]; if (l) l.textContent = `تحتوي كم ${unitName()}`; }));
+    const addUnit = () => {
+      extra.push({ name: inp({ placeholder: 'مثال: كرتون' }), factor: inp({ type: 'number', placeholder: 'مثال: 12' }), cost: inp({ type: 'number', placeholder: 'اختياري' }), barcode: inp({ placeholder: 'اختياري' }) });
+      drawUnits(); extra[extra.length - 1].name.focus();
+    };
+    modal('صنف جديد', h('div', null, h('div', { class: 'grid' }, field('اسم الصنف', f.name, { req: true }), field('وحدة المنتج', f.base_unit, { req: true }),
+      field('سعر الشراء', f.cost), field('الباركود', f.barcode)), h('label', { class: 'check' }, f.track_expiry, 'له تاريخ انتهاء'),
+    h('h4', { style: { margin: '14px 0 4px' } }, 'وحدات أخرى'),
+    h('p', { class: 'small muted', style: { margin: 0 } }, 'مثال: وحدة المنتج "حبة"، ووحدة أخرى "كرتون" تحتوي 12 حبة. المخزون يُحسب دائمًا بوحدة المنتج.'),
+    unitsBox, h('button', { type: 'button', class: 'btn small', style: { marginTop: '8px' }, onclick: addUnit }, '+ إضافة وحدة أخرى'),
+    h('p', { class: 'small muted' }, 'سعر الشراء يُكتب في الفاتورة تلقائيًا. سعر البيع وباقي البيانات (التصنيف، الحد الأدنى للسعر...) تُضبط من صفحة الأصناف.')),
     [{ label: 'حفظ وإضافة', class: 'primary', onClick: async () => {
-      const it = await run(() => api('POST', '/items', { name: f.name.value, base_unit: f.base_unit.value, sell_price: f.sell_price.value || 0, barcode: f.barcode.value || undefined, track_expiry: f.track_expiry.checked ? 1 : 0 }), 'أُضيف الصنف');
+      const units = extra.map((u) => ({ name: u.name.value, factor: u.factor.value, barcode: u.barcode.value || undefined }));
+      const it = await run(() => api('POST', '/items', { name: f.name.value, base_unit: f.base_unit.value, sell_price: 0, barcode: f.barcode.value || undefined, track_expiry: f.track_expiry.checked ? 1 : 0, units }), 'أُضيف الصنف');
       if (!it) return false;
-      it.selected_unit_id = it.units.find((u) => u.is_base).id;
+      // سعر الشراء المُدخل لكل وحدة يُمرَّر للسطر؛ وتُختار أول وحدة أخرى لها سعر وإلا وحدة المنتج
+      const base = it.units.find((u) => u.is_base);
+      it.quick_cost = {};
+      if (f.cost.value) it.quick_cost[base.id] = f.cost.value;
+      let chosen = null;
+      extra.forEach((u) => { const unit = it.units.find((x) => !x.is_base && x.name === u.name.value.trim()); if (unit && u.cost.value) { it.quick_cost[unit.id] = u.cost.value; chosen = chosen || unit; } });
+      it.selected_unit_id = (f.cost.value || !chosen ? base : chosen).id;
       results = [it]; pick(0);
       return true;
     } }]);

@@ -21,7 +21,7 @@ function itemFields(ctx, input, existing) {
   const name = s(input.name ?? existing?.name);
   if (!name) fail('VALIDATION', 'اسم الصنف مطلوب');
   const baseUnit = s(input.base_unit ?? existing?.base_unit);
-  if (!baseUnit) fail('VALIDATION', 'وحدة الأساس مطلوبة');
+  if (!baseUnit) fail('VALIDATION', 'وحدة المنتج مطلوبة');
   const qd = Number(input.qty_decimals ?? existing?.qty_decimals ?? 0);
   if (![0, 1, 2, 3].includes(qd)) fail('VALIDATION', 'دقة الكمية بين 0 و3');
   return {
@@ -98,7 +98,7 @@ function updateItem(ctx, id, input) {
     if (!ex) notFound('الصنف');
     const f = itemFields(ctx, input, ex);
     if ((f.base_unit !== ex.base_unit || f.qty_decimals !== ex.qty_decimals) && hasMovements(ctx, id)) {
-      fail('ITEM_IN_USE', 'لا يمكن تغيير وحدة الأساس أو دقة الكمية لصنف له حركات؛ أنشئ صنفًا جديدًا');
+      fail('ITEM_IN_USE', 'لا يمكن تغيير وحدة المنتج أو دقة الكمية لصنف له حركات؛ أنشئ صنفًا جديدًا');
     }
     if (input.code && s(input.code) !== ex.code) {
       uniqueGuard(() => ctx.db.prepare('UPDATE items SET code=? WHERE id=?').run(s(input.code), id), 'كود الصنف مستخدم مسبقًا');

@@ -39,7 +39,7 @@ export async function form({ el, params, q }) {
   const summary = h('div', { class: 'total-box' });
   const picker = itemPicker({ placeholder: 'اضغط هنا لاختيار صنف، أو اكتب الاسم أو الباركود', allowCreate: true, onPick: (it) => {
     const pu = it.units.find((u) => u.id === it.selected_unit_id && u.for_purchase) || it.units.find((u) => u.for_purchase) || it.units[0];
-    cart.push({ item: it, unit_id: pu.id, qty: 1, price: '', discount_amount: '', tax: it.tax_rate_bp ?? '', batch_no: '', prod_date: '', expiry_date: '' });
+    cart.push({ item: it, unit_id: pu.id, qty: 1, price: it.quick_cost?.[pu.id] ?? '', discount_amount: '', tax: it.tax_rate_bp ?? '', batch_no: '', prod_date: '', expiry_date: '' });
     draw();
   } });
 
@@ -178,7 +178,7 @@ export async function orderForm({ el, params }) {
   const total = h('b');
   const picker = itemPicker({ placeholder: 'اضغط هنا لاختيار صنف، أو اكتب الاسم', allowCreate: true, onPick: (it) => {
     const pu = it.units.find((u) => u.id === it.selected_unit_id && u.for_purchase) || it.units.find((u) => u.for_purchase) || it.units[0];
-    cart.push({ item: it, unit_id: pu.id, qty: 1, price: '', tax: it.tax_rate_bp ?? '' });
+    cart.push({ item: it, unit_id: pu.id, qty: 1, price: it.quick_cost?.[pu.id] ?? '', tax: it.tax_rate_bp ?? '' });
     draw();
   } });
   const sum = () => { total.replaceChildren(M(cart.reduce((a, l) => a + (num(l.qty) || 0) * (num(l.price) || 0), 0))); };

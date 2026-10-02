@@ -11,7 +11,7 @@ export async function items({ el, q, isCurrent }) {
     const r = await get('/items', { q: qIn.value, active: active.value, limit: 500 });
     if (!isCurrent()) return;
     body.replaceChildren(table({ columns: [
-      { key: 'code', label: 'الكود' }, { key: 'name', label: 'الاسم' }, { key: 'category_name', label: 'التصنيف' }, { key: 'base_unit', label: 'وحدة الأساس' },
+      { key: 'code', label: 'الكود' }, { key: 'name', label: 'الاسم' }, { key: 'category_name', label: 'التصنيف' }, { key: 'base_unit', label: 'وحدة المنتج' },
       { key: 'units', label: 'الوحدات والأسعار', render: (it) => it.units.map((u) => h('div', { class: 'small' }, `${u.name}${u.is_base ? '' : ' = ' + u.factor + ' ' + it.base_unit}: `, M(u.sell_price), u.barcode ? h('span', { class: 'muted' }, ' · ' + u.barcode) : '')) },
       { key: 'tax_rate_bp', label: 'ضريبة %', render: (it) => (it.tax_rate_bp == null ? 'الافتراضية' : it.tax_rate_bp) },
       { key: 'active', label: 'الحالة', render: (it) => (it.active ? h('span', { class: 'badge ok' }, 'نشط') : h('span', { class: 'badge bad' }, 'موقوف')) },
@@ -34,7 +34,7 @@ export async function itemForm({ el, params }) {
     qty_decimals: sel([{ value: 0, label: 'عدد صحيح (حبة)' }, { value: 1, label: 'منزلة عشرية' }, { value: 2, label: 'منزلتان' }, { value: 3, label: '3 منازل (وزن)' }], it?.qty_decimals ?? 0),
     track_expiry: h('input', { type: 'checkbox', checked: it ? !!it.track_expiry : true }),
     reorder_level: inp({ type: 'number', value: it?.reorder_level ?? '' }), expiry_alert_days: inp({ type: 'number', value: it?.expiry_alert_days ?? '' }),
-    min_price: inp({ type: 'number', value: it?.min_price ?? '', placeholder: 'لوحدة الأساس قبل الضريبة' }), max_discount_pct: inp({ type: 'number', value: it?.max_discount_bp ?? '' }),
+    min_price: inp({ type: 'number', value: it?.min_price ?? '', placeholder: 'لوحدة المنتج قبل الضريبة' }), max_discount_pct: inp({ type: 'number', value: it?.max_discount_bp ?? '' }),
     tax_rate_pct: inp({ type: 'number', value: it?.tax_rate_bp ?? '', placeholder: 'فارغ = الإعداد العام' }),
     active: h('input', { type: 'checkbox', checked: it ? !!it.active : true }),
   };
@@ -45,7 +45,7 @@ export async function itemForm({ el, params }) {
     units.forEach((u, i) => {
       const s = (k, cb) => (e) => { u[k] = cb ? e.target.checked : e.target.value; };
       ubody.append(h('tr', null,
-        h('td', null, u.is_base ? h('b', null, f.base_unit.value || 'وحدة الأساس') : inp({ value: u.name, oninput: s('name'), placeholder: 'كرتون' })),
+        h('td', null, u.is_base ? h('b', null, f.base_unit.value || 'وحدة المنتج') : inp({ value: u.name, oninput: s('name'), placeholder: 'كرتون' })),
         h('td', null, u.is_base ? '1' : inp({ type: 'number', value: u.factor, oninput: s('factor'), style: { width: '90px' } })),
         h('td', null, inp({ value: u.barcode || '', oninput: s('barcode') })),
         h('td', null, inp({ type: 'number', value: u.sell_price, oninput: s('sell_price'), style: { width: '100px' } })),
@@ -76,14 +76,14 @@ export async function itemForm({ el, params }) {
   el.append(
     h('div', { class: 'card' }, h('div', { class: 'grid' },
       field('الاسم', f.name, { req: true }), field('الكود', f.code), field('التصنيف', f.category_id), field('العلامة', f.brand), field('الوصف', f.description),
-      field('وحدة الأساس (لحساب المخزون)', f.base_unit, { req: true }), field('دقة الكمية', f.qty_decimals), field('حد إعادة الطلب (بوحدة الأساس)', f.reorder_level),
+      field('وحدة المنتج (لحساب المخزون)', f.base_unit, { req: true }), field('دقة الكمية', f.qty_decimals), field('حد إعادة الطلب (بوحدة المنتج)', f.reorder_level),
       field('تنبيه الصلاحية (أيام)', f.expiry_alert_days), field('ضريبة الصنف %', f.tax_rate_pct),
       can('cost.view') ? field('أدنى سعر بيع', f.min_price) : null, field('حد الخصم %', f.max_discount_pct)),
     h('div', { class: 'row', style: { marginTop: '10px' } }, h('label', { class: 'check' }, f.track_expiry, 'إلزام تتبع الدفعات وتاريخ الانتهاء'), h('label', { class: 'check' }, f.active, 'نشط'))),
     h('div', { class: 'card' }, h('h3', null, 'الوحدات والباركود والأسعار'),
       h('div', { class: 'table-wrap' }, h('table', null, h('thead', null, h('tr', null, ['الوحدة', 'المعامل (كم وحدة أساس)', 'الباركود', 'سعر البيع', 'للبيع', 'للشراء', 'نشطة', ''].map((x) => h('th', null, x)))), ubody)),
       h('button', { class: 'btn small', style: { marginTop: '8px' }, onclick: () => { units.push({ name: '', factor: '', barcode: '', sell_price: '', for_sale: 1, for_purchase: 1, active: 1 }); drawUnits(); } }, '+ وحدة'),
-      h('p', { class: 'small muted' }, 'مثال: وحدة الأساس "حبة"، والكرتون معامله 12. تغيير الاسم أو السعر أو المعامل لا يغيّر المستندات التاريخية.')),
+      h('p', { class: 'small muted' }, 'مثال: وحدة المنتج "حبة"، والكرتون معامله 12. تغيير الاسم أو السعر أو المعامل لا يغيّر المستندات التاريخية.')),
     h('button', { class: 'btn ok', onclick: save }, 'حفظ'));
   drawUnits();
 }

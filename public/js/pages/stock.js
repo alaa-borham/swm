@@ -180,7 +180,7 @@ export async function openingStock({ el }) {
   const date = inp({ type: 'date', value: today() });
   const cart = [];
   const tbody = h('tbody');
-  const picker = itemPicker({ allowCreate: true, placeholder: 'اضغط هنا لاختيار صنف، أو اكتب الاسم أو الباركود', onPick: (it) => { cart.push({ item: it, unit_id: it.units.find((u) => u.is_base).id, qty: '', unit_cost: '', batch_no: '', expiry_date: '' }); draw(); } });
+  const picker = itemPicker({ allowCreate: true, placeholder: 'اضغط هنا لاختيار صنف، أو اكتب الاسم أو الباركود', onPick: (it) => { const bu = it.units.find((u) => u.is_base).id; cart.push({ item: it, unit_id: bu, qty: '', unit_cost: it.quick_cost?.[bu] ?? '', batch_no: '', expiry_date: '' }); draw(); } });
   const draw = () => {
     clear(tbody);
     cart.forEach((l, i) => {

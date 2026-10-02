@@ -203,7 +203,7 @@ function purchasesReport(ctx, opts = {}) {
       { key: 'returns', label: 'المرتجعات', type: 'money' }, { key: 'net', label: 'الصافي', type: 'money' }, { key: 'payable', label: 'المستحق الحالي', type: 'money' }];
   } else {
     out = rows.map((r) => ({ name: r.name, invoices: r.invoices, qty: q(r.qty), cost: ctx.has('cost.view') ? m(r.cost) : null }));
-    cols = [{ key: 'name', label: 'الصنف' }, { key: 'invoices', label: 'الفواتير', type: 'int' }, { key: 'qty', label: 'الكمية (وحدة الأساس)', type: 'qty' }];
+    cols = [{ key: 'name', label: 'الصنف' }, { key: 'invoices', label: 'الفواتير', type: 'int' }, { key: 'qty', label: 'الكمية (وحدة المنتج)', type: 'qty' }];
     if (ctx.has('cost.view')) cols.push({ key: 'cost', label: 'التكلفة', type: 'money' });
   }
   return { title: bySupplier ? 'المشتريات حسب المورد' : 'المشتريات حسب الصنف', ...p, columns: cols, rows: out, totals: totalsOf(out, cols) };
