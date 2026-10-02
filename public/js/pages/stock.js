@@ -99,10 +99,25 @@ export async function transfer({ el, q }) {
     const n = [...picked.values()].filter((p) => Number(p.qty) > 0).length;
     countBox.textContent = n ? `${n} صنف محدد للتحويل` : '';
   };
+  const hint = h('div');
+  // المستودعات التي فيها رصيد صالح (للاختيار الافتراضي وللتنبيه عند اختيار مستودع فارغ)
+  const stocked = new Map();
+  try {
+    const all = await get('/reports/stock', { by: 'batch' });
+    for (const b of all.rows || []) if (b.state === 'صالح' && b.qty > 0) stocked.set(b.warehouse, (stocked.get(b.warehouse) || new Set()).add(b.code));
+  } catch { /* تجاهل */ }
+  const optByName = (name) => [...from.options].find((o) => o.textContent === name);
+  if (!q.from && !stocked.has(from.selectedOptions[0]?.textContent)) {
+    const first = [...stocked.keys()].map(optByName).find((o) => o && o.value !== to.value);
+    if (first) from.value = first.value;
+  }
   const loadRows = async () => {
     picked.clear();
     const r = await get('/reports/stock', { warehouse_id: from.value });
     rows = (r.rows || []).filter((x) => x.item_id && x.sellable > 0);
+    const others = [...stocked.entries()].filter(([name]) => name !== from.selectedOptions[0]?.textContent && optByName(name));
+    hint.replaceChildren(!rows.length && others.length ? h('div', { class: 'note warn' }, 'هذا المستودع لا يحتوي رصيدًا صالحًا. الرصيد موجود في: ',
+      others.map(([name, codes]) => h('button', { type: 'button', class: 'btn small', style: { margin: '0 4px' }, onclick: () => { from.value = optByName(name).value; loadRows(); } }, `${name} (${codes.size} صنف)`))) : '');
     draw();
   };
   from.addEventListener('change', loadRows);
@@ -111,6 +126,7 @@ export async function transfer({ el, q }) {
   el.append(h('div', { class: 'note' }, 'اختر المستودع المصدر فتظهر أصنافه المتاحة. حدد الأصناف واكتب الكمية (أو «الكل»). يُصرف بالأقرب انتهاءً ويدخل الوجهة بنفس الدفعات والتكلفة، ولا يُعد بيعًا.'),
     h('div', { class: 'card' }, h('div', { class: 'grid' }, field('من مستودع', from, { req: true }), field('إلى مستودع', to, { req: true }), field('ملاحظات', notes)),
       h('label', { class: 'check', style: { marginTop: '10px' } }, transit, 'نقل على مراحل: تبقى البضاعة "بالطريق" غير متاحة في الطرفين حتى تستلمها الوجهة')),
+    hint,
     h('div', { class: 'card' }, h('div', { class: 'row', style: { alignItems: 'center' } }, h('div', { style: { flex: 1 } }, filterIn), countBox),
       h('div', { class: 'table-wrap', style: { marginTop: '10px' } }, h('table', null, h('thead', null, h('tr', null, ['', 'الصنف', 'المتاح', 'الوحدة', 'الكمية المحوّلة', ''].map((x) => h('th', null, x)))), tbody))),
     h('button', { class: 'btn ok', onclick: async () => {
