@@ -236,12 +236,12 @@ function linesTable(d) {
       { key: 'received_qty', label: 'المستلم', render: (l) => Q((l.received_qty || 0) / (l.factor || 1) / 1000) }, { key: 'price', label: 'السعر', type: 'money' }, { key: 'total', label: 'الإجمالي', type: 'money' }];
   } else if (['sale', 'purchase', 'sale_return', 'purchase_return'].includes(t)) {
     cols = [...LINE_COLS.default];
-    if (t === 'purchase') cols.splice(2, 0, { key: 'batch_no', label: 'الدفعة' }, { key: 'expiry_date', label: 'الانتهاء', render: (l) => (l.needs_expiry ? h('span', { class: 'badge bad' }, 'مطلوب') : h('span', { style: { whiteSpace: 'nowrap' } }, l.expiry_date || '')) });
+    if (t === 'purchase') cols.splice(2, 0, { key: 'batch_no', label: 'رقم التشغيلة' }, { key: 'expiry_date', label: 'الانتهاء', render: (l) => (l.needs_expiry ? h('span', { class: 'badge bad' }, 'مطلوب') : h('span', { style: { whiteSpace: 'nowrap' } }, l.expiry_date || '')) });
     if (t === 'purchase' && can('cost.view')) cols.push({ key: 'extra_cost', label: 'نصيبه من التكاليف التابعة', type: 'money' }, { key: 'cost', label: 'التكلفة النهائية', type: 'money' }, { key: 'unit_cost', label: 'تكلفة الوحدة', render: (l) => (l.qty ? M(l.cost / l.qty) : '') });
     if (t === 'sale_return') cols.push({ key: 'condition', label: 'الحالة', render: (l) => ({ ok: 'صالح', pending: 'قيد الفحص', isolated: 'معزول', damaged: 'تالف' }[l.condition] || '') });
     if (t === 'sale' && can('cost.view')) cols.push({ key: 'cost', label: 'التكلفة', type: 'money' });
   } else if (t === 'stock_count') {
-    cols = [{ key: 'item_name', label: 'الصنف' }, { key: 'batch_no', label: 'الدفعة' }, { key: 'expiry_date', label: 'الانتهاء' }, { key: 'system_qty', label: 'المرجعي', type: 'qty' },
+    cols = [{ key: 'item_name', label: 'الصنف' }, { key: 'batch_no', label: 'رقم التشغيلة' }, { key: 'expiry_date', label: 'الانتهاء' }, { key: 'system_qty', label: 'المرجعي', type: 'qty' },
       { key: 'counted_qty', label: 'المعدود', type: 'qty' }, { key: 'base_qty', label: 'الفرق', type: 'qty' }];
     if (can('cost.view')) cols.push({ key: 'amount', label: 'قيمة التسوية', type: 'money' });
   } else if (t === 'journal') {
@@ -250,7 +250,7 @@ function linesTable(d) {
   } else if (['expense'].includes(t)) {
     cols = [{ key: 'description', label: 'البيان' }, { key: 'amount', label: 'المبلغ', type: 'money' }, { key: 'tax', label: 'الضريبة', type: 'money' }, { key: 'total', label: 'الإجمالي', type: 'money' }];
   } else {
-    cols = [{ key: 'item_name', label: 'الصنف' }, { key: 'unit_name', label: 'الوحدة' }, { key: 'qty', label: 'الكمية', type: 'qty' }, { key: 'batch_no', label: 'الدفعة' }, { key: 'expiry_date', label: 'الانتهاء' }];
+    cols = [{ key: 'item_name', label: 'الصنف' }, { key: 'unit_name', label: 'الوحدة' }, { key: 'qty', label: 'الكمية', type: 'qty' }, { key: 'batch_no', label: 'رقم التشغيلة' }, { key: 'expiry_date', label: 'الانتهاء' }];
     if (can('cost.view')) cols.push({ key: 'cost', label: 'التكلفة', type: 'money' });
     if (t === 'damage' || t === 'batch_status') cols.push({ key: 'description', label: 'السبب' });
   }

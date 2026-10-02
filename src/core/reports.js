@@ -296,10 +296,10 @@ function stockReport(ctx, opts = {}) {
         if (opts.state && opts.state !== st) return null;
         return o;
       }).filter(Boolean);
-    const cols = [{ key: 'code', label: 'الكود' }, { key: 'name', label: 'الصنف' }, { key: 'warehouse', label: 'المستودع' }, { key: 'batch_no', label: 'الدفعة' },
+    const cols = [{ key: 'code', label: 'الكود' }, { key: 'name', label: 'الصنف' }, { key: 'warehouse', label: 'المستودع' }, { key: 'batch_no', label: 'رقم التشغيلة' },
       { key: 'expiry_date', label: 'الانتهاء' }, { key: 'state', label: 'الحالة' }, { key: 'qty', label: 'الكمية', type: 'qty' }, { key: 'base_unit', label: 'الوحدة' }];
     if (showCost) cols.push({ key: 'unit_cost', label: 'تكلفة الوحدة', type: 'money' }, { key: 'cost', label: 'القيمة', type: 'money' });
-    return { title: 'رصيد المخزون حسب الدفعة', columns: cols, rows, totals: totalsOf(rows, cols) };
+    return { title: 'رصيد المخزون حسب التشغيلة', columns: cols, rows, totals: totalsOf(rows, cols) };
   }
   const rows = ctx.db.prepare(`SELECT i.id item_id, i.code, i.name, i.base_unit, i.reorder_level,
       SUM(CASE WHEN b.status='ok' AND (b.expiry_date IS NULL OR b.expiry_date>=?) THEN b.qty ELSE 0 END) sellable,
@@ -341,7 +341,7 @@ function itemCard(ctx, { item_id, warehouse_id, from, to }) {
     };
   });
   const cols = [{ key: 'date', label: 'التاريخ' }, { key: 'number', label: 'المستند', link: 'doc_id' }, { key: 'type', label: 'النوع' }, { key: 'warehouse', label: 'المستودع' },
-    { key: 'batch_no', label: 'الدفعة' }, { key: 'in', label: 'وارد', type: 'qty' }, { key: 'out', label: 'صادر', type: 'qty' }, { key: 'balance', label: 'الرصيد', type: 'qty' }];
+    { key: 'batch_no', label: 'رقم التشغيلة' }, { key: 'in', label: 'وارد', type: 'qty' }, { key: 'out', label: 'صادر', type: 'qty' }, { key: 'balance', label: 'الرصيد', type: 'qty' }];
   if (showCost) cols.push({ key: 'cost', label: 'قيمة الحركة', type: 'money' }, { key: 'value', label: 'قيمة الرصيد', type: 'money' });
   return { title: `بطاقة صنف: ${item.name} (${item.base_unit})`, ...p, opening_qty: q(opening.q), columns: cols, rows };
 }

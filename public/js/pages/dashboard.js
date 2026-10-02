@@ -34,7 +34,7 @@ function view(d) {
   const alerts = h('div', { class: 'kpis' },
     kpi('أصناف ناقصة', String(a.low_stock), '#/alerts', a.low_stock ? 'bad' : ''),
     kpi('قريبة الانتهاء', String(a.near_expiry), '#/alerts', a.near_expiry ? 'bad' : ''),
-    kpi('دفعات منتهية', String(a.expired), '#/alerts', a.expired ? 'bad' : ''),
+    kpi('تشغيلات منتهية', String(a.expired), '#/alerts', a.expired ? 'bad' : ''),
     kpi('معزول/قيد الفحص', String(a.isolated), '#/alerts'),
     kpi('فواتير متأخرة', String(a.overdue_customers), '#/reports?tab=aging', a.overdue_customers ? 'bad' : ''),
     kpi('تحويلات بالطريق', String(a.in_transit), '#/alerts', a.in_transit ? 'bad' : ''),

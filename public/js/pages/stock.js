@@ -5,7 +5,7 @@ export async function balances({ el, q, isCurrent }) {
   pageHead('رصيد المخزون', can('reports.export') ? h('button', { class: 'btn', onclick: () => download(`/reports/stock/export?format=xlsx&by=${by.value}&warehouse_id=${wh.value}`, 'stock.xlsx') }, 'تصدير Excel') : null,
     h('button', { class: 'btn', onclick: () => window.print() }, 'طباعة'));
   const wh = await warehouseSelect(q.warehouse_id || '', {}, { all: true });
-  const by = sel([{ value: 'item', label: 'حسب الصنف' }, { value: 'batch', label: 'حسب الدفعة' }], q.by || 'item');
+  const by = sel([{ value: 'item', label: 'حسب الصنف' }, { value: 'batch', label: 'حسب التشغيلة' }], q.by || 'item');
   const state = sel([{ value: '', label: 'كل الحالات' }, { value: 'صالح', label: 'صالح' }, { value: 'منتهي', label: 'منتهي' }, { value: 'معزول', label: 'معزول' }, { value: 'قيد الفحص', label: 'قيد الفحص' }], '');
   const body = h('div');
   const load = async () => {
@@ -26,7 +26,7 @@ async function batchStatus(row, done) {
   const to = sel([{ value: 'ok', label: 'صالح للبيع' }, { value: 'isolated', label: 'معزول' }, { value: 'damaged', label: 'تالف (خسارة)' }], 'isolated');
   const qn = inp({ type: 'number', value: row.qty });
   const reason = h('textarea', { placeholder: 'السبب (مطلوب)' });
-  const m = modal(`تغيير حالة الدفعة ${row.batch_no || row.batch_id} — ${row.name}`, h('div', { class: 'grid' }, field('الحالة الجديدة', to), field('الكمية', qn), field('السبب', reason)),
+  const m = modal(`تغيير حالة التشغيلة ${row.batch_no || row.batch_id} — ${row.name}`, h('div', { class: 'grid' }, field('الحالة الجديدة', to), field('الكمية', qn), field('السبب', reason)),
     [{ label: 'تنفيذ', class: 'primary', onClick: async () => !!(await run(() => api('POST', `/batches/${row.batch_id}/status`, { to_status: to.value, qty: num(qn.value), reason: reason.value }), 'تم')) }]);
   if (await m.done) done();
 }
@@ -37,11 +37,11 @@ export async function alerts({ el }) {
   const sec = (title, cols, rows, kind = '') => h('div', { class: 'card' }, h('h3', null, title, ' ', h('span', { class: 'badge ' + kind }, rows.length)), table({ columns: cols, rows, empty: 'لا يوجد' }));
   el.append(
     sec('أصناف وصلت حد إعادة الطلب', [{ key: 'code', label: 'الكود' }, { key: 'name', label: 'الصنف' }, { key: 'sellable', label: 'الصالح', type: 'qty' }, { key: 'reorder_level', label: 'حد الطلب', type: 'qty' }, { key: 'base_unit', label: 'الوحدة' }], a.low_stock, 'bad'),
-    sec('قريبة الانتهاء', [{ key: 'name', label: 'الصنف' }, { key: 'warehouse', label: 'المستودع' }, { key: 'batch_no', label: 'الدفعة' }, { key: 'expiry_date', label: 'الانتهاء' }, { key: 'days_left', label: 'أيام متبقية' }, { key: 'qty', label: 'الكمية', type: 'qty' }], a.near_expiry, 'warn'),
-    sec('منتهية (لا تُباع)', [{ key: 'name', label: 'الصنف' }, { key: 'warehouse', label: 'المستودع' }, { key: 'batch_no', label: 'الدفعة' }, { key: 'expiry_date', label: 'الانتهاء' }, { key: 'qty', label: 'الكمية', type: 'qty' }, can('cost.view') ? { key: 'cost', label: 'القيمة', type: 'money' } : null].filter(Boolean), a.expired, 'bad'),
+    sec('قريبة الانتهاء', [{ key: 'name', label: 'الصنف' }, { key: 'warehouse', label: 'المستودع' }, { key: 'batch_no', label: 'رقم التشغيلة' }, { key: 'expiry_date', label: 'الانتهاء' }, { key: 'days_left', label: 'أيام متبقية' }, { key: 'qty', label: 'الكمية', type: 'qty' }], a.near_expiry, 'warn'),
+    sec('منتهية (لا تُباع)', [{ key: 'name', label: 'الصنف' }, { key: 'warehouse', label: 'المستودع' }, { key: 'batch_no', label: 'رقم التشغيلة' }, { key: 'expiry_date', label: 'الانتهاء' }, { key: 'qty', label: 'الكمية', type: 'qty' }, can('cost.view') ? { key: 'cost', label: 'القيمة', type: 'money' } : null].filter(Boolean), a.expired, 'bad'),
     sec('تحويلات بالطريق (بانتظار الاستلام)', [{ key: 'number', label: 'التحويل', render: (r) => h('a', { href: '#/doc/' + r.id }, r.number) }, { key: 'date', label: 'التاريخ' },
       { key: 'from_name', label: 'من' }, { key: 'to_name', label: 'إلى' }, can('cost.view') ? { key: 'cost', label: 'القيمة', type: 'money' } : null].filter(Boolean), a.in_transit, 'warn'),
-    sec('معزولة أو قيد الفحص', [{ key: 'name', label: 'الصنف' }, { key: 'warehouse', label: 'المستودع' }, { key: 'batch_no', label: 'الدفعة' }, { key: 'status', label: 'الحالة', render: (r) => (r.status === 'pending' ? 'قيد الفحص' : 'معزول') }, { key: 'qty', label: 'الكمية', type: 'qty' }], a.isolated));
+    sec('معزولة أو قيد الفحص', [{ key: 'name', label: 'الصنف' }, { key: 'warehouse', label: 'المستودع' }, { key: 'batch_no', label: 'رقم التشغيلة' }, { key: 'status', label: 'الحالة', render: (r) => (r.status === 'pending' ? 'قيد الفحص' : 'معزول') }, { key: 'qty', label: 'الكمية', type: 'qty' }], a.isolated));
 }
 
 // ===================== التحويل =====================
@@ -109,7 +109,7 @@ export async function count({ el, params }) {
     inputs.set(l.id, i);
     return { ...l, input: i };
   });
-  const cols = [{ key: 'item_name', label: 'الصنف' }, { key: 'batch_no', label: 'الدفعة' }, { key: 'expiry_date', label: 'الانتهاء' }, { key: 'unit_name', label: 'الوحدة' },
+  const cols = [{ key: 'item_name', label: 'الصنف' }, { key: 'batch_no', label: 'رقم التشغيلة' }, { key: 'expiry_date', label: 'الانتهاء' }, { key: 'unit_name', label: 'الوحدة' },
     { key: 'system_qty', label: 'الرصيد المرجعي', type: 'qty' }, { key: 'c', label: 'المعدود', render: (r) => r.input }];
   if (d.status === 'approved') cols.push({ key: 'base_qty', label: 'الفرق', type: 'qty' }, can('cost.view') ? { key: 'amount', label: 'قيمة التسوية', type: 'money' } : null);
   const save = async () => {
@@ -139,7 +139,7 @@ export async function damage({ el }) {
   const load = async () => {
     const r = await get('/reports/stock', { by: 'batch', warehouse_id: wh.value });
     lines.clear();
-    body.replaceChildren(table({ columns: [{ key: 'name', label: 'الصنف' }, { key: 'batch_no', label: 'الدفعة' }, { key: 'expiry_date', label: 'الانتهاء' }, { key: 'state', label: 'الحالة' },
+    body.replaceChildren(table({ columns: [{ key: 'name', label: 'الصنف' }, { key: 'batch_no', label: 'رقم التشغيلة' }, { key: 'expiry_date', label: 'الانتهاء' }, { key: 'state', label: 'الحالة' },
       { key: 'qty', label: 'الرصيد', type: 'qty' }, { key: 'base_unit', label: 'الوحدة' }, { key: 'x', label: 'كمية التالف', render: (row) => { const i = inp({ type: 'number', style: { width: '90px' } }); lines.set(row.batch_id, i); return i; } }], rows: r.rows }));
   };
   wh.addEventListener('change', load);
@@ -195,7 +195,7 @@ export async function openingStock({ el }) {
   el.append(h('div', { class: 'note' }, 'الأرصدة الافتتاحية تُدخل بمستند مؤرخ يمكن تتبعه. يمكن أيضًا الاستيراد من Excel من صفحة الاستيراد.'),
     h('div', { class: 'card' }, h('div', { class: 'row' }, field('المستودع', wh), field('التاريخ', date))),
     h('div', { class: 'card' }, picker.el, h('div', { class: 'table-wrap', style: { marginTop: '10px' } }, h('table', null,
-      h('thead', null, h('tr', null, ['الصنف', 'الوحدة', 'الكمية', 'تكلفة الوحدة', 'الدفعة', 'الانتهاء', ''].map((x) => h('th', null, x)))), tbody))),
+      h('thead', null, h('tr', null, ['الصنف', 'الوحدة', 'الكمية', 'تكلفة الوحدة', 'رقم التشغيلة', 'الانتهاء', ''].map((x) => h('th', null, x)))), tbody))),
     h('button', { class: 'btn ok', onclick: async () => {
       const d = await run(() => send('POST', '/opening-stock', { warehouse_id: Number(wh.value), date: date.value, lines: cart.map((l) => ({ item_id: l.item.id, unit_id: l.unit_id, qty: num(l.qty), unit_cost: num(l.unit_cost), batch_no: l.batch_no || null, expiry_date: l.expiry_date || null })) }), 'تم');
       if (d) location.hash = '#/doc/' + d.id;
