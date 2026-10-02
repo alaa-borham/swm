@@ -635,6 +635,9 @@ if (require.main === module) {
   const pw = users.ensureAdmin(db, process.env.ADMIN_PASSWORD);
   if (pw && process.env.ADMIN_PASSWORD) console.log('\nتم إنشاء المستخدم admin بكلمة المرور المحددة في ADMIN_PASSWORD؛ غيّرها بعد أول دخول.\n');
   else if (pw) console.log(`\nتم إنشاء المستخدم admin بكلمة مرور مؤقتة: ${pw}\nغيّرها بعد أول دخول.\n`);
+  const reset = users.resetAdmin(db, process.env.ADMIN_RESET_PASSWORD);
+  if (reset === 'reset') console.log('\nتمت إعادة تعيين كلمة مرور admin من ADMIN_RESET_PASSWORD؛ ادخل بها ثم غيّرها، واحذف المتغير من Railway.\n');
+  else if (reset === 'short') console.warn('ADMIN_RESET_PASSWORD أقصر من 8 أحرف؛ لم تُعَد كلمة المرور');
   const app = createApp({ db, dataDir });
   scheduleBackups(db, dataDir);
   const port = Number(process.env.PORT || 3000);

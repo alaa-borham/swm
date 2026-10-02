@@ -162,5 +162,29 @@ function ensureAdmin(db, password) {
   return pw;
 }
 
+/**
+ * استعادة دخول المدير عند نسيان كلمة المرور: المتغير ADMIN_RESET_PASSWORD في بيئة التشغيل.
+ * يُطبَّق مرة واحدة لكل قيمة (تُحفظ بصمتها) حتى لا تُعاد الكلمة عند كل إعادة تشغيل بعد أن يغيّرها المدير.
+ */
+function resetAdmin(db, password) {
+  const pw = String(password || '');
+  if (!pw) return null;
+  if (pw.length < 8) return 'short';
+  const mark = sha('admin-reset:' + pw);
+  if (db.prepare("SELECT value FROM settings WHERE key='admin_reset_applied'").get()?.value === mark) return 'already';
+  const now = new Date().toISOString();
+  db.transaction(() => {
+    const u = db.prepare("SELECT id FROM users WHERE username='admin'").get();
+    if (u) db.prepare("UPDATE users SET password_hash=?, must_change_password=1, active=1, roles=CASE WHEN roles LIKE '%\"admin\"%' THEN roles ELSE '[\"admin\"]' END WHERE id=?").run(hashPassword(pw), u.id);
+    else db.prepare("INSERT INTO users(username,full_name,password_hash,roles,must_change_password,created_at) VALUES('admin','مدير النظام',?,'[\"admin\"]',1,?)").run(hashPassword(pw), now);
+    const id = db.prepare("SELECT id FROM users WHERE username='admin'").get().id;
+    db.prepare('DELETE FROM sessions WHERE user_id=?').run(id);
+    db.prepare("DELETE FROM login_attempts WHERE username='admin' AND ok=0").run();
+    db.prepare("INSERT INTO settings(key,value) VALUES('admin_reset_applied',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(mark);
+    db.prepare("INSERT INTO audit_log(ts,user_id,username,action,ok) VALUES(?,?,?,?,1)").run(now, id, 'admin', 'admin.password_reset');
+  })();
+  return 'reset';
+}
+
 module.exports = {
-  syncRepBranch, hashPassword, verifyPassword, createUser, updateUser, listUsers, changeOwnPassword, login, authenticate, logout, ensureAdmin, publicUser };
+  resetAdmin, syncRepBranch, hashPassword, verifyPassword, createUser, updateUser, listUsers, changeOwnPassword, login, authenticate, logout, ensureAdmin, publicUser };

@@ -420,3 +420,17 @@ test('مشاركة الفاتورة برابط: صفحة عامة بلا دخو�
     assert.equal((await t.admin.post(`/docs/${pur.id}/share`)).status >= 400, true, 'الشراء لا يُشارك');
   } finally { await t.close(); }
 });
+
+test('استعادة كلمة مرور المدير من ADMIN_RESET_PASSWORD: مرة واحدة لكل قيمة وتفك القفل', async () => {
+  const t = await boot();
+  try {
+    await t.admin.post('/auth/change-password', { current_password: 'Admin12345', new_password: 'Forgotten999' }).catch(() => null);
+    for (let i = 0; i < 6; i++) await fetch(t.base + '/auth/login', { method: 'POST', headers: { 'content-type': 'application/json', 'x-requested-with': 'fetch' }, body: JSON.stringify({ username: 'admin', password: 'wrong-pass' }) });
+    assert.equal(users.resetAdmin(t.db, 'short'), 'short');
+    assert.equal(users.resetAdmin(t.db, 'NewReset2026'), 'reset');
+    const c = await t.client('admin', 'NewReset2026');
+    const me = await c.get('/auth/me');
+    assert.equal(me.body.user.must_change_password, 1, 'يُطلب تغييرها');
+    assert.equal(users.resetAdmin(t.db, 'NewReset2026'), 'already', 'لا تُعاد عند إعادة التشغيل');
+  } finally { await t.close(); }
+});
