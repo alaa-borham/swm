@@ -44,6 +44,24 @@ async function posView({ el, q }) {
   const cardIn = inp({ type: 'number', placeholder: '0' });
   const bankSel = await cashSelect('', {}, (a) => a.kind === 'bank', { empty: '— اختر طريقة السداد —' });
   const cashSel = can('cash.view') && !state.session && !isRep ? await cashSelect('', {}, (a) => a.kind === 'cash') : null;
+  // واجهة السداد المبسطة: طريقة واحدة + المبلغ (يُقترح إجمالي الفاتورة)، والباقي آجل على العميل.
+  // تُترجم داخليًا إلى حقلي النقد والشبكة اللذين يبني منهما الطلب.
+  const banks = [...bankSel.options].filter((o) => o.value);
+  const payMethod = sel([{ value: 'cash', label: 'نقدي' }, ...banks.map((o) => ({ value: 'bank:' + o.value, label: o.textContent })), { value: 'credit', label: 'آجل على العميل' }], 'cash');
+  const payAmt = inp({ type: 'number', placeholder: '0' });
+  let payTouched = false;
+  const cashBox = cashSel ? field('الصندوق', cashSel) : null;
+  const syncPay = () => {
+    const m = payMethod.value;
+    payAmt.disabled = m === 'credit';
+    if (m === 'credit') payAmt.value = '';
+    cashIn.value = m === 'cash' ? payAmt.value : '';
+    cardIn.value = m.startsWith('bank:') ? payAmt.value : '';
+    if (m.startsWith('bank:')) bankSel.value = m.slice(5);
+    if (cashBox) cashBox.style.display = m === 'cash' ? '' : 'none';
+  };
+  payMethod.addEventListener('change', () => { payTouched = false; draw(); });
+  payAmt.addEventListener('input', () => { payTouched = true; syncPay(); draw(); });
   const tbody = h('tbody');
   const totals = h('div', { class: 'total-box' });
   const changeBox = h('div', { class: 'muted' });
@@ -59,6 +77,7 @@ async function posView({ el, q }) {
   };
   const resetForm = () => {
     cart.length = 0; cashIn.value = ''; cardIn.value = ''; invDiscPct.value = ''; invDiscAmt.value = ''; notes.value = '';
+    payTouched = false; payMethod.value = 'cash';
     draftId = null; draftNote.replaceChildren();
   };
   async function showDrafts() {
@@ -149,6 +168,8 @@ async function posView({ el, q }) {
         h('td', null, h('button', { class: 'btn small danger', 'aria-label': 'حذف', onclick: () => { cart.splice(i, 1); draw(); } }, '×'))));
     });
     if (!cart.length) tbody.append(h('tr', null, h('td', { colspan: 7, class: 'empty' }, 'امسح الباركود أو ابحث عن صنف لإضافته')));
+    if (!payTouched && payMethod.value !== 'credit') payAmt.value = cart.length ? c.total : '';
+    syncPay();
     const paid = (num(cashIn.value) || 0) + (num(cardIn.value) || 0);
     const credit = Math.max(0, Number((c.total - paid).toFixed(3)));
     clear(totals).append(
@@ -210,6 +231,7 @@ async function posView({ el, q }) {
           } catch (x) { toast('تعذر الحفظ دون اتصال: ' + x.message, 'bad'); return; }
           toast('لا يوجد اتصال: حُفظت الفاتورة على الجهاز وستُرسل تلقائيًا عند عودة الاتصال', 'ok');
           cart.length = 0; cashIn.value = ''; cardIn.value = ''; invDiscPct.value = ''; invDiscAmt.value = ''; notes.value = '';
+          payTouched = false; payMethod.value = 'cash';
           draw();
           picker.input.focus();
           return;
@@ -259,11 +281,10 @@ async function posView({ el, q }) {
         h('div', { style: { marginTop: '8px' } }, notes)),
       h('div', { class: 'card' }, totals),
       h('div', { class: 'card' },
-        h('div', { class: 'row' }, field('نقدي مستلم', cashIn), cashSel ? field('الصندوق', cashSel) : null),
-        h('div', { class: 'row', style: { marginTop: '8px' } }, field('مبلغ شبكة/بنك', cardIn), field('طريقة السداد', bankSel)),
+        h('div', { class: 'row' }, field('طريقة السداد', payMethod), field('المبلغ المدفوع', payAmt), cashBox),
         can('warehouses.manage') ? h('a', { class: 'small', href: '#/warehouses' }, '+ إضافة طريقة سداد جديدة') : null,
         changeBox,
-        h('div', { class: 'small muted', style: { marginTop: '6px' } }, 'غير المدفوع يُسجل آجلاً ويتطلب اختيار العميل'),
+        h('div', { class: 'small muted', style: { marginTop: '6px' } }, 'المبلغ يُقترح بإجمالي الفاتورة؛ إن دُفع أقل يُسجَّل الباقي آجلاً ويتطلب اختيار العميل'),
         h('div', { class: 'actions', style: { marginTop: '12px' } },
           h('button', { class: 'btn ok', onclick: () => submit(true) }, 'اعتماد'),
           h('button', { class: 'btn primary', onclick: () => submit(true, 'thermal') }, 'اعتماد وطباعة'),

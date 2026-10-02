@@ -25,9 +25,9 @@
   }
 }
 :root[data-theme="gray"] {
-  --bg: #e3e6ea; --panel: #f1f2f4; --ink: #1f2429; --muted: #5d6671; --line: #c9ced5; --brand: #2c5d85; --brand-ink: #ffffff;
-  --brand-soft: #d6dfe8; --ok: #1e7d4f; --ok-ink: #ffffff; --ok-soft: #d7ebe0; --warn: #8a5a00; --warn-soft: #f2e4c4; --bad: #a8291f; --bad-soft: #f3d8d5;
-  --shadow: 0 1px 2px rgba(20, 30, 45, .08), 0 2px 8px rgba(20, 30, 45, .06);
+  --bg: #5f656e; --panel: #727881; --ink: #f4f6f8; --muted: #d5d9de; --line: #868c95; --brand: #bcd6ee; --brand-ink: #1c2530;
+  --brand-soft: #677787; --ok: #9fe0bb; --ok-ink: #12271b; --ok-soft: #5d7468; --warn: #f3d27f; --warn-soft: #7a7058; --bad: #ffb4ad; --bad-soft: #80605e;
+  --shadow: 0 1px 3px rgba(0, 0, 0, .18);
 }
 :root[data-theme="dark"] {
   --bg: #12171d; --panel: #1b222b; --ink: #e6ebf1; --muted: #9aa6b4; --line: #2c3642; --brand: #4f9ad0; --brand-ink: #0c1218;
@@ -231,3 +231,4 @@ tbody tr.sel td { background: var(--brand-soft); }
 .stepper .step { width: 34px; min-height: 36px; border: 0; background: var(--brand-soft); color: var(--brand); font-size: 20px; font-weight: 700; line-height: 1; cursor: pointer; padding: 0; }
 .stepper .step:active { background: var(--brand); color: var(--brand-ink); }
 @media (max-width: 900px) { .stepper .step { width: 40px; min-height: 42px; } }
+input::placeholder, textarea::placeholder { color: var(--muted); opacity: .85; }
