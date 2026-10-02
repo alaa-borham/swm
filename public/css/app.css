@@ -147,6 +147,7 @@ tr.clickable { cursor: pointer; }
 .total-box { font-size: 15px; }
 .total-box .line { display: flex; justify-content: space-between; padding: 4px 0; }
 .total-box .grand { font-size: 26px; font-weight: 800; border-top: 2px solid var(--line); margin-top: 6px; padding-top: 8px; }
+.total-box .line.strong { font-weight: 800; border-top: 1px solid var(--line); padding-top: 6px; margin-top: 4px; }
 .kbd { font-size: 11px; border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; color: var(--muted); }
 
 /* النوافذ والإشعارات */

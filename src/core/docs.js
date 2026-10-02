@@ -229,6 +229,16 @@ function fullDoc(ctx, id) {
   const out = present(d);
   out.label = DOC_LABELS[d.type];
   out.lines = lines.map(present);
+  if (d.type === 'purchase') {
+    // تفصيل التكاليف التابعة ومن أين دُفعت، وتنبيه البنود التي تحتاج تاريخ انتهاء قبل الاعتماد
+    const data = typeof d.data === 'string' ? JSON.parse(d.data || '{}') : (d.data || {});
+    out.extras_view = (data.extras || []).map((e) => ({ description: e.description, amount: fromMinor(e.amount),
+      paid_from: e.cash_account_id ? (ctx.db.prepare('SELECT name FROM cash_accounts WHERE id=?').get(e.cash_account_id) || {}).name || null : null }));
+    if (d.status === 'draft') {
+      const tracks = ctx.db.prepare('SELECT track_expiry FROM items WHERE id=?');
+      out.lines.forEach((l, i) => { if (!lines[i].expiry_date && tracks.get(lines[i].item_id)?.track_expiry) l.needs_expiry = true; });
+    }
+  }
   if (d.ledger_account) {
     out.open_amount = fromMinor(openAmount(ctx, id));
     out.payment_status = paymentStatus(ctx, d);

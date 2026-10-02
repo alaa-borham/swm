@@ -183,7 +183,25 @@ export async function view({ el, params }) {
   const totalsRows = [['قيمة البنود', d.subtotal], ['الخصم', d.discount], ['الصافي', d.net], ['الضريبة', d.tax], ['تكاليف تابعة', d.extra_cost], ['الإجمالي', d.total],
     d.cost != null && can('cost.view') && ['sale', 'sale_return', 'purchase', 'transfer', 'damage', 'stock_count', 'purchase_return'].includes(d.type) ? ['التكلفة', d.cost] : null,
     d.open_amount != null ? ['المتبقي', d.open_amount] : null].filter((x) => x && x[1]);
-  if (totalsRows.length) parts.push(h('div', { class: 'card', style: { maxWidth: '420px' } }, h('div', { class: 'total-box' }, totalsRows.map(([k, v]) => h('div', { class: 'line' }, h('span', null, k), M(v))))));
+  if (d.type === 'purchase') {
+    const missing = d.lines.filter((l) => l.needs_expiry).map((l) => l.item_name);
+    if (missing.length) parts.splice(2, 0, h('div', { class: 'note warn' }, `قبل الاعتماد: أدخل تاريخ الانتهاء للأصناف: ${missing.join('، ')} (من زر تعديل).`));
+    const box = (title, rows, note) => h('div', { class: 'card', style: { flex: '1 1 300px', maxWidth: '460px' } }, h('h3', null, title),
+      h('div', { class: 'total-box' }, rows.filter(Boolean).map(([k, v, strong]) => h('div', { class: 'line' + (strong ? ' strong' : '') }, h('span', null, k), M(v)))), note ? h('p', { class: 'small muted' }, note) : null);
+    const extras = d.extras_view || [];
+    const extrasToSupplier = extras.filter((e) => !e.paid_from).reduce((a, e) => a + e.amount, 0);
+    parts.push(h('div', { class: 'row', style: { alignItems: 'stretch', gap: '14px' } },
+      box('مستحق المورد', [['قيمة البنود', d.subtotal], d.discount ? ['الخصم', d.discount] : null, d.discount ? ['الصافي', d.net] : null, ['الضريبة', d.tax],
+        extrasToSupplier ? ['تكاليف تابعة على المورد', extrasToSupplier] : null, ['إجمالي الفاتورة', d.total, true],
+        d.open_amount != null ? ['المدفوع', d.total - d.open_amount] : null, d.open_amount != null ? ['المتبقي للمورد', d.open_amount, true] : null]),
+      extras.length ? h('div', { class: 'card', style: { flex: '1 1 300px', maxWidth: '460px' } }, h('h3', null, 'التكاليف التابعة (نقل، تحميل...)'),
+        h('div', { class: 'total-box' }, extras.map((e) => h('div', { class: 'line' }, h('span', null, e.description, ' ', h('span', { class: 'muted small' }, e.paid_from ? `— دُفعت من ${e.paid_from}` : '— على المورد')), M(e.amount))),
+          h('div', { class: 'line strong' }, h('span', null, 'الإجمالي'), M(d.extra_cost))),
+        h('p', { class: 'small muted' }, 'تُوزَّع على الأصناف وتدخل في تكلفتها، ولا تُضاف لمستحق المورد إلا إذا كانت عليه.')) : null,
+      d.cost != null && can('cost.view') ? box('تكلفة المخزون', [['صافي البنود', d.net], d.extra_cost ? ['+ التكاليف التابعة', d.extra_cost] : null,
+        d.cost - d.net - (d.extra_cost || 0) > 0.001 ? ['+ ضريبة غير قابلة للاسترداد', d.cost - d.net - (d.extra_cost || 0)] : null, ['تكلفة المخزون', d.cost, true]],
+      'القيمة التي يدخل بها المخزون. الضريبة القابلة للاسترداد لا تدخل في التكلفة.') : null));
+  } else if (totalsRows.length) parts.push(h('div', { class: 'card', style: { maxWidth: '420px' } }, h('div', { class: 'total-box' }, totalsRows.map(([k, v]) => h('div', { class: 'line' }, h('span', null, k), M(v))))));
   if (d.allocations.length) {
     parts.push(h('div', { class: 'card' }, h('h3', null, 'التخصيصات والسداد'), table({ columns: [
       { key: 'date', label: 'التاريخ' }, { key: 'source_number', label: 'من', render: (a) => h('a', { href: '#/doc/' + a.source_doc_id }, a.source_number) },
@@ -218,8 +236,8 @@ function linesTable(d) {
       { key: 'received_qty', label: 'المستلم', render: (l) => Q((l.received_qty || 0) / (l.factor || 1) / 1000) }, { key: 'price', label: 'السعر', type: 'money' }, { key: 'total', label: 'الإجمالي', type: 'money' }];
   } else if (['sale', 'purchase', 'sale_return', 'purchase_return'].includes(t)) {
     cols = [...LINE_COLS.default];
-    if (t === 'purchase') cols.splice(2, 0, { key: 'batch_no', label: 'الدفعة' }, { key: 'expiry_date', label: 'الانتهاء' });
-    if (t === 'purchase' && can('cost.view')) cols.push({ key: 'extra_cost', label: 'تكاليف تابعة', type: 'money' }, { key: 'cost', label: 'التكلفة النهائية', type: 'money' });
+    if (t === 'purchase') cols.splice(2, 0, { key: 'batch_no', label: 'الدفعة' }, { key: 'expiry_date', label: 'الانتهاء', render: (l) => (l.needs_expiry ? h('span', { class: 'badge bad' }, 'مطلوب') : h('span', { style: { whiteSpace: 'nowrap' } }, l.expiry_date || '')) });
+    if (t === 'purchase' && can('cost.view')) cols.push({ key: 'extra_cost', label: 'نصيبه من التكاليف التابعة', type: 'money' }, { key: 'cost', label: 'التكلفة النهائية', type: 'money' }, { key: 'unit_cost', label: 'تكلفة الوحدة', render: (l) => (l.qty ? M(l.cost / l.qty) : '') });
     if (t === 'sale_return') cols.push({ key: 'condition', label: 'الحالة', render: (l) => ({ ok: 'صالح', pending: 'قيد الفحص', isolated: 'معزول', damaged: 'تالف' }[l.condition] || '') });
     if (t === 'sale' && can('cost.view')) cols.push({ key: 'cost', label: 'التكلفة', type: 'money' });
   } else if (t === 'stock_count') {
