@@ -466,5 +466,13 @@ test('استيراد العملاء من Excel: المندوب بالاسم و«
     ws.addRow(['الاسم', 'المندوب', 'الرقم الضريبي']); ws.addRow(['ع1', 'مجهول', '']); ws.addRow(['ع2', '', '123']); ws.addRow(['بقالة البوادي', '', '']);
     const pv2 = await t.admin.post('/import/preview', { kind: 'parties', filename: 'b.xlsx', data: Buffer.from(await bad.xlsx.writeBuffer()).toString('base64') });
     assert.equal(pv2.body.invalid, 2, JSON.stringify(pv2.body.rows.map((r) => r._errors)));
+    // خيار «كل المناديب» من شاشة الاستيراد للصفوف بلا مندوب
+    const g = new ExcelJS.Workbook(); const gs = g.addWorksheet('x');
+    gs.addRow(['الاسم', 'المندوب']); gs.addRow(['عميل للجميع', '']); gs.addRow(['عميل لأحمد', 'أحمد']);
+    const gd = Buffer.from(await g.xlsx.writeBuffer()).toString('base64');
+    const gc = await t.admin.post('/import/commit', { kind: 'parties', filename: 'g.xlsx', data: gd, default_rep: 'all' });
+    assert.equal(gc.body.imported, 2, JSON.stringify(gc.body));
+    assert.equal(P('عميل للجميع').all_reps, 1);
+    assert.equal(P('عميل لأحمد').rep_id, rep.id, 'عمود الملف أولى');
   } finally { await t.close(); }
 });

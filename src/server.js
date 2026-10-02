@@ -536,7 +536,7 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
     return Importer.parseFile(buf, body.filename);
   };
   api.post('/import/preview', h(async (ctx, req) => Importer.preview(ctx, req.body.kind, await readUpload(req.body))));
-  api.post('/import/commit', h(async (ctx, req) => Importer.commit(ctx, req.body.kind, await readUpload(req.body), { warehouse_id: req.body.warehouse_id, date: req.body.date })));
+  api.post('/import/commit', h(async (ctx, req) => Importer.commit(ctx, req.body.kind, await readUpload(req.body), { warehouse_id: req.body.warehouse_id, date: req.body.date, default_rep: req.body.default_rep })));
 
   // ---------- المرفقات ----------
   api.post('/attachments', h((ctx, req) => {

@@ -180,10 +180,19 @@ export async function importPage({ el, q = {} }) {
   const kind = sel([{ value: 'items', label: 'الأصناف والوحدات والباركود' }, { value: 'parties', label: 'العملاء والموردون (مع الأرصدة الافتتاحية)' }, { value: 'stock', label: 'المخزون الافتتاحي' }], ['items', 'parties', 'stock'].includes(q.kind) ? q.kind : 'items');
   const file = h('input', { type: 'file', accept: '.xlsx,.csv' });
   const wh = await warehouseSelect('');
+  // للعملاء: المندوب الافتراضي لكل صف عمود «المندوب» فيه فارغ (ومنها «كل المناديب»)
+  const reps = (await get('/reps').catch(() => ({ rows: [] })));
+  const repSel = sel([{ value: '', label: 'حسب عمود المندوب في الملف' }, { value: 'all', label: 'كل المناديب' },
+    ...(reps.rows || reps).filter((r) => r.active !== 0).map((r) => ({ value: r.id, label: r.name }))], '');
   const date = inp({ type: 'date', value: today() });
   const body = h('div');
-  const payload = async () => ({ kind: kind.value, filename: file.files[0].name, data: await readFileB64(file.files[0]), warehouse_id: Number(wh.value), date: date.value });
-  el.append(h('div', { class: 'card' }, h('div', { class: 'grid' }, field('نوع البيانات', kind), field('الملف (xlsx أو csv)', file), field('المستودع (للمخزون)', wh), field('تاريخ الأرصدة', date)),
+  const payload = async () => ({ kind: kind.value, filename: file.files[0].name, data: await readFileB64(file.files[0]), warehouse_id: Number(wh.value), date: date.value, default_rep: repSel.value || null });
+  const whField = field('المستودع (للمخزون)', wh);
+  const repField = field('العملاء يظهرون لـ', repSel);
+  const syncKind = () => { whField.style.display = kind.value === 'stock' ? '' : 'none'; repField.style.display = kind.value === 'parties' ? '' : 'none'; };
+  kind.addEventListener('change', () => { syncKind(); body.replaceChildren(); });
+  syncKind();
+  el.append(h('div', { class: 'card' }, h('div', { class: 'grid' }, field('نوع البيانات', kind), field('الملف (xlsx أو csv)', file), whField, repField, field('تاريخ الأرصدة', date)),
     h('div', { class: 'actions', style: { marginTop: '12px' } },
       h('button', { class: 'btn', onclick: () => download(`/import/template/${kind.value}`, `template-${kind.value}.xlsx`) }, 'تنزيل القالب'),
       h('span', { class: 'small muted' }, 'نزّل القالب، املأه في Excel (فيه ورقة مثال وورقة تعليمات)، ثم اختر الملف واضغط «معاينة وتحقق».'),

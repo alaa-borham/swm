@@ -79,6 +79,13 @@ const repOf = (ctx, v) => {
   const r = ctx.db.prepare('SELECT id FROM reps WHERE name=? OR TRIM(name)=?').get(t, t);
   return r ? { rep_id: r.id } : null;
 };
+// المندوب المختار في شاشة الاستيراد للصفوف التي عمود المندوب فيها فارغ
+const defaultRep = (ctx, v) => {
+  if (!v) return { rep_id: null };
+  if (v === 'all') return { rep_id: 'all' };
+  if (!ctx.db.prepare('SELECT 1 FROM reps WHERE id=?').get(Number(v))) fail('VALIDATION', 'المندوب المختار غير موجود');
+  return { rep_id: Number(v) };
+};
 const yes = (v) => ['1', 'نعم', 'yes', 'true', 'y', '✓'].includes(String(v || '').trim().toLowerCase());
 
 function mapRows(kind, rows) {
@@ -174,7 +181,7 @@ function commit(ctx, kind, rows, opts = {}) {
         const p = M.createParty(ctx, {
           name: r['الاسم'], phone: r['الهاتف'], address: r['العنوان'], is_customer: yes(r['عميل']), is_supplier: yes(r['مورد']),
           credit_limit: r['الحد الائتماني'] === '' ? null : r['الحد الائتماني'], payment_terms_days: r['مدة السداد'] || 0, tax_number: r['الرقم الضريبي'] || null,
-          ...(yes(r['عميل']) ? repOf(ctx, r['المندوب']) : {}),
+          ...(yes(r['عميل']) ? (r['المندوب'] ? repOf(ctx, r['المندوب']) : defaultRep(ctx, opts.default_rep)) : {}),
         });
         if (Number(r['الرصيد الافتتاحي للعميل'])) F.createOpeningBalance(ctx, { kind: 'customer', party_id: p.id, amount: r['الرصيد الافتتاحي للعميل'], date: opts.date });
         if (Number(r['الرصيد الافتتاحي للمورد'])) F.createOpeningBalance(ctx, { kind: 'supplier', party_id: p.id, amount: r['الرصيد الافتتاحي للمورد'], date: opts.date });
