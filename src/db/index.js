@@ -88,7 +88,7 @@ const DEFAULT_SETTINGS = {
   scale_prefix: '',                  // باركود الميزان: البادئة (مثل 2 أو 21)، فارغ = غير مفعّل
   scale_plu_digits: '5',
   scale_value_digits: '5',
-  scale_mode: 'weight',              // weight: الوزن بالجرام، price: السعر                  // رمز QR للفاتورة المبسطة (TLV)
+  scale_mode: 'weight',              // weight: الوزن بالجرام، price: السعر
 };
 
 const DOC_PREFIXES = {

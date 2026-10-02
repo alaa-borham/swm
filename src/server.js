@@ -53,6 +53,10 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
     next();
   });
 
+  // فحص صحة الخادم للاستضافة (لا يكشف بيانات)
+  app.get('/healthz', (req, res) => {
+    try { db.prepare('SELECT 1').get(); res.json({ ok: true }); } catch (_) { res.status(503).json({ ok: false }); }
+  });
   app.use(express.static(path.join(__dirname, '..', 'public'), { index: 'index.html', maxAge: 0 }));
 
   // Webhook حالات تسليم واتساب من Meta (خارج /api: لا جلسة، ويُتحقق من توقيع Meta)
@@ -498,10 +502,15 @@ function scheduleBackups(db, dataDir, logger = console) {
 }
 
 if (require.main === module) {
-  const dataDir = path.resolve(process.env.DATA_DIR || path.join(__dirname, '..', 'data'));
+  // على Railway تُحفظ البيانات في القرص الدائم (Volume) تلقائيًا
+  const dataDir = path.resolve(process.env.DATA_DIR || process.env.RAILWAY_VOLUME_MOUNT_PATH || path.join(__dirname, '..', 'data'));
+  if (process.env.RAILWAY_ENVIRONMENT && !process.env.RAILWAY_VOLUME_MOUNT_PATH && !process.env.DATA_DIR) {
+    console.warn('تحذير: لا يوجد قرص دائم (Volume) مربوط؛ ستُفقد البيانات عند إعادة النشر. أضف Volume على المسار /data');
+  }
   const db = openDb(path.join(dataDir, 'data.db'));
   const pw = users.ensureAdmin(db, process.env.ADMIN_PASSWORD);
-  if (pw) console.log(`\nتم إنشاء المستخدم admin بكلمة مرور مؤقتة: ${pw}\nغيّرها بعد أول دخول.\n`);
+  if (pw && process.env.ADMIN_PASSWORD) console.log('\nتم إنشاء المستخدم admin بكلمة المرور المحددة في ADMIN_PASSWORD؛ غيّرها بعد أول دخول.\n');
+  else if (pw) console.log(`\nتم إنشاء المستخدم admin بكلمة مرور مؤقتة: ${pw}\nغيّرها بعد أول دخول.\n`);
   const app = createApp({ db, dataDir });
   scheduleBackups(db, dataDir);
   const port = Number(process.env.PORT || 3000);

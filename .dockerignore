@@ -1,0 +1,12 @@
+node_modules
+data
+demo
+backups
+uploads
+test
+docs
+.git
+*.db
+*.db-wal
+*.db-shm
+.env
