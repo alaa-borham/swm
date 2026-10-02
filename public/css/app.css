@@ -25,9 +25,12 @@
   }
 }
 :root[data-theme="gray"] {
-  --bg: #454c56; --panel: #5a626e; --ink: #ffffff; --muted: #e3e7ec; --line: #78818e; --brand: #a9d3fb; --brand-ink: #0f1d2b;
-  --brand-soft: #6a7b8f; --ok: #8fe8b2; --ok-ink: #0d2416; --ok-soft: #4e6b5c; --warn: #ffd97d; --warn-soft: #6f6750; --bad: #ffb1a9; --bad-soft: #75595a;
-  --shadow: 0 1px 3px rgba(0, 0, 0, .28), 0 4px 12px rgba(0, 0, 0, .12);
+  /* رمادي «جرافيت»: خلفية متوسطة، بطاقات أفتح، حقول غائرة أغمق، وشريط وقائمة أعمق */
+  --bg: #474e58; --panel: #59616d; --field: #464c56; --chrome: #3b4149; --thead: #4f5a68;
+  --ink: #ffffff; --muted: #dbe1e8; --line: #6f7885;
+  --brand: #7cc0ff; --brand-ink: #0b1a28; --brand-soft: #5c6f86;
+  --ok: #6fe0a0; --ok-ink: #0b2415; --ok-soft: #4c6a5a; --warn: #ffd166; --warn-soft: #6d6448; --bad: #ff9d94; --bad-soft: #745656;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .25), 0 6px 16px rgba(0, 0, 0, .14);
 }
 :root[data-theme="dark"] {
   --bg: #12171d; --panel: #1b222b; --ink: #e6ebf1; --muted: #9aa6b4; --line: #2c3642; --brand: #4f9ad0; --brand-ink: #0c1218;
@@ -49,7 +52,7 @@ a:hover { text-decoration: underline; }
 
 /* التخطيط */
 .layout { display: grid; grid-template-columns: 230px minmax(0, 1fr); min-height: 100vh; }
-.side { background: var(--panel); border-left: 1px solid var(--line); padding: 12px 8px; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+.side { background: var(--chrome, var(--panel)); border-left: 1px solid var(--line); padding: 12px 8px; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
 .side .org { font-weight: 700; padding: 6px 10px 12px; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
 .side .org small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; }
 .nav-section { margin-top: 2px; }
@@ -66,7 +69,7 @@ a:hover { text-decoration: underline; }
 .side a.nav:hover { background: var(--brand-soft); text-decoration: none; }
 .side a.nav.active { background: var(--brand); color: var(--brand-ink); }
 .main { min-width: 0; }
-.top { display: flex; align-items: center; gap: 12px; padding: 10px 20px; background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
+.top { display: flex; align-items: center; gap: 12px; padding: 10px 20px; background: var(--chrome, var(--panel)); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
 .top .title { font-weight: 700; font-size: 17px; flex: 1; }
 .top .who { font-size: 13px; color: var(--muted); }
 .menu-btn { display: none; }
@@ -93,7 +96,7 @@ a:hover { text-decoration: underline; }
 .field { display: flex; flex-direction: column; gap: 4px; min-width: 140px; flex: 1; }
 .field label { font-size: 13px; color: var(--muted); }
 .field.req label::after { content: " *"; color: var(--bad); }
-input, select, textarea { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; min-height: 36px; width: 100%; }
+input, select, textarea { background: var(--field, var(--panel)); border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; min-height: 36px; width: 100%; }
 input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
 input[type=checkbox] { width: auto; min-height: 0; }
 input.num-in { direction: ltr; text-align: right; }
@@ -120,7 +123,7 @@ textarea { min-height: 70px; }
 .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); }
 table { border-collapse: collapse; width: 100%; }
 th, td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: right; vertical-align: middle; }
-th { background: var(--brand-soft); font-weight: 600; font-size: 13px; white-space: nowrap; position: sticky; top: 0; }
+th { background: var(--thead, var(--brand-soft)); font-weight: 600; font-size: 13px; white-space: nowrap; position: sticky; top: 0; }
 tbody tr:hover { background: color-mix(in srgb, var(--brand-soft) 50%, transparent); }
 tfoot td { font-weight: 700; background: var(--bg); }
 td.n, th.n { text-align: left; white-space: nowrap; }
