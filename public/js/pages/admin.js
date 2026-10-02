@@ -106,7 +106,7 @@ export async function audit({ el }) {
     rows }));
   };
   el.append(h('div', { class: 'note' }, 'السجل للإضافة فقط ولا يمكن تعديله أو حذفه من أي مستخدم.'),
-    h('form', { class: 'row card', style: { padding: '12px' }, onsubmit: (e) => { e.preventDefault(); load(); } }, field('المستخدم', user), field('العملية', action), field('بحث', qIn), h('label', { class: 'check' }, denied, 'المرفوض فقط'), h('button', { class: 'btn primary' }, 'بحث')), body);
+    h('form', { class: 'row card filters', style: { padding: '12px' }, onsubmit: (e) => { e.preventDefault(); load(); } }, field('المستخدم', user), field('العملية', action), field('بحث', qIn), h('label', { class: 'check' }, denied, 'المرفوض فقط'), h('button', { class: 'btn primary' }, 'بحث')), body);
   await load();
 }
 

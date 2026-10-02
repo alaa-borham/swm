@@ -76,7 +76,7 @@ export async function accounts({ el, q }) {
     body.replaceChildren(acc.value ? h('div', { class: 'note' }, 'رصيد أول المدة: ', M(r.opening), ' — رصيد آخر المدة: ', M(r.closing)) : '',
       table({ columns: r.columns, rows: r.rows, totals: r.totals, onRow: acc.value ? null : (row) => { acc.value = row.id; load(); } }));
   };
-  el.append(h('form', { class: 'row card', style: { padding: '12px' }, onsubmit: (e) => { e.preventDefault(); load(); } }, field('الحساب', acc), field('من', from), field('إلى', to), h('button', { class: 'btn primary' }, 'عرض')), body);
+  el.append(h('form', { class: 'row card filters', style: { padding: '12px' }, onsubmit: (e) => { e.preventDefault(); load(); } }, field('الحساب', acc), field('من', from), field('إلى', to), h('button', { class: 'btn primary' }, 'عرض')), body);
   await load();
 }
 
@@ -166,7 +166,7 @@ export async function expenses({ el, q, isCurrent }) {
       { key: 'total', label: 'المبلغ', type: 'money' }, { key: 'open_amount', label: 'غير مدفوع', type: 'money' }, { key: 'status', label: 'الحالة', render: (d) => badge(STATUS, d.status) }],
     rows: r.rows, onRow: (d) => { location.hash = '#/doc/' + d.id; } }));
   };
-  el.append(h('form', { class: 'row card', style: { padding: '12px' }, onsubmit: (e) => { e.preventDefault(); load(); } }, field('من', from), field('إلى', to), field('الحالة', status), h('button', { class: 'btn primary' }, 'عرض')), body);
+  el.append(h('form', { class: 'row card filters', style: { padding: '12px' }, onsubmit: (e) => { e.preventDefault(); load(); } }, field('من', from), field('إلى', to), field('الحالة', status), h('button', { class: 'btn primary' }, 'عرض')), body);
   await load();
 }
 

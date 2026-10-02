@@ -18,7 +18,7 @@ export async function items({ el, q, isCurrent }) {
       { key: 'a', label: '', render: (it) => [h('a', { class: 'btn small', href: `#/item-card?item=${it.id}` }, 'بطاقة'), ' ', can('items.manage') ? h('a', { class: 'btn small', href: '#/item/' + it.id }, 'تعديل') : null] }],
     rows: r.rows }), h('div', { class: 'muted small', style: { marginTop: '6px' } }, `${r.total} صنف`));
   };
-  el.append(h('form', { class: 'row card', style: { padding: '12px' }, onsubmit: (e) => { e.preventDefault(); load(); } }, field('بحث', qIn), field('الحالة', active), h('button', { class: 'btn primary' }, 'بحث')), body);
+  el.append(h('form', { class: 'row card filters', style: { padding: '12px' }, onsubmit: (e) => { e.preventDefault(); load(); } }, field('بحث', qIn), field('الحالة', active), h('button', { class: 'btn primary' }, 'بحث')), body);
   await load();
 }
 
@@ -102,6 +102,7 @@ export async function parties({ el, q, isCurrent }) {
   const load = async () => {
     const r = await get('/parties', { q: qIn.value, type: type.value, limit: 500 });
     if (!isCurrent()) return;
+    pageHead(type.value === 'supplier' ? 'الموردون' : type.value === 'customer' ? 'العملاء' : 'العملاء والموردون');
     body.replaceChildren(table({ columns: [
       { key: 'name', label: 'الاسم', render: (p) => h('a', { href: '#/party/' + p.id }, p.name) }, { key: 'phone', label: 'الهاتف' },
       { key: 't', label: 'النوع', render: (p) => [p.is_customer ? h('span', { class: 'badge' }, 'عميل') : '', ' ', p.is_supplier ? h('span', { class: 'badge warn' }, 'مورد') : ''] },
@@ -109,7 +110,7 @@ export async function parties({ el, q, isCurrent }) {
       { key: 'ap_balance', label: 'له (مورد)', type: 'money' }, { key: 'active', label: '', render: (p) => (p.active ? '' : h('span', { class: 'badge bad' }, 'موقوف')) }],
     rows: r.rows, onRow: (p) => { location.hash = '#/party/' + p.id; } }));
   };
-  el.append(h('form', { class: 'row card', style: { padding: '12px' }, onsubmit: (e) => { e.preventDefault(); load(); } }, field('بحث', qIn), field('النوع', type), h('button', { class: 'btn primary' }, 'بحث')), body);
+  el.append(h('form', { class: 'row card filters', style: { padding: '12px' }, onsubmit: (e) => { e.preventDefault(); load(); } }, field('بحث', qIn), field('النوع', type), h('button', { class: 'btn primary' }, 'بحث')), body);
   await load();
 }
 
@@ -165,7 +166,7 @@ export async function party({ el, params, q }) {
     h('div', null, h('b', null, 'الهاتف'), p.phone || '—'), h('div', null, h('b', null, 'العنوان'), p.address || '—'), h('div', null, h('b', null, 'الحد الائتماني'), p.credit_limit == null ? 'بلا حد' : M(p.credit_limit)),
     h('div', null, h('b', null, 'مدة السداد'), `${p.payment_terms_days} يوم`), h('div', null, h('b', null, 'المندوب'), p.rep_name || '—'),
     p.is_customer ? h('div', null, h('b', null, 'رصيد العميل (عليه)'), M(p.ar_balance)) : null, p.is_supplier ? h('div', null, h('b', null, 'رصيد المورد (له)'), M(p.ap_balance)) : null)),
-  h('form', { class: 'row card', style: { padding: '12px' }, onsubmit: (e) => { e.preventDefault(); load(); } }, field('الحساب', account), field('من', from), field('إلى', to), h('button', { class: 'btn primary' }, 'كشف الحساب')), body);
+  h('form', { class: 'row card filters', style: { padding: '12px' }, onsubmit: (e) => { e.preventDefault(); load(); } }, field('الحساب', account), field('من', from), field('إلى', to), h('button', { class: 'btn primary' }, 'كشف الحساب')), body);
   await load();
 }
 

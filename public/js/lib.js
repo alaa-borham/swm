@@ -300,7 +300,7 @@ export function itemPicker({ onPick, warehouseId, placeholder = 'ابحث بال
 /** شريط فلاتر بسيط */
 export function filters(fields, onApply) {
   const btn = h('button', { class: 'btn primary' }, 'عرض');
-  const form = h('form', { class: 'row card', style: { padding: '12px' }, onsubmit: (e) => { e.preventDefault(); onApply(); } }, ...fields, btn);
+  const form = h('form', { class: 'row card filters', style: { padding: '12px' }, onsubmit: (e) => { e.preventDefault(); onApply(); } }, ...fields, btn);
   return form;
 }
 
@@ -328,3 +328,17 @@ export async function download(url, filename) {
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
+
+// نماذج الفلترة (class=filters) تُطبَّق تلقائيًا: فورًا عند تغيير قائمة/تاريخ/خيار، وبعد توقف الكتابة في حقول البحث.
+let filterTimer = null;
+const submitFilters = (form) => { clearTimeout(filterTimer); if (form.isConnected) form.requestSubmit(); };
+document.addEventListener('change', (e) => {
+  const form = e.target.closest?.('form.filters');
+  if (form && e.target.matches('select, input[type=date], input[type=checkbox], input[type=month]')) submitFilters(form);
+});
+document.addEventListener('input', (e) => {
+  const form = e.target.closest?.('form.filters');
+  if (!form || !e.target.matches('input:not([type]), input[type=text], input[type=search], input[type=number]')) return;
+  clearTimeout(filterTimer);
+  filterTimer = setTimeout(() => submitFilters(form), 450);
+});

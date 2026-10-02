@@ -82,7 +82,7 @@ export async function render({ el, q, isCurrent }) {
     else if (k === 'party_id') continue;
     else fields.push(field({ as_of: 'حتى تاريخ', group: 'التجميع', account: 'الحساب', warehouse_id: 'المستودع', by: 'العرض', cash_account_id: 'الحساب', branch_id: 'الفرع' }[k] || k, e));
   }
-  el.append(h('form', { class: 'row card', style: { padding: '12px' }, onsubmit: (e) => { e.preventDefault(); load(); } }, ...fields, h('button', { class: 'btn primary' }, 'عرض')), body);
+  el.append(h('form', { class: 'row card filters', style: { padding: '12px' }, onsubmit: (e) => { e.preventDefault(); load(); } }, ...fields, h('button', { class: 'btn primary' }, 'عرض')), body);
   await load();
 }
 

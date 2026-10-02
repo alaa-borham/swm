@@ -47,7 +47,7 @@ export async function view({ el, params }) {
       if (reason && await run(() => api('POST', `/reps/${rep.id}/plans`, { rate_pct: num(rate.value), valid_from: vf.value, reason }), 'حُفظت الخطة')) location.reload();
     } }, 'إضافة خطة')));
   }
-  el.append(h('form', { class: 'row card', style: { padding: '12px' }, onsubmit: (e) => { e.preventDefault(); load(); } }, field('من', from), field('إلى', to), h('button', { class: 'btn primary' }, 'عرض')), body, plans);
+  el.append(h('form', { class: 'row card filters', style: { padding: '12px' }, onsubmit: (e) => { e.preventDefault(); load(); } }, field('من', from), field('إلى', to), h('button', { class: 'btn primary' }, 'عرض')), body, plans);
   await load();
 }
 const kpi = (k, v) => h('div', { class: 'kpi' }, h('div', { class: 'k' }, k), h('div', { class: 'v' }, v));
@@ -81,7 +81,7 @@ export async function commissions({ el, q, isCurrent }) {
         d.status === 'approved' && d.open_amount > 0 && can('commissions.pay') ? h('button', { class: 'btn small primary', onclick: () => pay(d, load) }, 'دفع') : null] }],
     rows: r.rows }));
   };
-  el.append(h('form', { class: 'row card', style: { padding: '12px' }, onsubmit: (e) => { e.preventDefault(); load(); } }, field('المندوب', repSel), field('من (اختياري)', from), field('إلى', to), h('button', { class: 'btn primary' }, 'عرض')),
+  el.append(h('form', { class: 'row card filters', style: { padding: '12px' }, onsubmit: (e) => { e.preventDefault(); load(); } }, field('المندوب', repSel), field('من (اختياري)', from), field('إلى', to), h('button', { class: 'btn primary' }, 'عرض')),
     h('div', { class: 'note' }, 'الأساس: التحصيل المخصص لفواتير المندوب بعد استبعاد الضريبة. المرتجع المردود وإلغاء التحصيل ينشئان تصحيحًا سالبًا. الاعتماد يثبت المصروف والاستحقاق مرة واحدة، والدفع يسوي الاستحقاق ويمنع الدفع مرتين.'),
     h('div', { class: 'card' }, preview), h('div', { class: 'card' }, docs));
   if (repSel.value) await load();

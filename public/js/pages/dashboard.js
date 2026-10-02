@@ -11,7 +11,7 @@ export async function render({ el, isCurrent }) {
     if (!isCurrent()) return;
     body.replaceChildren(view(d));
   };
-  el.append(h('form', { class: 'row card', style: { padding: '12px' }, onsubmit: (e) => { e.preventDefault(); load(); } },
+  el.append(h('form', { class: 'row card filters', style: { padding: '12px' }, onsubmit: (e) => { e.preventDefault(); load(); } },
     field('من', from), field('إلى', to), branch ? field('الفرع', branch) : null, h('button', { class: 'btn primary' }, 'عرض')), body);
   await load();
 }

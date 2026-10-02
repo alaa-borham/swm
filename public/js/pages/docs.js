@@ -40,7 +40,7 @@ export async function list({ el, q, isCurrent }, type) {
         offset > 0 ? h('button', { class: 'btn small', onclick: () => { offset -= 100; load(); } }, 'السابق') : null,
         offset + 100 < r.total ? h('button', { class: 'btn small', onclick: () => { offset += 100; load(); } }, 'التالي') : null));
   };
-  el.append(head || '', h('form', { class: 'row card', style: { padding: '12px' }, onsubmit: (e) => { e.preventDefault(); offset = 0; load(); } },
+  el.append(head || '', h('form', { class: 'row card filters', style: { padding: '12px' }, onsubmit: (e) => { e.preventDefault(); offset = 0; load(); } },
     field('بحث', qIn), field('من', from), field('إلى', to), field('الحالة', status), typeSel ? field('النوع', typeSel) : null, h('button', { class: 'btn primary' }, 'عرض')), body);
   await load();
 }

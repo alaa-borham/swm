@@ -18,7 +18,7 @@ export async function balances({ el, q, isCurrent }) {
   };
   by.addEventListener('change', () => { state.disabled = by.value !== 'batch'; });
   state.disabled = by.value !== 'batch';
-  el.append(h('form', { class: 'row card', style: { padding: '12px' }, onsubmit: (e) => { e.preventDefault(); load(); } }, field('المستودع', wh), field('العرض', by), field('الحالة', state), h('button', { class: 'btn primary' }, 'عرض')), body);
+  el.append(h('form', { class: 'row card filters', style: { padding: '12px' }, onsubmit: (e) => { e.preventDefault(); load(); } }, field('المستودع', wh), field('العرض', by), field('الحالة', state), h('button', { class: 'btn primary' }, 'عرض')), body);
   await load();
 }
 
