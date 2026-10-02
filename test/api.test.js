@@ -25,7 +25,7 @@ async function boot() {
       const ct = r.headers.get('content-type') || '';
       return { status: r.status, body: ct.includes('json') ? await r.json() : await r.arrayBuffer(), headers: r.headers };
     };
-    return { get: (u) => call('GET', u), post: (u, b, h) => call('POST', u, b, h), put: (u, b, h) => call('PUT', u, b, h) };
+    return { get: (u) => call('GET', u), post: (u, b, h) => call('POST', u, b, h), put: (u, b, h) => call('PUT', u, b, h), del: (u) => call('DELETE', u) };
   };
   const admin = await client('admin', 'Admin12345');
   return { db, dataDir, server, base, client, admin, close: () => new Promise((r) => server.close(r)) };
@@ -152,5 +152,22 @@ test('الإعدادات: رفض المنطقة الزمنية غير الصال
     t.db.prepare("UPDATE settings SET value='Cairo' WHERE key='timezone'").run();
     const me = await t.admin.get('/auth/me');
     assert.equal(me.status, 200);
+  } finally { await t.close(); }
+});
+
+test('المستودعات: تعديل الاسم وحذف الفارغ فقط', async () => {
+  const t = await boot();
+  try {
+    const w = (await t.admin.post('/warehouses', { name: 'مستودع مؤقت' })).body;
+    assert.equal((await t.admin.put('/warehouses/' + w.id, { name: 'مستودع معدل' })).body.name, 'مستودع معدل');
+    const used = (await t.admin.post('/warehouses', { name: 'مستودع مستخدم' })).body;
+    const item = (await t.admin.post('/items', { name: 'سكر', base_unit: 'حبة', track_expiry: 0, sell_price: 5 })).body;
+    await t.admin.post('/opening-stock', { warehouse_id: used.id, lines: [{ item_id: item.id, qty: 2, unit_cost: 1 }] });
+    const r1 = await t.admin.del('/warehouses/' + used.id);
+    assert.equal(r1.status, 400);
+    assert.match(r1.body.error.message, /منتجات/);
+    assert.equal((await t.admin.del('/warehouses/' + w.id)).status, 200);
+    assert.equal(t.db.prepare('SELECT COUNT(*) n FROM warehouses WHERE id=?').get(w.id).n, 0);
+    assert.equal(t.db.prepare("SELECT COUNT(*) n FROM audit_log WHERE action='warehouse.delete'").get().n, 1, 'الحذف موثق');
   } finally { await t.close(); }
 });

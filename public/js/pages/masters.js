@@ -185,6 +185,22 @@ export async function warehouses({ el }) {
   const caBranch = brSel();
   const caKind = sel([{ value: 'cash', label: 'صندوق نقدي' }, { value: 'bank', label: 'بنك / شبكة' }], 'cash');
   const toggle = (url, row) => h('button', { class: 'btn small', onclick: async () => { if (await run(() => api('PUT', url, { name: row.name, branch_id: row.branch_id, active: row.active ? 0 : 1 }), 'تم')) reload('warehouses', 'cash', 'branches'); } }, row.active ? 'إيقاف' : 'تفعيل');
+  const editWarehouse = async (w) => {
+    const { modal } = await import('../lib.js');
+    const n = inp({ value: w.name }), br = brSel();
+    br.value = String(w.branch_id);
+    modal('تعديل المستودع', h('div', { class: 'grid' }, field('الاسم', n, { req: true }), multi ? field('الفرع', br) : null),
+      [{ label: 'حفظ', class: 'primary', onClick: async () => {
+        const r = await run(() => api('PUT', '/warehouses/' + w.id, { name: n.value, branch_id: Number(br.value), active: w.active }), 'تم الحفظ');
+        if (r) reload('warehouses');
+        return !!r;
+      } }]);
+  };
+  const deleteWarehouse = async (w) => {
+    const { confirmBox } = await import('../lib.js');
+    if (!(await confirmBox('حذف المستودع', `حذف "${w.name}" نهائيًا؟ يُسمح بالحذف فقط إذا كان المستودع فارغًا ولم تُسجَّل عليه أي حركة.`))) return;
+    if (await run(() => api('DELETE', '/warehouses/' + w.id), 'تم الحذف')) reload('warehouses');
+  };
   const editBranch = async (b) => {
     const { modal } = await import('../lib.js');
     const n = inp({ value: b?.name || '' }), a = inp({ value: b?.address || '' }), p = inp({ value: b?.phone || '' });
@@ -204,7 +220,7 @@ export async function warehouses({ el }) {
     h('button', { class: 'btn primary', style: { marginTop: '10px' }, onclick: () => editBranch() }, 'فرع جديد'),
     h('p', { class: 'small muted' }, 'المستخدم المرتبط بفرع (من صفحة المستخدمين) لا يرى ولا يستخدم إلا مستودعات فرعه وصناديقه ومستنداته. المدير والمستخدم غير المرتبط يرون كل الفروع ويمكنهم تصفية التقارير حسب الفرع.')) : null,
     h('div', { class: 'card' }, h('h3', null, 'المستودعات'), table({ columns: [{ key: 'name', label: 'الاسم' }, { key: 'branch_name', label: 'الفرع' }, { key: 'kind', label: 'النوع', render: (w) => (w.kind === 'rep' ? 'مخزون مندوب' : 'مستودع') },
-      { key: 'active', label: 'الحالة', render: (w) => (w.active ? 'نشط' : 'موقوف') }, { key: 'a', label: '', render: (w) => (w.kind === 'main' ? toggle('/warehouses/' + w.id, w) : '') }], rows: whs }),
+      { key: 'active', label: 'الحالة', render: (w) => (w.active ? 'نشط' : 'موقوف') }, { key: 'a', label: '', render: (w) => (w.kind === 'main' && can('warehouses.manage') ? [h('button', { class: 'btn small', onclick: () => editWarehouse(w) }, 'تعديل'), ' ', toggle('/warehouses/' + w.id, w), ' ', h('button', { class: 'btn small danger', onclick: () => deleteWarehouse(w) }, 'حذف')] : '') }], rows: whs }),
     h('div', { class: 'row', style: { marginTop: '10px' } }, field('مستودع جديد', whName), multi ? field('الفرع', whBranch) : null,
       h('button', { class: 'btn primary', onclick: async () => { if (await run(() => api('POST', '/warehouses', { name: whName.value, branch_id: Number(whBranch.value) }), 'أُضيف')) reload('warehouses'); } }, 'إضافة'))),
     h('div', { class: 'card' }, h('h3', null, 'الصناديق والبنوك وعهد المناديب'), table({ columns: [{ key: 'name', label: 'الاسم' }, { key: 'kind', label: 'النوع', render: (c) => ({ cash: 'صندوق', bank: 'بنك', rep_custody: 'عهدة مندوب' }[c.kind]) },

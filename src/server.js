@@ -239,6 +239,7 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
   api.get('/warehouses', h((ctx, req) => M.listWarehouses(ctx, { all: req.query.all === '1' })));
   api.post('/warehouses', h((ctx, req) => M.saveWarehouse(ctx, req.body)));
   api.put('/warehouses/:id', h((ctx, req) => M.saveWarehouse(ctx, req.body, id(req))));
+  api.delete('/warehouses/:id', h((ctx, req) => M.deleteWarehouse(ctx, id(req))));
   api.get('/cash-accounts', h((ctx) => M.listCashAccounts(ctx)));
   api.post('/cash-accounts', h((ctx, req) => M.saveCashAccount(ctx, req.body)));
   api.put('/cash-accounts/:id', h((ctx, req) => M.saveCashAccount(ctx, req.body, id(req))));

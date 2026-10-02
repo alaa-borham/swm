@@ -371,6 +371,31 @@ function saveWarehouse(ctx, input, id) {
   });
 }
 
+/** حذف مستودع فارغ لم تُسجَّل عليه أي حركة أو مستند. ما له تاريخ يُوقَف ولا يُحذف حفاظًا على السجلات. */
+function deleteWarehouse(ctx, id) {
+  ctx.require('warehouses.manage');
+  return ctx.tx(() => {
+    const ex = ctx.db.prepare('SELECT * FROM warehouses WHERE id=?').get(id);
+    if (!ex) notFound('المستودع');
+    ctx.checkBranch(ex.branch_id);
+    if (ex.kind !== 'main') fail('IN_USE', 'مستودع المندوب يُدار من صفحة المندوب');
+    if (ctx.db.prepare('SELECT 1 FROM batches WHERE warehouse_id=? AND qty>0').get(id)) fail('IN_USE', 'لا يمكن حذف مستودع به منتجات');
+    const others = ctx.db.prepare("SELECT COUNT(*) n FROM warehouses WHERE branch_id=? AND kind='main' AND active=1 AND id<>?").get(ex.branch_id, id).n;
+    if (!others) fail('IN_USE', 'لا يمكن حذف المستودع الوحيد في الفرع');
+    // أي جدول يشير إلى المستودع (مستندات، حركات، دفعات، ورديات...) يمنع الحذف
+    const tables = ctx.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all().map((t) => t.name);
+    for (const t of tables) {
+      for (const fk of ctx.db.prepare(`PRAGMA foreign_key_list("${t}")`).all()) {
+        if (fk.table !== 'warehouses') continue;
+        if (ctx.db.prepare(`SELECT 1 FROM "${t}" WHERE "${fk.from}"=? LIMIT 1`).get(id)) fail('IN_USE', 'لا يمكن حذف مستودع عليه حركات أو مستندات سابقة، يمكنك إيقافه بدلًا من ذلك');
+      }
+    }
+    ctx.db.prepare('DELETE FROM warehouses WHERE id=?').run(id);
+    ctx.audit('warehouse.delete', { entity: 'warehouse', entity_id: id, before: ex });
+    return { ok: true };
+  });
+}
+
 function listCashAccounts(ctx) {
   const rows = ctx.db.prepare(`SELECT c.*, r.name rep_name,
       (SELECT COALESCE(SUM(debit-credit),0) FROM journal_lines WHERE account='CASH' AND cash_account_id=c.id) bal
@@ -478,5 +503,5 @@ function listReps(ctx) {
 
 module.exports = {
   createItem, updateItem, getItemFull, listItems, lookupItem, posCatalog, createParty, updateParty, getParty, getPartyRow, listParties,
-  simpleList, listWarehouses, listBranches, saveBranch, saveWarehouse, listCashAccounts, saveCashAccount, saveCategory, createRep, updateRep, getRep, listReps, addCommissionPlan,
+  simpleList, listWarehouses, listBranches, saveBranch, saveWarehouse, deleteWarehouse, listCashAccounts, saveCashAccount, saveCategory, createRep, updateRep, getRep, listReps, addCommissionPlan,
 };
