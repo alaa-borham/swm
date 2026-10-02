@@ -241,7 +241,7 @@ export function invalidate(...names) { for (const n of names) state.cache.delete
 /** قائمة اختيار بحث للعميل/المورد */
 export async function partySelect(kind, value, attrs = {}) {
   const list = await lookup(kind === 'supplier' ? 'suppliers' : 'customers');
-  return sel([{ value: '', label: kind === 'supplier' ? '— اختر المورد —' : '— عميل نقدي —' }, ...list.map((p) => ({ value: p.id, label: p.name + (p.phone ? ' — ' + p.phone : '') }))], value, attrs);
+  return sel([{ value: '', label: kind === 'supplier' ? '— اختر المورد —' : '— عميل نقدي —' }, ...list.map((p) => ({ value: p.id, label: (p.code ? p.code + ' — ' : '') + p.name + (p.phone ? ' — ' + p.phone : '') }))], value, attrs);
 }
 /** اختيار الفرع للتقارير (يظهر فقط عند تعدد الفروع ولمستخدم غير مقيد بفرع) */
 export async function branchFilter(value) {

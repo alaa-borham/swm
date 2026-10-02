@@ -272,14 +272,21 @@ function partyFields(input, ex = {}) {
   return f;
 }
 
+/** رقم العميل التالي: C + 5 أرقام متسلسلة */
+function nextPartyCode(ctx) {
+  const n = ctx.db.prepare("SELECT MAX(CAST(SUBSTR(code,2) AS INTEGER)) n FROM parties WHERE code GLOB 'C[0-9]*'").get().n || 0;
+  return 'C' + String(n + 1).padStart(5, '0');
+}
+
 function createParty(ctx, input) {
   ctx.require('parties.manage');
   return ctx.tx(() => {
     const f = partyFields(input);
     if (ctx.repScope) { f.rep_id = ctx.repScope; f.all_reps = 0; }
-    const id = ctx.db.prepare(`INSERT INTO parties(name,phone,address,is_customer,is_supplier,credit_limit,payment_terms_days,rep_id,all_reps,tax_number,notes,whatsapp_opt_in,active,created_at)
-      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(f.name, f.phone, f.address, f.is_customer, f.is_supplier, f.credit_limit, f.payment_terms_days,
-      f.rep_id, f.all_reps, f.tax_number, f.notes, f.whatsapp_opt_in, f.active, ctx.now()).lastInsertRowid;
+    const code = s(input.code) || nextPartyCode(ctx);
+    const id = uniqueGuard(() => ctx.db.prepare(`INSERT INTO parties(code,name,phone,address,is_customer,is_supplier,credit_limit,payment_terms_days,rep_id,all_reps,tax_number,notes,whatsapp_opt_in,active,created_at)
+      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(code, f.name, f.phone, f.address, f.is_customer, f.is_supplier, f.credit_limit, f.payment_terms_days,
+      f.rep_id, f.all_reps, f.tax_number, f.notes, f.whatsapp_opt_in, f.active, ctx.now()).lastInsertRowid, `رقم العميل ${code} مستخدم مسبقًا`);
     ctx.audit('party.create', { entity: 'party', entity_id: id, after: f });
     return getParty(ctx, id);
   });
@@ -293,6 +300,9 @@ function updateParty(ctx, id, input) {
     if (f.credit_limit !== ex.credit_limit && !ctx.has('credit.override') && !ctx.has('users.manage')) ctx.require('credit.override', 'party.credit_limit');
     ctx.db.prepare(`UPDATE parties SET name=?,phone=?,address=?,is_customer=?,is_supplier=?,credit_limit=?,payment_terms_days=?,rep_id=?,all_reps=?,tax_number=?,notes=?,whatsapp_opt_in=?,active=? WHERE id=?`)
       .run(f.name, f.phone, f.address, f.is_customer, f.is_supplier, f.credit_limit, f.payment_terms_days, f.rep_id, f.all_reps, f.tax_number, f.notes, f.whatsapp_opt_in, f.active, id);
+    if (input.code !== undefined && s(input.code) && s(input.code) !== ex.code) {
+      uniqueGuard(() => ctx.db.prepare('UPDATE parties SET code=? WHERE id=?').run(s(input.code), id), `رقم العميل ${s(input.code)} مستخدم مسبقًا`);
+    }
     ctx.audit('party.update', { entity: 'party', entity_id: id, before: ex, after: f });
     return getParty(ctx, id);
   });
@@ -319,7 +329,7 @@ function listParties(ctx, { q, type, active, limit = 200, offset = 0 } = {}) {
   ctx.require('parties.view');
   const w = ['1=1'];
   const p = [];
-  if (q) { w.push('(name LIKE ? OR phone LIKE ?)'); p.push(`%${q}%`, `%${q}%`); }
+  if (q) { w.push('(name LIKE ? OR phone LIKE ? OR code LIKE ?)'); p.push(`%${q}%`, `%${q}%`, `%${q}%`); }
   if (type === 'customer') w.push('is_customer=1');
   if (type === 'supplier') w.push('is_supplier=1');
   if (active !== undefined && active !== '') { w.push('active=?'); p.push(bool(active)); }

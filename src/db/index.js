@@ -72,6 +72,14 @@ const MIGRATIONS = {
       );
       CREATE INDEX IF NOT EXISTS doc_shares_doc ON doc_shares(doc_id);`);
   },
+  9: (db) => {
+    // رقم لكل عميل/مورد (C00001...) بترتيب الإدخال
+    addColumn(db, 'parties', 'code', 'TEXT');
+    const rows = db.prepare('SELECT id FROM parties WHERE code IS NULL ORDER BY id').all();
+    const up = db.prepare('UPDATE parties SET code=? WHERE id=?');
+    rows.forEach((r, i) => up.run('C' + String(i + 1).padStart(5, '0'), r.id));
+    db.exec('CREATE UNIQUE INDEX IF NOT EXISTS parties_code ON parties(code)');
+  },
 };
 const SCHEMA_VERSION = Math.max(1, ...Object.keys(MIGRATIONS).map(Number));
 

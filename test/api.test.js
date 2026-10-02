@@ -476,3 +476,21 @@ test('استيراد العملاء من Excel: المندوب بالاسم و«
     assert.equal(P('عميل لأحمد').rep_id, rep.id, 'عمود الملف أولى');
   } finally { await t.close(); }
 });
+
+test('رقم العميل: تلقائي متسلسل، قابل للتعديل دون تكرار، والبحث به', async () => {
+  const t = await boot();
+  try {
+    const a = (await t.admin.post('/parties', { name: 'عميل أ', is_customer: 1 })).body;
+    const b = (await t.admin.post('/parties', { name: 'عميل ب', is_customer: 1 })).body;
+    assert.match(a.code, /^C\d{5}$/);
+    assert.equal(Number(b.code.slice(1)), Number(a.code.slice(1)) + 1);
+    const dup = await t.admin.put('/parties/' + b.id, { code: a.code });
+    assert.equal(dup.status, 409);
+    assert.equal((await t.admin.put('/parties/' + b.id, { code: 'VIP1' })).body.code, 'VIP1');
+    const found = (await t.admin.get('/parties?q=' + a.code)).body.rows;
+    assert.deepEqual(found.map((p) => p.id), [a.id]);
+    const c = (await t.admin.post('/parties', { name: 'عميل ج', is_customer: 1 })).body;
+    assert.equal(c.code, b.code.replace(/.*/, 'C' + String(Number(a.code.slice(1)) + 1).padStart(5, '0')), 'التالي بعد أكبر رقم C');
+    assert.equal(t.db.prepare('SELECT COUNT(*) n FROM parties WHERE code IS NULL').get().n, 0);
+  } finally { await t.close(); }
+});

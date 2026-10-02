@@ -127,7 +127,7 @@ export async function parties({ el, q, isCurrent }) {
     can('import.manage') ? h('a', { class: 'btn', href: '#/import?kind=parties' }, 'استيراد من Excel') : null);
   if (head) el.append(head);
   if (q.new && can('parties.manage')) setTimeout(() => partyForm(null, q.new), 50);
-  const qIn = inp({ placeholder: 'الاسم أو الهاتف', value: q.q || '' });
+  const qIn = inp({ placeholder: 'الرقم أو الاسم أو الهاتف', value: q.q || '' });
   const type = sel([{ value: '', label: 'الكل' }, { value: 'customer', label: 'العملاء' }, { value: 'supplier', label: 'الموردون' }], q.type || '');
   const body = h('div');
   const load = async () => {
@@ -135,7 +135,7 @@ export async function parties({ el, q, isCurrent }) {
     if (!isCurrent()) return;
     pageHead(type.value === 'supplier' ? 'الموردون' : type.value === 'customer' ? 'العملاء' : 'العملاء والموردون');
     body.replaceChildren(table({ columns: [
-      { key: 'name', label: 'الاسم', render: (p) => h('a', { href: '#/party/' + p.id }, p.name) }, { key: 'phone', label: 'الهاتف' },
+      { key: 'code', label: 'الرقم' }, { key: 'name', label: 'الاسم', render: (p) => h('a', { href: '#/party/' + p.id }, p.name) }, { key: 'phone', label: 'الهاتف' },
       { key: 't', label: 'النوع', render: (p) => [p.is_customer ? h('span', { class: 'badge' }, 'عميل') : '', ' ', p.is_supplier ? h('span', { class: 'badge warn' }, 'مورد') : ''] },
       { key: 'rep_name', label: 'المندوب' }, { key: 'credit_limit', label: 'الحد الائتماني', type: 'money' }, { key: 'ar_balance', label: 'عليه (عميل)', type: 'money' },
       { key: 'ap_balance', label: 'له (مورد)', type: 'money' }, { key: 'active', label: '', render: (p) => [p.active ? '' : h('span', { class: 'badge bad' }, 'موقوف'), ' ',
@@ -150,7 +150,7 @@ export async function parties({ el, q, isCurrent }) {
 export async function partyForm(p, kind = 'customer', onSaved) {
   const reps = await lookup('reps');
   const f = {
-    name: inp({ value: p?.name || '' }), phone: inp({ value: p?.phone || '' }), address: inp({ value: p?.address || '' }), tax_number: inp({ value: p?.tax_number || '' }),
+    code: inp({ value: p?.code || '', placeholder: 'تلقائي' }), name: inp({ value: p?.name || '' }), phone: inp({ value: p?.phone || '' }), address: inp({ value: p?.address || '' }), tax_number: inp({ value: p?.tax_number || '' }),
     is_customer: h('input', { type: 'checkbox', checked: p ? !!p.is_customer : kind === 'customer' }), is_supplier: h('input', { type: 'checkbox', checked: p ? !!p.is_supplier : kind === 'supplier' }), whatsapp_opt_in: h('input', { type: 'checkbox', checked: !!p?.whatsapp_opt_in }),
     credit_limit: inp({ type: 'number', value: p?.credit_limit ?? '', placeholder: 'فارغ = بلا حد' }), payment_terms_days: inp({ type: 'number', value: p?.payment_terms_days ?? 0 }),
     rep_id: sel([{ value: '', label: '— بدون مندوب —' }, { value: 'all', label: 'كل المناديب' }, ...reps.map((r) => ({ value: r.id, label: r.name }))], p?.all_reps ? 'all' : p?.rep_id || ''), notes: inp({ value: p?.notes || '' }),
@@ -158,12 +158,12 @@ export async function partyForm(p, kind = 'customer', onSaved) {
   };
   const { modal } = await import('../lib.js');
   const m = modal(p ? 'تعديل ' + p.name : kind === 'supplier' ? 'مورد جديد' : 'عميل جديد', h('div', null, h('div', { class: 'grid' },
-    field('الاسم', f.name, { req: true }), field('الهاتف', f.phone), field('العنوان', f.address), field('الرقم الضريبي', f.tax_number),
+    field('الرقم', f.code), field('الاسم', f.name, { req: true }), field('الهاتف', f.phone), field('العنوان', f.address), field('الرقم الضريبي', f.tax_number),
     field('الحد الائتماني', f.credit_limit), field('مدة السداد (يوم)', f.payment_terms_days), field('المندوب المسؤول', f.rep_id), field('ملاحظات', f.notes)),
   h('div', { class: 'row', style: { marginTop: '10px' } }, h('label', { class: 'check' }, f.is_customer, 'عميل'), h('label', { class: 'check' }, f.is_supplier, 'مورد'), h('label', { class: 'check' }, f.active, 'نشط'), h('label', { class: 'check' }, f.whatsapp_opt_in, 'وافق على استلام رسائل واتساب')),
   h('p', { class: 'small muted' }, 'يمكن أن يكون الطرف عميلاً وموردًا معًا؛ يُعرض الحسابان منفصلين دون دمج تلقائي.')),
   [{ label: 'حفظ', class: 'primary', onClick: async () => {
-    const body = { name: f.name.value, phone: f.phone.value, address: f.address.value, tax_number: f.tax_number.value, is_customer: f.is_customer.checked ? 1 : 0, is_supplier: f.is_supplier.checked ? 1 : 0, whatsapp_opt_in: f.whatsapp_opt_in.checked ? 1 : 0,
+    const body = { code: f.code.value || undefined, name: f.name.value, phone: f.phone.value, address: f.address.value, tax_number: f.tax_number.value, is_customer: f.is_customer.checked ? 1 : 0, is_supplier: f.is_supplier.checked ? 1 : 0, whatsapp_opt_in: f.whatsapp_opt_in.checked ? 1 : 0,
       credit_limit: f.credit_limit.value, payment_terms_days: num(f.payment_terms_days.value) || 0, rep_id: f.rep_id.value === 'all' ? 'all' : f.rep_id.value ? Number(f.rep_id.value) : null, notes: f.notes.value, active: f.active.checked ? 1 : 0 };
     const r = await run(() => (p ? api('PUT', '/parties/' + p.id, body) : api('POST', '/parties', body)), 'تم الحفظ');
     if (!r) return false;
@@ -176,7 +176,7 @@ export async function partyForm(p, kind = 'customer', onSaved) {
 
 export async function party({ el, params, q }) {
   const p = await get('/parties/' + params[0]);
-  pageHead(p.name, can('parties.manage') ? h('button', { class: 'btn', onclick: () => partyForm(p) }, 'تعديل') : null,
+  pageHead((p.code ? p.code + ' — ' : '') + p.name, can('parties.manage') ? h('button', { class: 'btn', onclick: () => partyForm(p) }, 'تعديل') : null,
     p.is_customer && can('cash.receipt') ? h('a', { class: 'btn primary', href: `#/receipt?party=${p.id}` }, 'سند قبض') : null,
     p.is_supplier && can('cash.payment') ? h('a', { class: 'btn', href: `#/payment?party=${p.id}` }, 'سند صرف') : null,
     p.is_customer && can('sales.create') ? h('a', { class: 'btn', href: `#/pos?party=${p.id}` }, 'بيع') : null);
