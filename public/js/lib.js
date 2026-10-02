@@ -300,8 +300,14 @@ export function itemPicker({ onPick, warehouseId, placeholder = 'ابحث بال
   // إنشاء صنف سريع دون مغادرة الشاشة؛ يُضاف مباشرة بعد الحفظ
   const quickItem = (name) => {
     const isCode = /^\d{6,}$/.test(name);
-    const f = { name: inp({ value: isCode ? '' : name }), base_unit: inp({ value: 'حبة' }), cost: inp({ type: 'number', placeholder: 'اختياري' }),
+    const f = { name: inp({ value: isCode ? '' : name }), base_unit: inp({ value: 'حبة' }), cost: inp({ type: 'number', placeholder: 'اختياري' }), margin: inp({ type: 'number', placeholder: 'اختياري' }),
       barcode: inp({ value: isCode ? name : '', placeholder: 'اختياري' }), track_expiry: h('input', { type: 'checkbox', checked: true }) };
+    const sellPreview = h('p', { class: 'small', style: { margin: '6px 0 0' } });
+    const showSell = () => {
+      const pp = Number(f.cost.value), pm = Number(f.margin.value);
+      sellPreview.textContent = f.cost.value && f.margin.value && pp >= 0 && pm >= 0 ? `سعر البيع المحسوب: ${(pp * (1 + pm / 100)).toFixed(state.settings.money_decimals ?? 2)}` : '';
+    };
+    f.cost.addEventListener('input', showSell); f.margin.addEventListener('input', showSell);
     // وحدات إضافية: الاسم، وكم وحدة منتج تحتوي، وسعرها وباركودها
     const extra = [];
     const unitsBox = h('div');
@@ -318,14 +324,14 @@ export function itemPicker({ onPick, warehouseId, placeholder = 'ابحث بال
       drawUnits(); extra[extra.length - 1].name.focus();
     };
     modal('صنف جديد', h('div', null, h('div', { class: 'grid' }, field('اسم الصنف', f.name, { req: true }), field('وحدة المنتج', f.base_unit, { req: true }),
-      field('سعر الشراء', f.cost), field('الباركود', f.barcode)), h('label', { class: 'check' }, f.track_expiry, 'له تاريخ انتهاء'),
+      field('سعر الشراء', f.cost), field('نسبة الربح %', f.margin), field('الباركود', f.barcode)), sellPreview, h('label', { class: 'check' }, f.track_expiry, 'له تاريخ انتهاء'),
     h('h4', { style: { margin: '14px 0 4px' } }, 'وحدات أخرى'),
     h('p', { class: 'small muted', style: { margin: 0 } }, 'مثال: وحدة المنتج "حبة"، ووحدة أخرى "كرتون" تحتوي 12 حبة. المخزون يُحسب دائمًا بوحدة المنتج.'),
     unitsBox, h('button', { type: 'button', class: 'btn small', style: { marginTop: '8px' }, onclick: addUnit }, '+ إضافة وحدة أخرى'),
-    h('p', { class: 'small muted' }, 'سعر الشراء يُكتب في الفاتورة تلقائيًا. سعر البيع وباقي البيانات (التصنيف، الحد الأدنى للسعر...) تُضبط من صفحة الأصناف.')),
+    h('p', { class: 'small muted' }, 'سعر الشراء يُكتب في الفاتورة تلقائيًا. عند كتابة نسبة الربح يُحسب سعر البيع لكل وحدة = سعر شرائها + النسبة. باقي البيانات تُضبط من صفحة الأصناف.')),
     [{ label: 'حفظ وإضافة', class: 'primary', onClick: async () => {
-      const units = extra.map((u) => ({ name: u.name.value, factor: u.factor.value, barcode: u.barcode.value || undefined, purchase_price: u.cost.value || undefined }));
-      const it = await run(() => api('POST', '/items', { name: f.name.value, base_unit: f.base_unit.value, sell_price: 0, purchase_price: f.cost.value || undefined, barcode: f.barcode.value || undefined, track_expiry: f.track_expiry.checked ? 1 : 0, units }), 'أُضيف الصنف');
+      const units = extra.map((u) => ({ name: u.name.value, factor: u.factor.value, barcode: u.barcode.value || undefined, purchase_price: u.cost.value || undefined, profit_margin: f.margin.value || undefined }));
+      const it = await run(() => api('POST', '/items', { name: f.name.value, base_unit: f.base_unit.value, sell_price: 0, purchase_price: f.cost.value || undefined, profit_margin: f.margin.value || undefined, barcode: f.barcode.value || undefined, track_expiry: f.track_expiry.checked ? 1 : 0, units }), 'أُضيف الصنف');
       if (!it) return false;
       // سعر الشراء المُدخل لكل وحدة يُمرَّر للسطر؛ وتُختار أول وحدة أخرى لها سعر وإلا وحدة المنتج
       const base = it.units.find((u) => u.is_base);

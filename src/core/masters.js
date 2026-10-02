@@ -58,6 +58,9 @@ function saveUnits(ctx, item, units) {
       purchase_price: u.purchase_price == null || u.purchase_price === '' ? null : toMinor(u.purchase_price, `سعر شراء ${name}`),
     };
     if (vals.purchase_price != null && vals.purchase_price < 0) fail('VALIDATION', 'السعر لا يكون سالبًا');
+    vals.profit_margin_bp = marginBp(u.profit_margin, name);
+    // بلا سعر بيع: سعر البيع = سعر الشراء + نسبة الربح
+    if (!vals.sell_price && vals.purchase_price != null && vals.profit_margin_bp != null) vals.sell_price = Math.round(vals.purchase_price * (10000 + vals.profit_margin_bp) / 10000);
     if (vals.sell_price < 0) fail('VALIDATION', 'السعر لا يكون سالبًا');
     uniqueGuard(() => {
       if (u.id) {
@@ -66,11 +69,13 @@ function saveUnits(ctx, item, units) {
         if (ex.is_base) vals.factor = 1000;
         // سعر الشراء لا يُمسح إذا لم يُرسل (مستخدم لا يراه)
         const pp = u.purchase_price === undefined ? ex.purchase_price : vals.purchase_price;
-        ctx.db.prepare('UPDATE item_units SET name=?,factor=?,barcode=?,sell_price=?,purchase_price=?,for_sale=?,for_purchase=?,active=? WHERE id=?')
-          .run(vals.name, vals.factor, vals.barcode, vals.sell_price, pp, vals.for_sale, vals.for_purchase, ex.is_base ? 1 : vals.active, ex.id);
+        const pm = u.profit_margin === undefined ? ex.profit_margin_bp : vals.profit_margin_bp;
+        if (!vals.sell_price && pp != null && pm != null) vals.sell_price = Math.round(pp * (10000 + pm) / 10000);
+        ctx.db.prepare('UPDATE item_units SET name=?,factor=?,barcode=?,sell_price=?,purchase_price=?,profit_margin_bp=?,for_sale=?,for_purchase=?,active=? WHERE id=?')
+          .run(vals.name, vals.factor, vals.barcode, vals.sell_price, pp, pm, vals.for_sale, vals.for_purchase, ex.is_base ? 1 : vals.active, ex.id);
       } else {
-        ctx.db.prepare('INSERT INTO item_units(item_id,name,factor,barcode,sell_price,purchase_price,is_base,for_sale,for_purchase,active) VALUES(?,?,?,?,?,?,?,?,?,?)')
-          .run(item.id, vals.name, vals.factor, vals.barcode, vals.sell_price, vals.purchase_price, u.is_base ? 1 : 0, vals.for_sale, vals.for_purchase, vals.active);
+        ctx.db.prepare('INSERT INTO item_units(item_id,name,factor,barcode,sell_price,purchase_price,profit_margin_bp,is_base,for_sale,for_purchase,active) VALUES(?,?,?,?,?,?,?,?,?,?,?)')
+          .run(item.id, vals.name, vals.factor, vals.barcode, vals.sell_price, vals.purchase_price, vals.profit_margin_bp, u.is_base ? 1 : 0, vals.for_sale, vals.for_purchase, vals.active);
       }
     }, `الباركود ${vals.barcode || ''} أو اسم الوحدة ${name} مستخدم مسبقًا`);
   }
@@ -88,7 +93,7 @@ function createItem(ctx, input) {
     `كود الصنف ${code} مستخدم مسبقًا`);
     if (!code) ctx.db.prepare('UPDATE items SET code=? WHERE id=?').run(`IT${String(id).padStart(5, '0')}`, id);
     const item = ctx.db.prepare('SELECT * FROM items WHERE id=?').get(id);
-    const units = [{ is_base: 1, name: f.base_unit, barcode: input.barcode, sell_price: input.sell_price ?? 0, purchase_price: input.purchase_price }, ...(input.units || []).filter((u) => !u.is_base)];
+    const units = [{ is_base: 1, name: f.base_unit, barcode: input.barcode, sell_price: input.sell_price ?? 0, purchase_price: input.purchase_price, profit_margin: input.profit_margin }, ...(input.units || []).filter((u) => !u.is_base)];
     saveUnits(ctx, item, units);
     ctx.audit('item.create', { entity: 'item', entity_id: id, after: { ...f, code: item.code } });
     return getItemFull(ctx, id);
@@ -118,9 +123,22 @@ function updateItem(ctx, id, input) {
   });
 }
 
-/** سعر الشراء يراه من يرى التكلفة أو ينشئ المشتريات فقط */
+/** نسبة ربح اختيارية من 0 إلى 1000% (تُخزن ×100) */
+function marginBp(x, name) {
+  if (x === undefined || x === null || x === '') return null;
+  const n = Number(x);
+  if (!Number.isFinite(n) || n < 0 || n > 1000) fail('VALIDATION', `نسبة الربح للوحدة ${name} يجب أن تكون بين 0 و1000`);
+  return Math.round(n * 100);
+}
+
+/** سعر الشراء ونسبة الربح يراهما من يرى التكلفة أو ينشئ المشتريات فقط */
 function hidePurchasePrice(ctx, units) {
-  if (!ctx.has('cost.view') && !ctx.has('purchases.create')) units.forEach((u) => delete u.purchase_price);
+  const allowed = ctx.has('cost.view') || ctx.has('purchases.create');
+  units.forEach((u) => {
+    u.profit_margin = u.profit_margin_bp == null ? null : u.profit_margin_bp / 100;
+    delete u.profit_margin_bp;
+    if (!allowed) { delete u.purchase_price; delete u.profit_margin; }
+  });
 }
 
 function getItemFull(ctx, id) {

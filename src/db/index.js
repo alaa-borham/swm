@@ -46,6 +46,10 @@ const MIGRATIONS = {
     // سعر الشراء الافتراضي لكل وحدة (يُقترح في فاتورة وطلب الشراء)
     addColumn(db, 'item_units', 'purchase_price', 'INTEGER');
   },
+  5: (db) => {
+    // نسبة الربح على سعر الشراء لحساب سعر البيع تلقائيًا (×100)
+    addColumn(db, 'item_units', 'profit_margin_bp', 'INTEGER');
+  },
 };
 const SCHEMA_VERSION = Math.max(1, ...Object.keys(MIGRATIONS).map(Number));
 

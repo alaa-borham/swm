@@ -231,3 +231,13 @@ test('سعر الشراء للوحدات: يُحفظ ولا يظهر للكاش�
     assert.equal((await c.get('/items/' + it.id)).body.units[0].purchase_price, undefined);
   } finally { await t.close(); }
 });
+
+test('نسبة الربح: سعر البيع = سعر الشراء + النسبة عند عدم إدخاله', async () => {
+  const t = await boot();
+  try {
+    const it = (await t.admin.post('/items', { name: 'زيت', base_unit: 'حبة', track_expiry: 0, purchase_price: 10, profit_margin: 25, units: [{ name: 'كرتون', factor: 12, purchase_price: 100, profit_margin: 20 }, { name: 'ربطة', factor: 6, purchase_price: 50, profit_margin: 20, sell_price: 70 }] })).body;
+    assert.deepEqual(it.units.map((u) => [u.name, u.sell_price, u.profit_margin]), [['حبة', 12.5, 25], ['ربطة', 70, 20], ['كرتون', 120, 20]]);
+    const bad = await t.admin.post('/items', { name: 'خطأ', base_unit: 'حبة', purchase_price: 1, profit_margin: -5 });
+    assert.equal(bad.status, 400);
+  } finally { await t.close(); }
+});
