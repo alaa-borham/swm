@@ -112,11 +112,27 @@ function layout() {
   clear(app);
   const side = h('nav', { class: 'side', 'aria-label': 'القائمة' },
     h('div', { class: 'org' }, state.settings.org_name, h('small', null, state.me.full_name, state.branch ? ' — ' + state.branch.name : '')));
+  // مجموعات قابلة للطي؛ تُحفظ المجموعات المفتوحة على الجهاز
+  let openGroups;
+  try { openGroups = new Set(JSON.parse(localStorage.getItem('frs-nav-open') || '[]')); } catch (_) { openGroups = new Set(); }
+  const saveOpen = () => { try { localStorage.setItem('frs-nav-open', JSON.stringify([...openGroups])); } catch (_) { /* ignore */ } };
   for (const [group, items] of NAV) {
     const vis = items.filter(([r]) => allowed(r));
     if (!vis.length) continue;
-    if (group) side.appendChild(h('div', { class: 'nav-group' }, group));
-    for (const [r, label] of vis) side.appendChild(h('a', { class: 'nav', href: '#/' + r, 'data-route': r, onclick: () => side.classList.remove('open') }, label));
+    const links = vis.map(([r, label]) => h('a', { class: 'nav', href: '#/' + r, 'data-route': r, onclick: () => side.classList.remove('open') }, label));
+    if (!group) { side.append(...links); continue; }
+    const body = h('div', { class: 'nav-items', id: 'nav-' + group, role: 'group' }, links);
+    const head = h('button', { type: 'button', class: 'nav-group', 'aria-expanded': 'false', 'aria-controls': 'nav-' + group, 'data-group': group },
+      h('span', null, group), h('span', { class: 'chev', 'aria-hidden': 'true' }, '‹'));
+    const setOpen = (o) => { head.setAttribute('aria-expanded', String(o)); body.classList.toggle('open', o); };
+    head.addEventListener('click', () => {
+      const o = head.getAttribute('aria-expanded') !== 'true';
+      setOpen(o);
+      if (o) openGroups.add(group); else openGroups.delete(group);
+      saveOpen();
+    });
+    setOpen(openGroups.has(group));
+    side.append(h('div', { class: 'nav-section' }, head, body));
   }
   const net = h('a', { href: '#/offline-queue', class: 'badge hidden' });
   const updateNet = () => {
@@ -152,6 +168,10 @@ async function route() {
   const q = Object.fromEntries(new URLSearchParams(query));
   const r = ROUTES.find((x) => x[0] === name);
   document.querySelectorAll('.side a.nav').forEach((a) => a.classList.toggle('active', a.dataset.route === name));
+  // افتح القسم الذي يحتوي الصفحة الحالية
+  const act = document.querySelector('.side a.nav.active');
+  const sec = act && act.closest('.nav-section');
+  if (sec) { sec.querySelector('.nav-group').setAttribute('aria-expanded', 'true'); sec.querySelector('.nav-items').classList.add('open'); }
   const el = document.getElementById('content');
   if (!el) return;
   document.querySelectorAll('.modal-bg').forEach((m) => m.remove());
