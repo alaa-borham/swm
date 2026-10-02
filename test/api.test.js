@@ -362,3 +362,28 @@ test('استيراد الأصناف من القالب: سعر الشراء ون�
     assert.equal(old.status, 200, JSON.stringify(old.body));
   } finally { await t.close(); }
 });
+
+test('خصم الفاتورة: يفعّله المدير، واستخدامه من المندوب يلغي خصومات الأصناف', async () => {
+  const t = await boot();
+  try {
+    const rep = (await t.admin.post('/reps', { name: 'م' })).body;
+    await t.admin.post('/users', { username: 'repx', full_name: 'م', password: 'Rep12345', roles: ['rep'], rep_id: rep.id });
+    const item = (await t.admin.post('/items', { name: 'حلاوه', base_unit: 'حبة', track_expiry: 0, sell_price: 10, max_discount_pct: 50 })).body;
+    await t.admin.post('/opening-stock', { warehouse_id: 1, lines: [{ item_id: item.id, qty: 20, unit_cost: 5 }] });
+    await t.admin.post('/transfers', { from_warehouse_id: 1, to_warehouse_id: rep.warehouse_id, lines: [{ item_id: item.id, unit_id: item.units[0].id, qty: 10 }] });
+    const c = (await t.admin.post('/parties', { name: 'ع', is_customer: 1, rep_id: rep.id })).body;
+    const r = await t.client('repx', 'Rep12345');
+    const body = { party_id: c.id, warehouse_id: rep.warehouse_id, invoice_discount_amount: 2, lines: [{ item_id: item.id, qty: 2, discount_pct: 10 }], payments: [] };
+    const off = await r.post('/sales', body);
+    assert.equal(off.status, 403, 'غير مفعّل');
+    assert.match(off.body.error.message, /غير مفعّل/);
+    await t.admin.put('/settings', { invoice_discount_enabled: true });
+    const on = await r.post('/sales', body);
+    assert.equal(on.status, 200, JSON.stringify(on.body));
+    assert.equal(on.body.lines[0].line_discount, 0, 'أُلغي خصم الصنف');
+    assert.equal(on.body.discount, 2, 'بقي خصم الفاتورة فقط');
+    // بدون خصم فاتورة: خصم الصنف يبقى
+    const lineOnly = await r.post('/sales', { party_id: c.id, warehouse_id: rep.warehouse_id, lines: [{ item_id: item.id, qty: 1, discount_pct: 10 }], payments: [] });
+    assert.equal(lineOnly.body.lines[0].line_discount, 1);
+  } finally { await t.close(); }
+});

@@ -160,7 +160,7 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
         org_logo_url: s.org_logo ? '/api/settings/logo?v=' + crypto.createHash('sha1').update(s.org_logo).digest('hex').slice(0, 10) : null,
         money_decimals: getMoneyDecimals(), prices_include_tax: s.prices_include_tax === '1', default_tax_rate: fromBp(Number(s.default_tax_rate_bp)),
         invoice_footer: s.invoice_footer, receipt_width_mm: Number(s.receipt_width_mm), locked_until: s.locked_until, today: ctx.today(),
-        expiry_alert_days: Number(s.expiry_alert_days), einvoice_qr: s.einvoice_qr === '1', whatsapp_enabled: s.whatsapp_enabled === '1', app_version: APP_VERSION,
+        expiry_alert_days: Number(s.expiry_alert_days), einvoice_qr: s.einvoice_qr === '1', whatsapp_enabled: s.whatsapp_enabled === '1', app_version: APP_VERSION, invoice_discount_enabled: s.invoice_discount_enabled === '1',
       },
     };
   }));
@@ -190,7 +190,7 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
 
   const SETTING_KEYS = {
     org_name: 'settings.manage', org_address: 'settings.manage', org_phone: 'settings.manage', org_tax_number: 'settings.manage', country: 'settings.manage',
-    org_logo: 'settings.manage', org_cr_number: 'settings.manage', reps_all_customers: 'settings.manage',
+    org_logo: 'settings.manage', org_cr_number: 'settings.manage', reps_all_customers: 'settings.manage', invoice_discount_enabled: 'settings.manage',
     currency: 'settings.manage', timezone: 'settings.manage', expiry_block_days: 'settings.manage', expiry_alert_days: 'settings.manage',
     cashier_max_discount_pct: 'settings.manage', extra_cost_basis: 'settings.manage', session_timeout_minutes: 'settings.manage', backup_hour: 'backup.manage',
     backup_retention: 'backup.manage', invoice_footer: 'settings.manage', receipt_width_mm: 'settings.manage', money_decimals: 'settings.manage',
@@ -253,7 +253,7 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
         if (![0, 1, 2, 3].includes(Number(v))) fail('VALIDATION', 'منازل العملة بين 0 و3');
         require('./lib/money').setMoneyDecimals(Number(v));
       }
-      if (['reps_all_customers', 'prices_include_tax', 'tax_recoverable', 'einvoice_qr', 'whatsapp_enabled', 'whatsapp_auto_invoice', 'whatsapp_auto_receipt'].includes(k)) { set.run(k, v ? '1' : '0'); continue; }
+      if (['invoice_discount_enabled', 'reps_all_customers', 'prices_include_tax', 'tax_recoverable', 'einvoice_qr', 'whatsapp_enabled', 'whatsapp_auto_invoice', 'whatsapp_auto_receipt'].includes(k)) { set.run(k, v ? '1' : '0'); continue; }
       set.run(k, String(v ?? ''));
     }
     ctx.invalidateSettings();

@@ -141,7 +141,7 @@ async function posView({ el, q }) {
         onchange: () => { l.unit_id = Number(unitSel.value); l.price = units.find((u) => u.id === l.unit_id).sell_price; redraw(); } });
       const qIn = inp({ type: 'number', value: l.qty, style: { width: '80px' }, onchange: () => { l.qty = qIn.value; redraw(); } });
       const pIn = inp({ type: 'number', value: l.price, style: { width: '90px' }, onchange: () => { l.price = pIn.value; redraw(); } });
-      const dIn = inp({ type: 'number', value: l.discount_pct, placeholder: '%', style: { width: '64px' }, onchange: () => { l.discount_pct = dIn.value; redraw(); } });
+      const dIn = inp({ type: 'number', value: l.discount_pct, placeholder: '%', style: { width: '64px' }, disabled: invDiscUsed() || null, title: invDiscUsed() ? 'خصم الأصناف غير متاح مع خصم الفاتورة' : null, onchange: () => { l.discount_pct = dIn.value; redraw(); } });
       tbody.append(h('tr', null,
         h('td', null, l.item.name, l.item.sellable_qty != null ? h('div', { class: 'small muted' }, 'متاح ', Q(l.item.sellable_qty), ' ', l.item.base_unit) : null),
         h('td', null, unitSel), h('td', null, stepper(qIn, { step: 1, min: 0, onChange: (v) => { l.qty = v; redraw(); } })),
@@ -160,7 +160,16 @@ async function posView({ el, q }) {
     return c;
   }
   const line = (k, v) => h('div', { class: 'line' }, h('span', null, k), M(v));
-  for (const x of [invDiscPct, invDiscAmt, cashIn, cardIn]) x.addEventListener('input', draw);
+  // سياسة خصم الفاتورة: يظهر لغير المدير فقط إذا فعّله المدير، واستخدامه يلغي خصومات الأصناف
+  const isAdmin = can('settings.manage');
+  const invDiscAllowed = isAdmin || !!s.invoice_discount_enabled;
+  const invDiscUsed = () => !isAdmin && ((num(invDiscPct.value) || 0) !== 0 || (num(invDiscAmt.value) || 0) !== 0);
+  const onInvDisc = () => {
+    if (invDiscUsed() && cart.some((l) => l.discount_pct)) { cart.forEach((l) => { l.discount_pct = ''; }); toast('أُلغيت خصومات الأصناف لأن خصم الفاتورة مستخدم', 'warn'); }
+    draw();
+  };
+  invDiscPct.addEventListener('input', onInvDisc); invDiscAmt.addEventListener('input', onInvDisc);
+  for (const x of [cashIn, cardIn]) x.addEventListener('input', draw);
 
   const payload = (approve, extra = {}) => {
     const c = calc();
@@ -246,7 +255,7 @@ async function posView({ el, q }) {
     h('div', null,
       h('div', { class: 'card' },
         h('div', { class: 'grid' }, field('العميل', custSel), field('المستودع', whSel), can('settings.manage') ? field('التاريخ', dateIn) : null),
-        h('div', { class: 'row', style: { marginTop: '8px' } }, field('خصم الفاتورة %', invDiscPct), field('أو مبلغ', invDiscAmt)),
+        invDiscAllowed ? h('div', { class: 'row', style: { marginTop: '8px' } }, field('خصم الفاتورة %', invDiscPct), field('أو مبلغ', invDiscAmt)) : null,
         h('div', { style: { marginTop: '8px' } }, notes)),
       h('div', { class: 'card' }, totals),
       h('div', { class: 'card' },

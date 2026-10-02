@@ -46,7 +46,20 @@ function invoiceOpts(ctx, input) {
   };
 }
 
+/**
+ * سياسة خصم الفاتورة لغير المدير: لا يُسمح به إلا إذا فعّله المدير من الإعدادات،
+ * وعند استخدامه تُلغى خصومات الأصناف (لا يجتمع الخصمان).
+ */
+function applyDiscountPolicy(ctx, input) {
+  if (ctx.has('settings.manage')) return input;
+  const has = (v) => v != null && v !== '' && Number(v) !== 0;
+  if (!has(input.invoice_discount_pct) && !has(input.invoice_discount_amount)) return input;
+  if (ctx.setting('invoice_discount_enabled') !== '1') fail('FORBIDDEN', 'خصم الفاتورة غير مفعّل؛ يفعّله المدير من الإعدادات', 403);
+  return { ...input, lines: (input.lines || []).map((l) => ({ ...l, discount_pct: null, discount_amount: null })) };
+}
+
 function storeDraft(ctx, input, existing) {
+  input = applyDiscountPolicy(ctx, input);
   const date = checkDate(input.date || ctx.today());
   const warehouseId = Number(input.warehouse_id || defaultWarehouse(ctx));
   const wh = ctx.db.prepare('SELECT * FROM warehouses WHERE id=?').get(warehouseId);

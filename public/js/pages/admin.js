@@ -46,6 +46,8 @@ export async function settings({ el }) {
       F('expiry_block_days', 'منع البيع قبل الانتهاء بـ (أيام)', { type: 'number' }),
       F('scale_prefix', 'بادئة باركود الميزان (فارغ = غير مفعّل)'), F('scale_plu_digits', 'خانات كود الصنف في باركود الميزان', { type: 'number' }),
       F('scale_value_digits', 'خانات الوزن/السعر', { type: 'number' }), F('expiry_alert_days', 'تنبيه الصلاحية (أيام)', { type: 'number' }), field('توزيع تكاليف الشراء', basis), field('باركود الميزان يحمل', scaleMode))),
+    h('div', { class: 'card' }, h('h3', null, 'خصم الفاتورة'), chk('invoice_discount_enabled', 'السماح بخصم على إجمالي الفاتورة للمناديب والكاشير'),
+      h('p', { class: 'small muted' }, 'عند التفعيل: إذا استخدم المندوب أو الكاشير خصم الفاتورة تُلغى خصومات الأصناف في نفس الفاتورة. المدير يستطيع دائمًا.')),
     h('div', { class: 'card' }, h('h3', null, 'المناديب'), chk('reps_all_customers', 'المناديب يرون كل العملاء (وليس العملاء المسندين لهم فقط)'),
       h('p', { class: 'small muted' }, 'عند الإيقاف: يرى كل مندوب العملاء المسندين له فقط (من صفحة المندوب ← إسناد عملاء، أو حقل المندوب في بطاقة العميل).')),
     whatsappCard(s, F, chk),
