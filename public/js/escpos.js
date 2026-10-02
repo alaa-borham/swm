@@ -16,7 +16,7 @@ export async function renderCanvas(node, { width = null, scale = 2 } = {}) {
   const pad = width ? 4 : 12;
   const w = Math.ceil(rect.width) + pad * 2;
   // ارتفاع إضافي احتياطًا: قد يختلف الخط داخل الصورة عن الشاشة فيطول الإيصال؛ الأبيض الزائد يُقص عند التحويل
-  const hgt = Math.ceil(rect.height * (width ? 1.6 : 1)) + pad * 2 + (width ? 200 : 0);
+  const hgt = Math.ceil(rect.height * (width ? 2.5 : 1)) + pad * 2 + (width ? 400 : 0);
   const html = new XMLSerializer().serializeToString(clone);
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${hgt}"><foreignObject width="100%" height="100%">`
     + `<div xmlns="http://www.w3.org/1999/xhtml" dir="rtl" class="print-area" style="display:block;background:#fff;color:#000;padding:${pad}px;font-family:Tahoma,Arial,sans-serif">`
@@ -68,8 +68,12 @@ export function canvasToEscPos(canvas) {
       }
     }
   }
-  out.push(0x1b, 0x64, 0x04); // تغذية 4 أسطر
+  // مسافة فارغة أسفل الإيصال (~3 سم) ليسهل قطعه
+  out.push(0x1b, 0x4a, 0xf0); // تغذية 240 نقطة
+  out.push(0x0a, 0x0a, 0x0a);
   out.push(0x1d, 0x56, 0x42, 0x00); // قص (تتجاهله الطابعات بلا قاطع)
+  // حشوة في النهاية: بعض الطابعات المحمولة تُسقط آخر البيانات المستلمة، فتسقط الحشوة بدل نهاية الإيصال
+  for (let i = 0; i < 1536; i++) out.push(0x00);
   return new Uint8Array(out);
 }
 
