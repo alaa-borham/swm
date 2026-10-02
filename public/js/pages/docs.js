@@ -34,6 +34,7 @@ export async function list({ el, q, isCurrent }, type) {
       type === 'purchase_order' ? { key: 'po', label: 'الاستلام', render: (d) => poBadge(d.data?.po_state) } : null,
       { key: 'status', label: 'الحالة', render: (d) => [badge(STATUS, d.status), ' ', d.payment_status && d.status === 'approved' ? badge(PAY_STATUS, d.payment_status) : ''] },
       { key: 'created_by_name', label: 'بواسطة' },
+      ['sale', 'purchase', 'sale_return', 'purchase_return', 'receipt', 'payment', 'purchase_order', 'expense'].includes(type) ? { key: 'view', label: '', render: (d) => h('button', { class: 'btn small', onclick: (e) => { e.stopPropagation(); viewDoc(d.id, type === 'sale' && window.innerWidth < 900 ? 'thermal' : 'a4'); } }, 'عرض') } : null,
     ].filter(Boolean);
     body.replaceChildren(table({ columns: cols, rows: r.rows, onRow: (d) => { location.hash = '#/doc/' + d.id; } }),
       h('div', { class: 'row', style: { marginTop: '8px' } }, h('span', { class: 'muted' }, `${r.total} مستند`),
@@ -69,6 +70,7 @@ export async function view({ el, params }) {
   }, 'danger');
 
   if (d.status === 'approved' && ['sale', 'sale_return', 'receipt', 'payment', 'purchase'].includes(d.type) && can('sales.print')) {
+    A('عرض الفاتورة', () => viewDoc(d.id, 'a4'));
     A('طباعة A4', () => printDoc(d.id, 'a4'));
     if (['sale', 'sale_return', 'receipt'].includes(d.type)) A('إيصال حراري', () => printDoc(d.id, 'thermal'));
   }
@@ -300,44 +302,74 @@ export async function saleReturn({ el, params }) {
 }
 
 // ===================== الطباعة =====================
-export async function printDoc(id, format = 'a4') {
+/** تجهيز مستند للطباعة: العرض، رمز QR، وعلامة «نسخة» إن سبقت طباعته */
+async function preparePrint(id, format, { count }) {
+  const d = await get('/docs/' + id);
+  const p = count ? await api('POST', `/docs/${id}/print`, {}) : { copy: (d.print_count || 0) > 0 };
+  const s = state.settings;
+  let qrImg = null;
+  if (s.einvoice_qr && ['sale', 'sale_return'].includes(d.type) && d.status === 'approved') {
+    try {
+      const q = await get(`/docs/${id}/qr`);
+      qrImg = h('img', { src: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(q.svg), alt: 'QR', style: { width: format === 'thermal' ? '40mm' : '34mm', height: 'auto', display: 'block', margin: '8px auto', imageRendering: 'pixelated' } });
+    } catch (e) { toast('تعذر إنشاء رمز الفاتورة: ' + e.message, 'bad'); }
+  }
+  d._qr = qrImg;
+  return { d, s, copy: p.copy };
+}
+
+const pageStyle = (format, s) => h('style', { class: 'print-page-style' }, format === 'thermal' ? `@page { size: ${s.receipt_width_mm || 80}mm auto; margin: 2mm; }` : '@page { size: A4; margin: 10mm; }');
+const waitImages = (root) => Promise.all([...root.querySelectorAll('img')].map((img) => (img.complete ? null : new Promise((r) => { img.onload = r; img.onerror = r; setTimeout(r, 3000); }))));
+
+/** عرض المستند كما سيُطبع، مع أزرار الطباعة والمشاركة والتبديل بين A4 والحراري */
+export async function viewDoc(id, format = 'a4', { count = false } = {}) {
   try {
-    const d = await get('/docs/' + id);
-    const p = await api('POST', `/docs/${id}/print`, {});
-    const s = state.settings;
-    // رمز الفاتورة الضريبية المبسطة
-    let qrImg = null;
-    if (s.einvoice_qr && ['sale', 'sale_return'].includes(d.type)) {
-      try {
-        const q = await get(`/docs/${id}/qr`);
-        qrImg = h('img', { src: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(q.svg), alt: 'QR', style: { width: format === 'thermal' ? '40mm' : '34mm', height: 'auto', display: 'block', margin: '8px auto', imageRendering: 'pixelated' } });
-      } catch (e) { toast('تعذر إنشاء رمز الفاتورة: ' + e.message, 'bad'); }
-    }
-    d._qr = qrImg;
+    const area = document.querySelector('.print-area') || document.body.appendChild(h('div', { class: 'print-area' }));
+    let fmt = format;
+    let printed = count;
+    const render = async (withCount) => {
+      const { d, s, copy } = await preparePrint(id, fmt, { count: withCount });
+      clear(area);
+      area.append(fmt === 'thermal' ? thermal(d, s, copy) : a4(d, s, copy));
+      document.querySelectorAll('.print-page-style').forEach((x) => x.remove());
+      document.head.appendChild(pageStyle(fmt, s));
+      await waitImages(area);
+      return d;
+    };
+    const d = await render(count);
+    const close = () => { document.body.classList.remove('printing', 'print-preview'); clear(area); document.querySelectorAll('.print-page-style').forEach((x) => x.remove()); document.querySelector('.print-toolbar')?.remove(); };
+    // أول طباعة/مشاركة فقط تُسجَّل في عداد الطباعة (النسخ التالية تُعلَّم «نسخة»)
+    const markPrinted = async () => { if (!printed) { printed = true; await api('POST', `/docs/${id}/print`, {}).catch(() => null); } };
+    const canThermal = ['sale', 'sale_return', 'receipt'].includes(d.type);
+    const fmtBtn = (f, label) => h('button', { class: 'btn' + (fmt === f ? ' primary' : ''), onclick: async () => { fmt = f; await render(false); bar.replaceWith(toolbar()); } }, label);
+    const toolbar = () => (bar = h('div', { class: 'print-toolbar' },
+      h('button', { class: 'btn ok', onclick: async () => { await markPrinted(); window.print(); } }, 'طباعة'),
+      h('button', { class: 'btn', onclick: async () => { await markPrinted(); shareAsImage(area.firstElementChild, `${d.number}.png`, fmt); } }, 'مشاركة صورة'),
+      canThermal ? fmtBtn('a4', 'A4') : null, canThermal ? fmtBtn('thermal', 'حراري') : null,
+      h('button', { class: 'btn', onclick: close }, 'إغلاق'),
+      h('span', { class: 'small' }, 'إن لم تظهر قائمة الطباعة على الجوال: استخدم «مشاركة صورة» وأرسلها لتطبيق الطابعة (مثل RawBT) أو واتساب أو احفظها.')));
+    let bar;
+    document.querySelector('.print-toolbar')?.remove();
+    document.body.classList.add('printing', 'print-preview');
+    document.body.appendChild(toolbar());
+  } catch (e) { toast(e.message, 'bad'); }
+}
+
+export async function printDoc(id, format = 'a4') {
+  // على الجوال: متصفحات أندرويد تُنهي window.print فورًا قبل التقاط المعاينة، فتُعرض معاينة بأزرار بدل الطباعة المباشرة
+  const mobile = window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 900;
+  if (mobile) return viewDoc(id, format, { count: true });
+  try {
+    const { d, s, copy } = await preparePrint(id, format, { count: true });
     const area = document.querySelector('.print-area') || document.body.appendChild(h('div', { class: 'print-area' }));
     clear(area);
-    area.append(format === 'thermal' ? thermal(d, s, p.copy) : a4(d, s, p.copy));
+    area.append(format === 'thermal' ? thermal(d, s, copy) : a4(d, s, copy));
     document.body.classList.add('printing');
-    const page = h('style', null, format === 'thermal' ? `@page { size: ${s.receipt_width_mm || 80}mm auto; margin: 2mm; }` : '@page { size: A4; margin: 10mm; }');
+    const page = pageStyle(format, s);
     document.head.appendChild(page);
-    // انتظار تحميل الشعار ورمز QR قبل الطباعة
-    await Promise.all([...area.querySelectorAll('img')].map((img) => (img.complete ? null : new Promise((r) => { img.onload = r; img.onerror = r; setTimeout(r, 3000); }))));
-    let autoClose = null;
-    const close = () => { document.body.classList.remove('printing', 'print-preview'); clear(area); page.remove(); document.querySelector('.print-toolbar')?.remove(); if (autoClose) window.removeEventListener('afterprint', autoClose); };
-    // على الجوال: متصفحات أندرويد تُنهي window.print فورًا قبل أن تلتقط المعاينة، فلا نمسح الإيصال تلقائيًا؛
-    // تُعرض معاينة كاملة بأزرار طباعة وإغلاق وتبقى حتى يغلقها المستخدم
-    const mobile = window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 900;
-    if (mobile) {
-      document.body.classList.add('print-preview');
-      document.body.appendChild(h('div', { class: 'print-toolbar' },
-        h('button', { class: 'btn primary', onclick: () => window.print() }, 'طباعة'),
-        h('button', { class: 'btn ok', onclick: () => shareAsImage(area.firstElementChild, `${d.number}.png`, format) }, 'مشاركة صورة'),
-        h('button', { class: 'btn', onclick: close }, 'إغلاق'),
-        h('span', { class: 'small' }, 'إن لم تظهر قائمة الطباعة: استخدم «مشاركة صورة» وأرسلها لتطبيق الطابعة (مثل RawBT) أو واتساب أو احفظها.')));
-      return;
-    }
-    autoClose = () => close();
-    window.addEventListener('afterprint', autoClose);
+    await waitImages(area);
+    const done = () => { document.body.classList.remove('printing'); clear(area); page.remove(); window.removeEventListener('afterprint', done); };
+    window.addEventListener('afterprint', done);
     setTimeout(() => window.print(), 50);
   } catch (e) { toast(e.message, 'bad'); }
 }
