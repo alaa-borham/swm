@@ -13,6 +13,7 @@ export async function render({ el, isCurrent }) {
   };
   // اختصارات العمليات اليومية حسب صلاحيات المستخدم
   const shortcuts = [
+    ['sales.create', '#/pos', '🛒', 'فاتورة بيع', 'بيع لعميل نقدًا أو آجل'],
     ['parties.manage', '#/parties?type=customer&new=customer', '👤', 'عميل جديد', 'إضافة عميل'],
     ['purchases.create', '#/purchase', '🧾', 'فاتورة شراء', 'استلام بضاعة من مورد'],
     ['cash.receipt', '#/receipt', '💵', 'سند قبض', 'دفعة من عميل'],

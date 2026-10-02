@@ -5,7 +5,7 @@ import { enqueue, refreshCatalog } from '../offline.js';
 
 export async function render(c) {
   const { el } = c;
-  pageHead('نقطة البيع');
+  pageHead('فاتورة بيع جديدة');
   const needsSession = !can('cash.view') && !state.rep;
   if (needsSession && !state.session) return openSessionForm(el);
   await posView(c);
