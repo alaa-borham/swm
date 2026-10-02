@@ -63,6 +63,8 @@ const DEFAULT_SETTINGS = {
   org_address: '',
   org_phone: '',
   org_tax_number: '',
+  org_cr_number: '',
+  org_logo: '',
   country: '',
   currency: 'ريال',
   money_decimals: '2',

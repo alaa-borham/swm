@@ -153,7 +153,8 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
       branch: ctx.user.branch_id ? db.prepare('SELECT id,name FROM branches WHERE id=?').get(ctx.user.branch_id) : null,
       branches_count: db.prepare('SELECT COUNT(*) n FROM branches WHERE active=1').get().n,
       settings: {
-        org_name: s.org_name, org_address: s.org_address, org_phone: s.org_phone, org_tax_number: s.org_tax_number, currency: s.currency,
+        org_name: s.org_name, org_address: s.org_address, org_phone: s.org_phone, org_tax_number: s.org_tax_number, org_cr_number: s.org_cr_number, currency: s.currency,
+        org_logo_url: s.org_logo ? '/api/settings/logo?v=' + crypto.createHash('sha1').update(s.org_logo).digest('hex').slice(0, 10) : null,
         money_decimals: getMoneyDecimals(), prices_include_tax: s.prices_include_tax === '1', default_tax_rate: fromBp(Number(s.default_tax_rate_bp)),
         invoice_footer: s.invoice_footer, receipt_width_mm: Number(s.receipt_width_mm), locked_until: s.locked_until, today: ctx.today(),
         expiry_alert_days: Number(s.expiry_alert_days), einvoice_qr: s.einvoice_qr === '1', whatsapp_enabled: s.whatsapp_enabled === '1',
@@ -165,11 +166,21 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
 
   const SETTING_KEYS = {
     org_name: 'settings.manage', org_address: 'settings.manage', org_phone: 'settings.manage', org_tax_number: 'settings.manage', country: 'settings.manage',
+    org_logo: 'settings.manage', org_cr_number: 'settings.manage',
     currency: 'settings.manage', timezone: 'settings.manage', expiry_block_days: 'settings.manage', expiry_alert_days: 'settings.manage',
     cashier_max_discount_pct: 'settings.manage', extra_cost_basis: 'settings.manage', session_timeout_minutes: 'settings.manage', backup_hour: 'backup.manage',
     backup_retention: 'backup.manage', invoice_footer: 'settings.manage', receipt_width_mm: 'settings.manage', money_decimals: 'settings.manage',
     default_tax_rate_pct: 'tax.manage', prices_include_tax: 'tax.manage', tax_recoverable: 'tax.manage', einvoice_qr: 'tax.manage', whatsapp_enabled: 'settings.manage', whatsapp_phone_number_id: 'settings.manage', whatsapp_api_version: 'settings.manage', whatsapp_lang: 'settings.manage', whatsapp_country_code: 'settings.manage', whatsapp_template_invoice: 'settings.manage', whatsapp_template_receipt: 'settings.manage', whatsapp_template_reminder: 'settings.manage', whatsapp_auto_invoice: 'settings.manage', whatsapp_auto_receipt: 'settings.manage', whatsapp_verify_token: 'settings.manage', scale_prefix: 'settings.manage', scale_plu_digits: 'settings.manage', scale_value_digits: 'settings.manage', scale_mode: 'settings.manage',
   };
+  // شعار المؤسسة للطباعة
+  api.get('/settings/logo', (req, res, next) => {
+    try {
+      const v = db.prepare("SELECT value FROM settings WHERE key='org_logo'").get()?.value;
+      const m = v && /^data:(image\/(?:png|jpeg|webp));base64,(.+)$/.exec(v);
+      if (!m) return res.status(404).end();
+      res.set('Content-Type', m[1]).set('Cache-Control', 'private, max-age=31536000, immutable').send(Buffer.from(m[2], 'base64'));
+    } catch (e) { next(e); }
+  });
   api.get('/settings', h((ctx) => {
     ctx.require('settings.manage');
     const s = { ...ctx.settings() };
@@ -189,6 +200,14 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
       const intIn = (min, max, label) => { const n = Number(v); if (!Number.isInteger(n) || n < min || n > max) fail('VALIDATION', `${label}: أدخل رقمًا صحيحًا بين ${min} و${max}`); };
       if (k === 'timezone' && !require('./lib/dates').validTimeZone(String(v || ''))) fail('VALIDATION', 'المنطقة الزمنية غير صحيحة؛ اخترها من القائمة (مثل Africa/Cairo أو Asia/Riyadh)');
       if (k === 'org_name' && !String(v || '').trim()) fail('VALIDATION', 'اسم المؤسسة مطلوب');
+      // الشعار صورة PNG/JPG/WebP مضمنة (بدون SVG لأنه قد يحمل نصوصًا برمجية) وبحجم معقول للطباعة
+      if (k === 'org_logo' && v) {
+        const m = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/.exec(String(v));
+        if (!m) fail('VALIDATION', 'الشعار يجب أن يكون صورة PNG أو JPG أو WebP');
+        if (m[2].length * 0.75 > 300 * 1024) fail('VALIDATION', 'حجم الشعار كبير؛ الحد 300 كيلوبايت');
+      }
+      // أول إدخال للرقم الضريبي يفعّل رمز QR للفاتورة الضريبية تلقائيًا
+      if (k === 'org_tax_number' && v && !before.org_tax_number && !('einvoice_qr' in req.body) && ctx.has('tax.manage')) set.run('einvoice_qr', '1');
       if (k === 'expiry_block_days') intIn(0, 365, 'منع البيع قبل الانتهاء');
       if (k === 'expiry_alert_days') intIn(0, 3650, 'تنبيه الصلاحية');
       if (k === 'session_timeout_minutes') intIn(5, 10080, 'انتهاء الجلسة');

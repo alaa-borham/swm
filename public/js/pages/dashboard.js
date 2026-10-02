@@ -14,6 +14,7 @@ export async function render({ el, isCurrent }) {
   // اختصارات العمليات اليومية حسب صلاحيات المستخدم
   const shortcuts = [
     ['sales.create', '#/pos', '🛒', 'فاتورة بيع', 'بيع لعميل نقدًا أو آجل'],
+    ['sales.view', '#/sales', '📋', 'قائمة الفواتير', 'فواتير البيع والمسودات'],
     ['parties.manage', '#/parties?type=customer&new=customer', '👤', 'عميل جديد', 'إضافة عميل'],
     ['purchases.create', '#/purchase', '🧾', 'فاتورة شراء', 'استلام بضاعة من مورد'],
     ['items.view', '#/items', '📦', 'الأصناف والباركود', 'الأصناف والأسعار'],

@@ -21,9 +21,23 @@ export async function settings({ el }) {
   basis.dataset.key = 'extra_cost_basis';
   const scaleMode = sel([{ value: 'weight', label: 'الوزن بالجرام' }, { value: 'price', label: 'السعر' }], s.scale_mode || 'weight');
   scaleMode.dataset.key = 'scale_mode';
+  // الشعار: يُحفظ صورة مضمنة ويُطبع أعلى الفاتورة والإيصال
+  const logoIn = h('input', { type: 'hidden', value: s.org_logo || '' });
+  logoIn.dataset.key = 'org_logo';
+  const logoPrev = h('img', { alt: 'الشعار', style: { maxHeight: '60px', maxWidth: '160px', display: s.org_logo ? 'block' : 'none', background: '#fff', padding: '4px', borderRadius: '6px' } });
+  if (s.org_logo) logoPrev.src = s.org_logo;
+  const logoFile = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp', onchange: async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 300 * 1024) { toast('حجم الشعار كبير؛ الحد 300 كيلوبايت', 'bad'); e.target.value = ''; return; }
+    const url = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file); });
+    logoIn.value = url; logoPrev.src = url; logoPrev.style.display = 'block';
+  } });
+  const logoField = field('الشعار (PNG/JPG حتى 300 ك.ب)', h('div', null, logoPrev, logoFile, logoIn,
+    h('button', { type: 'button', class: 'btn small', style: { marginTop: '4px' }, onclick: () => { logoIn.value = ''; logoPrev.style.display = 'none'; logoFile.value = ''; } }, 'إزالة الشعار')));
   const form = h('div', null,
     h('div', { class: 'card' }, h('h3', null, 'بيانات المؤسسة'), h('div', { class: 'grid' }, F('org_name', 'اسم المؤسسة'), F('org_address', 'العنوان'), F('org_phone', 'الهاتف'),
-      F('org_tax_number', 'الرقم الضريبي'), F('country', 'بلد التشغيل'), F('currency', 'العملة'), F('money_decimals', 'منازل العملة', { type: 'number' }), field('المنطقة الزمنية', tzSelect(s.timezone)))),
+      F('org_tax_number', 'الرقم الضريبي (يظهر به رمز QR للزكاة والدخل)'), F('org_cr_number', 'السجل التجاري'), logoField, F('country', 'بلد التشغيل'), F('currency', 'العملة'), F('money_decimals', 'منازل العملة', { type: 'number' }), field('المنطقة الزمنية', tzSelect(s.timezone)))),
     can('tax.manage') ? h('div', { class: 'card' }, h('h3', null, 'الضرائب'), h('div', { class: 'grid' }, F('default_tax_rate_pct', 'نسبة الضريبة الافتراضية %', { type: 'number' })),
       h('div', { class: 'row', style: { marginTop: '8px' } }, chk('prices_include_tax', 'الأسعار شاملة الضريبة'), chk('tax_recoverable', 'ضريبة المشتريات قابلة للاسترداد (لا تدخل التكلفة)'),
         chk('einvoice_qr', 'طباعة رمز QR للفاتورة الضريبية المبسطة (TLV) — يتطلب الرقم الضريبي')),

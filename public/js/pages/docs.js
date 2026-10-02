@@ -322,6 +322,8 @@ export async function printDoc(id, format = 'a4') {
     document.head.appendChild(page);
     const done = () => { document.body.classList.remove('printing'); clear(area); page.remove(); window.removeEventListener('afterprint', done); };
     window.addEventListener('afterprint', done);
+    // انتظار تحميل الشعار ورمز QR قبل الطباعة
+    await Promise.all([...area.querySelectorAll('img')].map((img) => (img.complete ? null : new Promise((r) => { img.onload = r; img.onerror = r; setTimeout(r, 3000); }))));
     setTimeout(() => window.print(), 50);
   } catch (e) { toast(e.message, 'bad'); }
 }
@@ -330,7 +332,7 @@ function a4(d, s, copy) {
   const isItems = d.lines.some((l) => l.item_name);
   return h('div', { class: 'print-a4' },
     h('div', { class: 'head' },
-      h('div', null, h('h1', null, s.org_name), d.branch_name && (d.branch_address || d.branch_phone) ? h('div', null, d.branch_name) : null, h('div', null, d.branch_address || s.org_address), h('div', null, d.branch_phone || s.org_phone), s.org_tax_number ? h('div', null, 'الرقم الضريبي: ', s.org_tax_number) : null),
+      h('div', null, s.org_logo_url ? h('img', { class: 'logo', src: s.org_logo_url, alt: '' }) : null, h('h1', null, s.org_name), s.org_cr_number ? h('div', null, 'السجل التجاري: ', N(s.org_cr_number)) : null, d.branch_name && (d.branch_address || d.branch_phone) ? h('div', null, d.branch_name) : null, h('div', null, d.branch_address || s.org_address), h('div', null, d.branch_phone || s.org_phone), s.org_tax_number ? h('div', null, 'الرقم الضريبي: ', s.org_tax_number) : null),
       h('div', { style: { textAlign: 'left' } }, h('h1', null, s.einvoice_qr && d.type === 'sale' ? 'فاتورة ضريبية مبسطة' : d.label), h('div', null, 'رقم: ', N(d.number)), h('div', null, 'التاريخ: ', N(d.date)),
         d.due_date ? h('div', null, 'الاستحقاق: ', N(d.due_date)) : null, copy ? h('div', { class: 'copy-mark' }, 'نسخة') : null)),
     d.party_name ? h('p', null, h('b', null, 'العميل/المورد: '), d.party_name) : null,
@@ -346,20 +348,36 @@ function a4(d, s, copy) {
 }
 
 function thermal(d, s, copy) {
+  const taxInv = s.einvoice_qr && ['sale', 'sale_return'].includes(d.type);
+  const title = taxInv ? (d.type === 'sale' ? 'فاتورة ضريبية مبسطة' : 'إشعار دائن (مرتجع)') : d.label;
+  const row = (k, v, bold) => h('div', { class: 'tr' + (bold ? ' b' : '') }, h('span', null, k), h('span', null, v));
+  const paid = d.open_amount != null ? d.total - d.open_amount : null;
   return h('div', { class: 'print-thermal', style: { width: `${(s.receipt_width_mm || 80) - 8}mm` } },
-    h('div', { class: 'c' }, h('b', null, s.org_name)), h('div', { class: 'c' }, d.branch_phone || s.org_phone || ''),
-    s.org_tax_number ? h('div', { class: 'c' }, 'ر.ض: ', s.org_tax_number) : null,
-    h('div', { class: 'c' }, d.label, ' ', N(d.number)), h('div', { class: 'c' }, N(d.date), copy ? ' — نسخة' : ''),
-    d.party_name ? h('div', null, d.party_name) : null,
+    s.org_logo_url ? h('img', { class: 'logo', src: s.org_logo_url, alt: '' }) : null,
+    h('div', { class: 'c' }, h('b', { style: { fontSize: '1.15em' } }, s.org_name)),
+    d.branch_name && (state.branchesCount || 1) > 1 ? h('div', { class: 'c' }, d.branch_name) : null,
+    d.branch_address || s.org_address ? h('div', { class: 'c' }, d.branch_address || s.org_address) : null,
+    d.branch_phone || s.org_phone ? h('div', { class: 'c' }, 'هاتف: ', N(d.branch_phone || s.org_phone)) : null,
+    s.org_tax_number ? h('div', { class: 'c' }, 'الرقم الضريبي: ', N(s.org_tax_number)) : null,
+    s.org_cr_number ? h('div', { class: 'c' }, 'السجل التجاري: ', N(s.org_cr_number)) : null,
+    h('div', { class: 'sep' }),
+    h('div', { class: 'c' }, h('b', null, title)),
+    row('رقم الفاتورة', N(d.number)), row('التاريخ', d.approved_at ? dt(d.approved_at) : N(d.date)),
+    d.party_name ? row('العميل', d.party_name) : null,
+    copy ? h('div', { class: 'c' }, '— نسخة —') : null,
+    h('div', { class: 'sep' }),
     d.lines.some((l) => l.item_name) ? h('table', { style: { width: '100%' } }, h('tbody', null, d.lines.map((l) => [
       h('tr', null, h('td', { colspan: 3 }, l.item_name)),
       h('tr', null, h('td', null, `${qty(l.qty)} ${l.unit_name}`), h('td', null, '× ' + money(l.price)), h('td', { style: { textAlign: 'left' } }, money(l.total)))]))) : null,
-    h('div', null, '--------------------------------'),
-    d.discount ? h('div', null, 'الخصم: ', money(d.discount)) : null, d.tax ? h('div', null, 'الضريبة: ', money(d.tax)) : null,
-    h('div', null, h('b', null, 'الإجمالي: ', money(d.total))),
-    d.open_amount != null ? h('div', null, 'المدفوع: ', money(d.total - d.open_amount), ' — المتبقي: ', money(d.open_amount)) : null,
+    h('div', { class: 'sep' }),
+    row('الإجمالي قبل الضريبة', money(d.net)),
+    d.discount ? row('الخصم', money(d.discount)) : null,
+    row('ضريبة القيمة المضافة', money(d.tax)),
+    row('الإجمالي شامل الضريبة', money(d.total), true),
+    paid != null ? row('المدفوع', money(paid)) : null,
+    d.open_amount ? row('المتبقي (آجل)', money(d.open_amount)) : null,
     d._qr || null,
-    h('div', { class: 'c', style: { marginTop: '6px' } }, s.invoice_footer || ''));
+    s.invoice_footer ? h('div', { class: 'c', style: { marginTop: '6px' } }, s.invoice_footer) : null);
 }
 export { partySelect };
 
