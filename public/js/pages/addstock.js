@@ -27,6 +27,8 @@ export async function addStockModal(item = null, onDone) {
 
   const units = () => (it ? it.units.filter((u) => u.active && (source.value !== 'purchase' || u.for_purchase)) : []);
   const fillUnits = () => {
+    if (!it) { unitSel.replaceChildren(h('option', { value: '' }, '— اختر الصنف أولًا —')); unitSel.disabled = true; return; }
+    unitSel.disabled = false;
     const list = units();
     const prev = Number(unitSel.value);
     unitSel.replaceChildren(...list.map((u) => h('option', { value: u.id }, u.name + (u.is_base ? '' : ` (${u.factor} ${it.base_unit})`))));
@@ -59,6 +61,7 @@ export async function addStockModal(item = null, onDone) {
       const picker = itemPicker({ allowCreate: true, placeholder: 'اضغط لاختيار الصنف أو اكتب الاسم أو الباركود', onPick: (x) => { it = x; showItem(); } });
       itemBox.replaceChildren(picker.el);
       expiryField.style.display = 'none';
+      fillUnits();
       setTimeout(() => picker.input.focus(), 30);
     }
   };
