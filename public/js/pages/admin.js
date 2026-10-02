@@ -1,6 +1,17 @@
 // الإدارة: الإعدادات، المستخدمون والأدوار، سجل التدقيق، النسخ الاحتياطي، الاستيراد، الأرصدة الافتتاحية، إقفال الفترات، كلمة المرور.
 import { h, clear, dt, badge, state, get, api, submitter, toast, run, M, inp, sel, field, num, table, pageHead, can, askReason, today, lookup, readFileB64, download, partySelect, cashSelect, warehouseSelect, modal } from '../lib.js';
 
+const TIMEZONES = [['Asia/Riyadh', 'السعودية (الرياض)'], ['Africa/Cairo', 'مصر (القاهرة)'], ['Asia/Dubai', 'الإمارات (دبي)'], ['Asia/Kuwait', 'الكويت'],
+  ['Asia/Qatar', 'قطر'], ['Asia/Bahrain', 'البحرين'], ['Asia/Muscat', 'عُمان'], ['Asia/Amman', 'الأردن'], ['Asia/Baghdad', 'العراق'], ['Asia/Beirut', 'لبنان'],
+  ['Asia/Damascus', 'سوريا'], ['Asia/Gaza', 'فلسطين'], ['Asia/Aden', 'اليمن'], ['Africa/Khartoum', 'السودان'], ['Africa/Tripoli', 'ليبيا'], ['Africa/Tunis', 'تونس'],
+  ['Africa/Algiers', 'الجزائر'], ['Africa/Casablanca', 'المغرب'], ['Africa/Nouakchott', 'موريتانيا'], ['Europe/Istanbul', 'تركيا'], ['UTC', 'التوقيت العالمي UTC']];
+function tzSelect(cur) {
+  const list = TIMEZONES.some(([v]) => v === cur) ? TIMEZONES : [[cur, cur + ' (غير صالحة — اختر من القائمة)'], ...TIMEZONES];
+  const e = sel(list.map(([value, label]) => ({ value, label })), cur);
+  e.dataset.key = 'timezone';
+  return e;
+}
+
 export async function settings({ el }) {
   pageHead('الإعدادات');
   const s = await get('/settings');
@@ -12,7 +23,7 @@ export async function settings({ el }) {
   scaleMode.dataset.key = 'scale_mode';
   const form = h('div', null,
     h('div', { class: 'card' }, h('h3', null, 'بيانات المؤسسة'), h('div', { class: 'grid' }, F('org_name', 'اسم المؤسسة'), F('org_address', 'العنوان'), F('org_phone', 'الهاتف'),
-      F('org_tax_number', 'الرقم الضريبي'), F('country', 'بلد التشغيل'), F('currency', 'العملة'), F('money_decimals', 'منازل العملة', { type: 'number' }), F('timezone', 'المنطقة الزمنية'))),
+      F('org_tax_number', 'الرقم الضريبي'), F('country', 'بلد التشغيل'), F('currency', 'العملة'), F('money_decimals', 'منازل العملة', { type: 'number' }), field('المنطقة الزمنية', tzSelect(s.timezone)))),
     can('tax.manage') ? h('div', { class: 'card' }, h('h3', null, 'الضرائب'), h('div', { class: 'grid' }, F('default_tax_rate_pct', 'نسبة الضريبة الافتراضية %', { type: 'number' })),
       h('div', { class: 'row', style: { marginTop: '8px' } }, chk('prices_include_tax', 'الأسعار شاملة الضريبة'), chk('tax_recoverable', 'ضريبة المشتريات قابلة للاسترداد (لا تدخل التكلفة)'),
         chk('einvoice_qr', 'طباعة رمز QR للفاتورة الضريبية المبسطة (TLV) — يتطلب الرقم الضريبي')),

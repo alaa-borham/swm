@@ -140,3 +140,17 @@ test('تصدير التقارير Excel وCSV', async () => {
     assert.equal(c.status, 200);
   } finally { await t.close(); }
 });
+
+test('الإعدادات: رفض المنطقة الزمنية غير الصالحة وعدم تعطل النظام بها', async () => {
+  const t = await boot();
+  try {
+    const bad = await t.admin.put('/settings', { timezone: 'مصر' });
+    assert.equal(bad.status, 400);
+    assert.match(bad.body.error.message, /المنطقة الزمنية/);
+    assert.equal((await t.admin.put('/settings', { timezone: 'Africa/Cairo', org_name: 'مؤسسة الاختبار' })).status, 200);
+    // قيمة تالفة محفوظة مسبقًا (من إصدار قديم) لا توقف النظام
+    t.db.prepare("UPDATE settings SET value='Cairo' WHERE key='timezone'").run();
+    const me = await t.admin.get('/auth/me');
+    assert.equal(me.status, 200);
+  } finally { await t.close(); }
+});

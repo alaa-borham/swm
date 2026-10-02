@@ -185,6 +185,19 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
       const perm = SETTING_KEYS[k];
       if (!perm) continue;
       ctx.require(perm, 'settings.' + k);
+      // التحقق من القيم قبل الحفظ: قيمة خاطئة هنا قد تعطل العمليات كلها
+      const intIn = (min, max, label) => { const n = Number(v); if (!Number.isInteger(n) || n < min || n > max) fail('VALIDATION', `${label}: أدخل رقمًا صحيحًا بين ${min} و${max}`); };
+      if (k === 'timezone' && !require('./lib/dates').validTimeZone(String(v || ''))) fail('VALIDATION', 'المنطقة الزمنية غير صحيحة؛ اخترها من القائمة (مثل Africa/Cairo أو Asia/Riyadh)');
+      if (k === 'org_name' && !String(v || '').trim()) fail('VALIDATION', 'اسم المؤسسة مطلوب');
+      if (k === 'expiry_block_days') intIn(0, 365, 'منع البيع قبل الانتهاء');
+      if (k === 'expiry_alert_days') intIn(0, 3650, 'تنبيه الصلاحية');
+      if (k === 'session_timeout_minutes') intIn(5, 10080, 'انتهاء الجلسة');
+      if (k === 'backup_hour') intIn(0, 23, 'ساعة النسخ');
+      if (k === 'backup_retention') intIn(1, 365, 'عدد النسخ');
+      if (k === 'receipt_width_mm') intIn(40, 120, 'عرض الإيصال');
+      if (k === 'scale_plu_digits' || k === 'scale_value_digits') intIn(1, 8, 'خانات باركود الميزان');
+      if (k === 'scale_prefix' && v && !/^\d{1,3}$/.test(String(v))) fail('VALIDATION', 'بادئة باركود الميزان أرقام فقط (1-3 خانات)');
+      if (k === 'whatsapp_country_code' && v && !/^\d{1,4}$/.test(String(v))) fail('VALIDATION', 'رمز الدولة أرقام فقط مثل 966 أو 20');
       if (k === 'default_tax_rate_pct') { set.run('default_tax_rate_bp', String(toBp(v))); continue; }
       if (k === 'cashier_max_discount_pct') { set.run('cashier_max_discount_bp', String(toBp(v))); continue; }
       if (k === 'money_decimals' && String(v) !== before.money_decimals) {

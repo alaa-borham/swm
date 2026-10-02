@@ -9,7 +9,12 @@ function todayIn(timeZone) {
   const tz = timeZone || 'UTC';
   let f = formatters.get(tz);
   if (!f) {
-    f = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' });
+    try {
+      f = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' });
+    } catch (_) {
+      // منطقة زمنية غير صالحة في الإعدادات لا يجب أن توقف النظام
+      f = new Intl.DateTimeFormat('en-CA', { timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit' });
+    }
     formatters.set(tz, f);
   }
   return f.format(new Date());
@@ -32,6 +37,10 @@ function addDays(d, n) {
   return t.toISOString().slice(0, 10);
 }
 
+function validTimeZone(tz) {
+  try { new Intl.DateTimeFormat('en-CA', { timeZone: tz }); return true; } catch (_) { return false; }
+}
+
 function nowIso() { return new Date().toISOString(); }
 
-module.exports = { todayIn, checkDate, addDays, nowIso, ISO_DATE };
+module.exports = { validTimeZone, todayIn, checkDate, addDays, nowIso, ISO_DATE };
