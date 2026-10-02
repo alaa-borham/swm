@@ -483,9 +483,10 @@ export function thermal(d, s, copy) {
     d.party_name ? row('العميل', d.party_name) : null,
     copy ? h('div', { class: 'c' }, '— نسخة —') : null,
     h('div', { class: 'sep' }),
-    d.lines.some((l) => l.item_name) ? h('table', { style: { width: '100%' } }, h('tbody', null, d.lines.map((l) => [
-      h('tr', null, h('td', { colspan: 3 }, l.item_name)),
-      h('tr', null, h('td', null, `${qty(l.qty)} ${l.unit_name}`), h('td', null, '× ' + money(l.price)), h('td', { style: { textAlign: 'left' } }, money(l.total)))]))) : null,
+    // كل صنف في سطر واحد: الاسم | الكمية | السعر | الإجمالي
+    d.lines.some((l) => l.item_name) ? h('table', { class: 't-lines' },
+      h('thead', null, h('tr', null, h('th', null, 'الصنف'), h('th', null, 'الكمية'), h('th', null, 'السعر'), h('th', null, 'الإجمالي'))),
+      h('tbody', null, d.lines.map((l) => h('tr', null, h('td', null, l.item_name), h('td', { class: 'n' }, `${qty(l.qty)} ${l.unit_name}`), h('td', { class: 'n' }, money(l.price)), h('td', { class: 'n' }, money(l.total)))))) : null,
     h('div', { class: 'sep' }),
     row('الإجمالي قبل الضريبة', money(d.net)),
     d.discount ? row('الخصم', money(d.discount)) : null,

@@ -195,6 +195,12 @@ tr.clickable { cursor: pointer; }
 .print-thermal table { font-size: 12px; }
 .print-thermal th, .print-thermal td { padding: 2px; border-bottom: 1px dashed #999; }
 .print-thermal .c { text-align: center; }
+.print-thermal .t-lines { width: 100%; border-collapse: collapse; table-layout: auto; }
+.print-thermal .t-lines th { font-weight: 800; text-align: right; border-bottom: 1px solid #000; background: none; color: #000; white-space: nowrap; }
+.print-thermal .t-lines td { vertical-align: top; }
+.print-thermal .t-lines td:first-child { width: 100%; word-break: break-word; }
+.print-thermal .t-lines .n, .print-thermal .t-lines th:not(:first-child) { white-space: nowrap; text-align: center; padding: 2px 4px; }
+.print-thermal .t-lines td:last-child, .print-thermal .t-lines th:last-child { text-align: left; padding-left: 0; }
 .print-thermal .logo { display: block; max-width: 45mm; max-height: 22mm; margin: 0 auto 4px; }
 .print-thermal .sep { border-top: 1px dashed #000; margin: 4px 0; }
 .print-thermal .tr { display: flex; justify-content: space-between; gap: 6px; }
