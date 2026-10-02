@@ -42,8 +42,18 @@ export function canvasToEscPos(canvas) {
   const bytesPerRow = Math.ceil(W / 8);
   // قص الفراغ الأبيض في الأسفل
   let last = H - 1;
-  const dark = (x, y) => { const i = (y * W + x) * 4; return px[i + 3] > 0 && (px[i] * 299 + px[i + 1] * 587 + px[i + 2] * 114) / 1000 < 150; };
-  for (; last > 0; last--) { let any = false; for (let x = 0; x < W; x += 2) if (dark(x, last)) { any = true; break; } if (any) break; }
+  // الأسود والرمادي الغامق ← نقطة سوداء، والأبيض ← فراغ، والألوان الفاتحة/المتوسطة (مثل الشعار الملوّن) ← نقاط متدرجة (Bayer)
+  // حتى لا تختفي الألوان الفاتحة من الإيصال
+  const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+  const dark = (x, y) => {
+    const i = (y * W + x) * 4;
+    if (px[i + 3] === 0) return false;
+    const l = (px[i] * 299 + px[i + 1] * 587 + px[i + 2] * 114) / 1000;
+    if (l < 110) return true;
+    if (l > 235) return false;
+    return (l - 110) / 125 * 16 < BAYER[(y & 3) * 4 + (x & 3)] + 0.5;
+  };
+  for (; last > 0; last--) { let any = false; for (let x = 0; x < W; x++) { const i = (last * W + x) * 4; if (px[i + 3] && px[i] + px[i + 1] + px[i + 2] < 700) { any = true; break; } } if (any) break; }
   const rows = last + 1;
   const out = [0x1b, 0x40]; // تهيئة
   const BAND = 48; // شرائح صغيرة تناسب ذاكرة الطابعات المحمولة
@@ -114,16 +124,19 @@ export async function printViaBluetooth(bytes, onProgress) {
   // قطع 20 بايت (تناسب أي اتصال BLE دون كتابة طويلة)، مع توقف دوري حسب السرعة المختارة حتى لا تمتلئ ذاكرة الطابعة،
   // وإعادة المحاولة عند خطأ عابر بدل التوقف في منتصف الإيصال.
   const speed = BLE_SPEEDS[bleSpeed()] || BLE_SPEEDS.normal;
-  const noResp = !!bleChar.properties.writeWithoutResponse;
+  let noResp = !!bleChar.properties.writeWithoutResponse;
   const chunk = 20;
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const writeOnce = (part) => (noResp ? bleChar.writeValueWithoutResponse(part) : bleChar.writeValueWithResponse(part));
   for (let i = 0, sent = 0; i < bytes.length; i += chunk) {
     const part = bytes.slice(i, i + chunk);
+    // الطابعة المشغولة بالطباعة قد ترفض البيانات مؤقتًا: ننتظر ونعيد المحاولة (حتى ~15 ثانية) بدل قطع آخر الإيصال،
+    // وبعد أول رفض ننتقل للكتابة بتأكيد الاستلام إن دعمتها الطابعة لأنها تنتظر جاهزيتها تلقائيًا
     for (let attempt = 0; ; attempt++) {
       try { await writeOnce(part); break; } catch (e) {
-        if (attempt >= 4) throw new Error(`انقطع الإرسال للطابعة عند ${Math.round((i / bytes.length) * 100)}٪ — اختر سرعة أبطأ وأعد المحاولة`);
-        await wait(200 * (attempt + 1));
+        if (attempt >= 12) throw new Error(`انقطع الإرسال للطابعة عند ${Math.round((i / bytes.length) * 100)}٪ — اختر سرعة أبطأ وأعد المحاولة`);
+        if (noResp && bleChar.properties.write) noResp = false;
+        await wait(Math.min(250 * (attempt + 1), 2000));
         if (!bleChar.service.device.gatt.connected) { const server = await bleChar.service.device.gatt.connect(); bleChar = await findWritable(server); }
       }
     }
@@ -131,5 +144,5 @@ export async function printViaBluetooth(bytes, onProgress) {
     if (sent >= speed.block) { sent = 0; onProgress?.(i / bytes.length); await wait(speed.pause); }
   }
   onProgress?.(1);
-  await wait(300);
+  await wait(1500); // مهلة حتى تُفرّغ آخر البيانات من ذاكرة البلوتوث قبل أي عملية أخرى
 }
