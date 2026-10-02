@@ -259,3 +259,13 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: .85; }
   table.lines-table td .stepper input { max-width: none; }
   table.lines-table td.n { font-weight: 800; font-size: 17px; border-top: 1px dashed var(--line); margin-top: 4px; padding-top: 8px; }
 }
+
+/* معاينة الطباعة على الجوال */
+@media screen {
+  body.print-preview #app, body.print-preview #toasts { display: none; }
+  body.print-preview .print-area { display: block; background: #fff; color: #000; min-height: 100vh; padding: 130px 12px 24px; }
+  body.print-preview .print-thermal { max-width: 100%; }
+  .print-toolbar { position: fixed; top: 0; inset-inline: 0; z-index: 50; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; background: var(--chrome, var(--panel)); color: var(--ink); border-bottom: 1px solid var(--line); }
+  .print-toolbar .small { color: var(--muted); flex-basis: 100%; }
+}
+@media print { .print-toolbar { display: none !important; } }

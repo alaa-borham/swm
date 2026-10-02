@@ -320,10 +320,23 @@ export async function printDoc(id, format = 'a4') {
     document.body.classList.add('printing');
     const page = h('style', null, format === 'thermal' ? `@page { size: ${s.receipt_width_mm || 80}mm auto; margin: 2mm; }` : '@page { size: A4; margin: 10mm; }');
     document.head.appendChild(page);
-    const done = () => { document.body.classList.remove('printing'); clear(area); page.remove(); window.removeEventListener('afterprint', done); };
-    window.addEventListener('afterprint', done);
     // انتظار تحميل الشعار ورمز QR قبل الطباعة
     await Promise.all([...area.querySelectorAll('img')].map((img) => (img.complete ? null : new Promise((r) => { img.onload = r; img.onerror = r; setTimeout(r, 3000); }))));
+    let autoClose = null;
+    const close = () => { document.body.classList.remove('printing', 'print-preview'); clear(area); page.remove(); document.querySelector('.print-toolbar')?.remove(); if (autoClose) window.removeEventListener('afterprint', autoClose); };
+    // على الجوال: متصفحات أندرويد تُنهي window.print فورًا قبل أن تلتقط المعاينة، فلا نمسح الإيصال تلقائيًا؛
+    // تُعرض معاينة كاملة بأزرار طباعة وإغلاق وتبقى حتى يغلقها المستخدم
+    const mobile = window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 900;
+    if (mobile) {
+      document.body.classList.add('print-preview');
+      document.body.appendChild(h('div', { class: 'print-toolbar' },
+        h('button', { class: 'btn primary', onclick: () => window.print() }, 'طباعة'),
+        h('button', { class: 'btn', onclick: close }, 'إغلاق'),
+        h('span', { class: 'small' }, 'للطابعة الحرارية بالبلوتوث: اختر الطابعة من قائمة الطباعة أو «حفظ كـ PDF» ثم شاركه')));
+      return;
+    }
+    autoClose = () => close();
+    window.addEventListener('afterprint', autoClose);
     setTimeout(() => window.print(), 50);
   } catch (e) { toast(e.message, 'bad'); }
 }
