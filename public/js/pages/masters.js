@@ -77,11 +77,12 @@ export async function itemForm({ el, params }) {
         h('td', null, sellIn),
         canPP ? h('td', null, inp({ type: 'number', value: u.purchase_price ?? '', placeholder: 'اختياري', oninput: (e) => { u.purchase_price = e.target.value; recalc(); }, style: { width: '100px' } })) : null,
         canPP ? h('td', null, inp({ type: 'number', value: u.profit_margin ?? '', placeholder: '%', title: 'سعر البيع = سعر الشراء + هذه النسبة', oninput: (e) => { u.profit_margin = e.target.value; recalc(); }, style: { width: '80px' } })) : null,
-        h('td', null, u.is_base ? h('input', { type: 'checkbox', checked: true, disabled: true, title: 'وحدة المنتج نشطة دائمًا' }) : h('input', { type: 'checkbox', checked: !!u.active, onchange: (e) => { u.active = e.target.checked; drawEntry(); } })),
+        h('td', null, u.is_base ? h('input', { type: 'checkbox', checked: f.active.checked, title: 'إيقاف وحدة المنتج يوقف الصنف كله', onchange: (e) => { f.active.checked = e.target.checked; } }) : h('input', { type: 'checkbox', checked: !!u.active, onchange: (e) => { u.active = e.target.checked; drawEntry(); } })),
         h('td', null, !u.is_base && !u.id ? h('button', { class: 'btn small danger', onclick: () => { units.splice(i, 1); drawUnits(); } }, '×') : '')));
     });
   };
   f.base_unit.addEventListener('input', () => { drawUnits(); });
+  f.active.addEventListener('change', () => drawUnits());
   const send = submitter();
   const save = async () => {
     const base = units.find((u) => u.is_base);
