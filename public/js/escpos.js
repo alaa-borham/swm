@@ -45,7 +45,7 @@ export function canvasToEscPos(canvas) {
   for (; last > 0; last--) { let any = false; for (let x = 0; x < W; x += 2) if (dark(x, last)) { any = true; break; } if (any) break; }
   const rows = last + 1;
   const out = [0x1b, 0x40]; // تهيئة
-  const BAND = 128;
+  const BAND = 48; // شرائح صغيرة تناسب ذاكرة الطابعات المحمولة
   for (let y0 = 0; y0 < rows; y0 += BAND) {
     const hh = Math.min(BAND, rows - y0);
     out.push(0x1d, 0x76, 0x30, 0x00, bytesPerRow & 0xff, bytesPerRow >> 8, hh & 0xff, hh >> 8);
@@ -101,9 +101,17 @@ export async function printViaBluetooth(bytes) {
     bleChar = await findWritable(server);
     if (!bleChar) { device.gatt.disconnect(); throw new Error('الطابعة لا تدعم البلوتوث منخفض الطاقة (BLE)؛ استخدم تطبيق RawBT'); }
   }
-  const chunk = 180;
-  for (let i = 0; i < bytes.length; i += chunk) {
+  // الطابعة تطبع أبطأ مما يصل البلوتوث، فإن أُرسل كل شيء دفعة واحدة امتلأت ذاكرتها وتوقفت في منتصف الإيصال.
+  // نرسل قطعًا صغيرة بتأكيد الاستلام إن أمكن، مع مهلة قصيرة، ونتوقف قليلًا بين كل ~2 كيلوبايت ليلحق رأس الطباعة.
+  const withResp = !!bleChar.properties.write;
+  const chunk = 100;
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  for (let i = 0, sent = 0; i < bytes.length; i += chunk) {
     const part = bytes.subarray(i, i + chunk);
-    if (bleChar.properties.writeWithoutResponse) { await bleChar.writeValueWithoutResponse(part); await new Promise((r) => setTimeout(r, 8)); } else await bleChar.writeValue(part);
+    if (withResp) await bleChar.writeValueWithResponse(part); else await bleChar.writeValueWithoutResponse(part);
+    await wait(withResp ? 8 : 25);
+    sent += part.length;
+    if (sent >= 2048) { sent = 0; await wait(120); }
   }
+  await wait(300);
 }
