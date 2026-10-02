@@ -234,6 +234,11 @@ function fullDoc(ctx, id) {
     const data = typeof d.data === 'string' ? JSON.parse(d.data || '{}') : (d.data || {});
     out.extras_view = (data.extras || []).map((e) => ({ description: e.description, amount: fromMinor(e.amount),
       paid_from: e.cash_account_id ? (ctx.db.prepare('SELECT name FROM cash_accounts WHERE id=?').get(e.cash_account_id) || {}).name || null : null }));
+    if (d.status === 'draft' && data.payment && (data.payment.mode === 'cash' || Number(data.payment.amount) > 0)) {
+      // الدفعة المسجلة في المسودة تُنفَّذ عند الاعتماد
+      const acc = data.payment.cash_account_id ? ctx.db.prepare('SELECT name FROM cash_accounts WHERE id=?').get(data.payment.cash_account_id) : null;
+      out.planned_payment = { mode: data.payment.mode || 'partial', amount: data.payment.mode === 'cash' ? fromMinor(d.total) : Number(data.payment.amount), account_name: acc ? acc.name : null };
+    }
     if (d.status === 'draft') {
       const tracks = ctx.db.prepare('SELECT track_expiry FROM items WHERE id=?');
       out.lines.forEach((l, i) => { if (!lines[i].expiry_date && tracks.get(lines[i].item_id)?.track_expiry) l.needs_expiry = true; });

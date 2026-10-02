@@ -194,7 +194,10 @@ export async function view({ el, params }) {
     parts.push(h('div', { class: 'row', style: { alignItems: 'stretch', gap: '14px' } },
       box('مستحق المورد', [['قيمة البنود', d.subtotal], d.discount ? ['الخصم', d.discount] : null, d.discount ? ['الصافي', d.net] : null, ['الضريبة', d.tax],
         extrasToSupplier ? ['تكاليف تابعة على المورد', extrasToSupplier] : null, ['إجمالي الفاتورة', d.total, true],
-        d.open_amount != null ? ['المدفوع', d.total - d.open_amount] : null, d.open_amount != null ? ['المتبقي للمورد', d.open_amount, true] : null]),
+        ...(d.planned_payment ? [[`دفعة عند الاعتماد${d.planned_payment.account_name ? ' (من ' + d.planned_payment.account_name + ')' : ''}`, d.planned_payment.amount],
+          ['المتبقي للمورد بعد الاعتماد', d.total - d.planned_payment.amount, true]]
+          : [d.open_amount != null ? ['المدفوع', d.total - d.open_amount] : null, d.open_amount != null ? ['المتبقي للمورد', d.open_amount, true] : null])],
+        d.planned_payment ? 'المسودة لم تُنفَّذ بعد؛ الدفعة تُصرف من الحساب عند اعتماد الفاتورة.' : null),
       extras.length ? h('div', { class: 'card', style: { flex: '1 1 300px', maxWidth: '460px' } }, h('h3', null, 'التكاليف التابعة (نقل، تحميل...)'),
         h('div', { class: 'total-box' }, extras.map((e) => h('div', { class: 'line' }, h('span', null, e.description, ' ', h('span', { class: 'muted small' }, e.paid_from ? `— دُفعت من ${e.paid_from}` : '— على المورد')), M(e.amount))),
           h('div', { class: 'line strong' }, h('span', null, 'الإجمالي'), M(d.extra_cost))),
