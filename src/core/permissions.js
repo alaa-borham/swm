@@ -107,10 +107,27 @@ const ROLES = {
   },
 };
 
-function permissionsFor(roles) {
+/** صلاحيات الأدوار المعدلة من الإدارة (مخزنة في الإعدادات) تحل محل الافتراضية؛ دور المدير ثابت دائمًا */
+function parseOverrides(json) {
+  if (!json) return {};
+  try { const o = JSON.parse(json); return o && typeof o === 'object' ? o : {}; } catch (_) { return {}; }
+}
+
+function rolePermissions(role, overrides = {}) {
+  if (!ROLES[role]) return [];
+  if (role === 'admin' || !Array.isArray(overrides[role])) return ROLES[role].permissions;
+  return overrides[role].filter((p) => PERMISSIONS[p]);
+}
+
+function permissionsFor(roles, overrides = {}) {
   const set = new Set();
-  for (const r of roles || []) for (const p of (ROLES[r] ? ROLES[r].permissions : [])) set.add(p);
+  for (const r of roles || []) for (const p of rolePermissions(r, overrides)) set.add(p);
   return set;
 }
 
-module.exports = { PERMISSIONS, ROLES, permissionsFor };
+/** الأدوار بصلاحياتها الفعلية والافتراضية للعرض والتعديل */
+function effectiveRoles(overrides = {}) {
+  return Object.fromEntries(Object.entries(ROLES).map(([k, r]) => [k, { name: r.name, permissions: rolePermissions(k, overrides), defaults: r.permissions, locked: k === 'admin', customized: k !== 'admin' && Array.isArray(overrides[k]) }]));
+}
+
+module.exports = { PERMISSIONS, ROLES, permissionsFor, parseOverrides, rolePermissions, effectiveRoles };

@@ -1,5 +1,5 @@
 'use strict';
-const { permissionsFor, PERMISSIONS } = require('./permissions');
+const { permissionsFor, PERMISSIONS, parseOverrides } = require('./permissions');
 const { AppError, fail } = require('../lib/errors');
 const { todayIn, nowIso } = require('../lib/dates');
 
@@ -13,8 +13,8 @@ class Ctx {
     this.user = user || null;
     this.ip = opts.ip || null;
     this._today = opts.today || null;
-    this._perms = user ? permissionsFor(user.roles) : new Set();
     this._settings = null;
+    this._perms = user ? permissionsFor(user.roles, parseOverrides(this.setting('role_permissions'))) : new Set();
     this.denied = [];
   }
 

@@ -8,7 +8,7 @@ const { openDb } = require('./db');
 const { Ctx } = require('./core/context');
 const { AppError, fail } = require('./lib/errors');
 const { toBp, toMinor, fromMinor, fromBp, getMoneyDecimals } = require('./lib/money');
-const { PERMISSIONS, ROLES, permissionsFor } = require('./core/permissions');
+const { PERMISSIONS, ROLES, permissionsFor, parseOverrides, effectiveRoles } = require('./core/permissions');
 const users = require('./core/users');
 const M = require('./core/masters');
 const D = require('./core/docs');
@@ -148,7 +148,7 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
     const s = ctx.settings();
     const session = Pay.openSessionFor(ctx, ctx.userId);
     return {
-      user: ctx.user, permissions: [...permissionsFor(ctx.user.roles)], session,
+      user: ctx.user, permissions: [...ctx._perms], session,
       rep: ctx.user.rep_id ? M.getRep(ctx, ctx.user.rep_id) : null,
       branch: ctx.user.branch_id ? db.prepare('SELECT id,name FROM branches WHERE id=?').get(ctx.user.branch_id) : null,
       branches_count: db.prepare('SELECT COUNT(*) n FROM branches WHERE active=1').get().n,
@@ -162,7 +162,28 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
     };
   }));
   api.post('/auth/password', h((ctx, req) => users.changeOwnPassword(ctx, req.body)));
-  api.get('/meta', h(() => ({ permissions: PERMISSIONS, roles: ROLES, doc_labels: D.DOC_LABELS })));
+  api.get('/meta', h((ctx) => ({ permissions: PERMISSIONS, roles: effectiveRoles(parseOverrides(ctx.setting('role_permissions'))), doc_labels: D.DOC_LABELS })));
+  // تعديل صلاحيات دور (عدا المدير)؛ reset يعيده للافتراضي
+  api.put('/roles/:role/permissions', h((ctx, req) => ctx.tx(() => {
+    ctx.require('users.manage');
+    const role = req.params.role;
+    if (!ROLES[role]) fail('NOT_FOUND', 'الدور غير موجود', 404);
+    if (role === 'admin') fail('VALIDATION', 'صلاحيات المدير ثابتة ولا تُعدّل');
+    const all = parseOverrides(ctx.setting('role_permissions'));
+    const before = all[role] || ROLES[role].permissions;
+    if (req.body.reset) delete all[role];
+    else {
+      const list = req.body.permissions;
+      if (!Array.isArray(list)) fail('VALIDATION', 'قائمة الصلاحيات مطلوبة');
+      const bad = list.filter((p) => !PERMISSIONS[p]);
+      if (bad.length) fail('VALIDATION', 'صلاحيات غير معروفة: ' + bad.join(', '));
+      all[role] = [...new Set(list)];
+    }
+    db.prepare("INSERT INTO settings(key,value) VALUES('role_permissions',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(JSON.stringify(all));
+    ctx.invalidateSettings();
+    ctx.audit('role.permissions', { entity: 'role', reason: role, before, after: all[role] || ROLES[role].permissions });
+    return effectiveRoles(all)[role];
+  })));
 
   const SETTING_KEYS = {
     org_name: 'settings.manage', org_address: 'settings.manage', org_phone: 'settings.manage', org_tax_number: 'settings.manage', country: 'settings.manage',

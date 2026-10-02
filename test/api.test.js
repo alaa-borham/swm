@@ -291,3 +291,21 @@ test('المندوب المرتبط بفرع: يرى طرق السداد (الب
     assert.equal(sale.status, 200, JSON.stringify(sale.body));
   } finally { await t.close(); }
 });
+
+test('تعديل صلاحيات الأدوار: يسري فورًا، والمدير ثابت، والاستعادة للافتراضي', async () => {
+  const t = await boot();
+  try {
+    await t.admin.post('/users', { username: 'cashier', full_name: 'كاشير', password: 'Cash1234', roles: ['cashier'] });
+    const c = await t.client('cashier', 'Cash1234');
+    assert.equal((await c.get('/reports/stock')).status, 200);
+    const meta = (await t.admin.get('/meta')).body;
+    const perms = meta.roles.cashier.permissions.filter((p) => p !== 'stock.view');
+    assert.equal((await t.admin.put('/roles/cashier/permissions', { permissions: perms })).status, 200);
+    assert.equal((await c.get('/reports/stock')).status, 403, 'سُحبت الصلاحية فورًا');
+    assert.equal((await t.admin.put('/roles/admin/permissions', { permissions: [] })).status, 400, 'المدير ثابت');
+    assert.equal((await t.admin.put('/roles/cashier/permissions', { permissions: ['bogus.perm'] })).status, 400);
+    assert.equal((await c.put('/roles/cashier/permissions', { permissions: [...perms, 'users.manage'] })).status, 403, 'الكاشير لا يعدل الصلاحيات');
+    assert.equal((await t.admin.put('/roles/cashier/permissions', { reset: true })).status, 200);
+    assert.equal((await c.get('/reports/stock')).status, 200, 'عادت الافتراضية');
+  } finally { await t.close(); }
+});

@@ -95,13 +95,34 @@ export async function users({ el }) {
     table({ columns: [{ key: 'username', label: 'المستخدم' }, { key: 'full_name', label: 'الاسم' }, { key: 'roles', label: 'الأدوار', render: (u) => u.roles.map((r) => meta.roles[r]?.name || r).join('، ') },
       { key: 'rep_name', label: 'المندوب' }, { key: 'branch_name', label: 'الفرع' }, { key: 'active', label: 'الحالة', render: (u) => (u.active ? h('span', { class: 'badge ok' }, 'نشط') : h('span', { class: 'badge bad' }, 'موقوف')) },
       { key: 'a', label: '', render: (u) => h('button', { class: 'btn small', onclick: () => form(u) }, 'تعديل') }], rows: list }),
-    h('div', { class: 'card', style: { marginTop: '16px' } }, h('h3', null, 'مصفوفة الصلاحيات المبدئية'), permMatrix(meta)));
+    h('div', { class: 'card', style: { marginTop: '16px' } }, h('h3', null, 'صلاحيات الأدوار'), permMatrix(meta)));
 }
 
 function permMatrix(meta) {
   const roles = Object.entries(meta.roles);
-  return h('div', { class: 'table-wrap' }, h('table', null, h('thead', null, h('tr', null, h('th', null, 'الصلاحية'), roles.map(([, r]) => h('th', null, r.name)))),
-    h('tbody', null, Object.entries(meta.permissions).map(([k, label]) => h('tr', null, h('td', null, label), roles.map(([, r]) => h('td', { style: { textAlign: 'center' } }, r.permissions.includes(k) ? '✓' : '')))))));
+  const editable = can('users.manage');
+  // نسخة قابلة للتعديل من صلاحيات كل دور
+  const work = Object.fromEntries(roles.map(([k, r]) => [k, new Set(r.permissions)]));
+  const dirty = new Set();
+  const saveBar = h('div', { class: 'actions', style: { marginTop: '10px' } });
+  const drawBar = () => saveBar.replaceChildren(dirty.size
+    ? h('button', { class: 'btn ok', onclick: async () => {
+      for (const k of dirty) if (!(await run(() => api('PUT', `/roles/${k}/permissions`, { permissions: [...work[k]] })))) return;
+      toast('حُفظت الصلاحيات؛ تسري على المستخدمين فورًا', 'ok'); location.reload();
+    } }, `حفظ التغييرات (${[...dirty].map((k) => meta.roles[k].name).join('، ')})`)
+    : h('span', { class: 'muted small' }, editable ? 'حدد أو ألغِ الصلاحيات ثم احفظ. صلاحيات المدير ثابتة.' : ''));
+  const head = h('tr', null, h('th', null, 'الصلاحية'), roles.map(([k, r]) => h('th', { style: { textAlign: 'center' } }, r.name,
+    r.customized ? h('div', null, h('span', { class: 'badge warn' }, 'معدّل'), ' ',
+      editable ? h('button', { class: 'btn small', title: 'استعادة الصلاحيات الافتراضية لهذا الدور', onclick: async () => {
+        if (await run(() => api('PUT', `/roles/${k}/permissions`, { reset: true }), 'استُعيدت الصلاحيات الافتراضية')) location.reload();
+      } }, 'افتراضي') : null) : null)));
+  const body = h('tbody', null, Object.entries(meta.permissions).map(([p, label]) => h('tr', null, h('td', null, label),
+    roles.map(([k, r]) => h('td', { style: { textAlign: 'center' } }, editable && !r.locked
+      ? h('input', { type: 'checkbox', checked: work[k].has(p), title: `${r.name}: ${label}`, onchange: (e) => { if (e.target.checked) work[k].add(p); else work[k].delete(p); dirty.add(k); drawBar(); } })
+      : (r.permissions.includes(p) ? '✓' : ''))))));
+  drawBar();
+  return h('div', null, h('div', { class: 'table-wrap' }, h('table', null, h('thead', null, head), body)), saveBar,
+    h('p', { class: 'small muted' }, 'تعديل صلاحيات دور يسري على كل المستخدمين الذين لهم هذا الدور. ولإعطاء مستخدم صلاحيات دورين، اختر له أكثر من دور من «تعديل».'));
 }
 
 export async function audit({ el }) {
