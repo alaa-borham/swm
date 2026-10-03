@@ -105,7 +105,7 @@ async function posView({ el, q }) {
     resetForm();
     for (const l of d.lines) {
       const item = await get('/items/' + l.item_id);
-      cart.push({ item, unit_id: l.unit_id, qty: l.qty, price: priceEditable ? l.price : (item.units.find((u) => u.id === l.unit_id)?.sell_price ?? l.price), discount_pct: l.line_discount && l.value ? Number((l.line_discount / l.value * 100).toFixed(2)) : '' });
+      cart.push({ item, unit_id: l.unit_id, qty: l.qty, price: priceEditable ? l.price : (item.units.find((u) => u.id === l.unit_id)?.sell_price ?? l.price), discount_pct: '', discMode: l.line_discount ? 'amt' : 'pct', discount_amt: l.line_discount || '' });
     }
     custSel.value = d.party_id ? String(d.party_id) : '';
     if (d.warehouse_id) whSel.value = String(d.warehouse_id);
@@ -138,7 +138,9 @@ async function posView({ el, q }) {
     const md = 10 ** (s.money_decimals ?? 2);
     const lines = cart.map((l) => {
       const value = Math.round(num(l.qty) * num(l.price) * md) || 0;
-      const disc = l.discount_pct ? Math.round(value * num(l.discount_pct) / 100) : 0;
+      // الخصم إما نسبة أو قيمة (آخر ما كتبه المستخدم)، ولا يتجاوز قيمة البند
+      let disc = l.discMode === 'amt' ? Math.round(num(l.discount_amt) * md) || 0 : (l.discount_pct ? Math.round(value * num(l.discount_pct) / 100) : 0);
+      disc = Math.min(Math.max(disc, 0), value);
       return { l, value, disc, after: value - disc };
     });
     const sumAfter = lines.reduce((a, x) => a + x.after, 0);
@@ -169,14 +171,22 @@ async function posView({ el, q }) {
         onchange: () => { l.unit_id = Number(unitSel.value); l.price = units.find((u) => u.id === l.unit_id).sell_price; redraw(); } });
       const qIn = inp({ type: 'number', value: l.qty, style: { width: '80px' }, onchange: () => { l.qty = qIn.value; redraw(); } });
       const pIn = inp({ type: 'number', value: l.price, style: { width: '90px' }, onchange: () => { l.price = pIn.value; redraw(); } });
-      const dIn = inp({ type: 'number', value: l.discount_pct, placeholder: '%', style: { width: '64px' }, disabled: invDiscUsed() || null, title: invDiscUsed() ? 'خصم الأصناف غير متاح مع خصم الفاتورة' : null, onchange: () => { l.discount_pct = dIn.value; redraw(); } });
+      const lc = c.lines[i];
+      const md = 10 ** (s.money_decimals ?? 2);
+      const offDisc = invDiscUsed() || null;
+      const offTitle = offDisc ? 'خصم الأصناف غير متاح مع خصم الفاتورة' : null;
+      // نسبة الخصم وقيمته مرتبطتان: كتابة أحدهما تحسب الآخر
+      const pctShown = l.discMode === 'amt' ? (lc.value && lc.disc ? Number((lc.disc / lc.value * 100).toFixed(2)) : '') : l.discount_pct;
+      const amtShown = l.discMode === 'amt' ? l.discount_amt : (lc.disc ? (lc.disc / md).toFixed(s.money_decimals ?? 2) : '');
+      const dIn = inp({ type: 'number', value: pctShown, placeholder: '%', style: { width: '64px' }, disabled: offDisc, title: offTitle, onchange: () => { l.discMode = 'pct'; l.discount_pct = dIn.value; l.discount_amt = ''; redraw(); } });
+      const aIn = inp({ type: 'number', value: amtShown, placeholder: 'قيمة', style: { width: '80px' }, disabled: offDisc, title: offTitle, onchange: () => { l.discMode = 'amt'; l.discount_amt = aIn.value; l.discount_pct = ''; redraw(); } });
       tbody.append(h('tr', null,
         h('td', null, l.item.name, l.item.sellable_qty != null ? h('div', { class: 'small muted' }, 'متاح ', Q(l.item.sellable_qty), ' ', l.item.base_unit) : null),
         h('td', null, unitSel), h('td', null, stepper(qIn, { step: 1, min: 0, onChange: (v) => { l.qty = v; redraw(); } })),
-        h('td', null, priceEditable ? stepper(pIn, { step: 1, min: 0, onChange: (v) => { l.price = v; redraw(); } }) : h('span', { class: 'n', title: 'سعر البيع ثابت' }, money(l.price))), h('td', null, dIn), h('td', { class: 'n' }, M(c.lines[i].total)),
+        h('td', null, priceEditable ? stepper(pIn, { step: 1, min: 0, onChange: (v) => { l.price = v; redraw(); } }) : h('span', { class: 'n', title: 'سعر البيع ثابت' }, money(l.price))), h('td', null, dIn), h('td', null, aIn), h('td', { class: 'n' }, M(c.lines[i].total)),
         h('td', null, h('button', { class: 'btn small danger', 'aria-label': 'حذف', onclick: () => { cart.splice(i, 1); draw(); } }, '×'))));
     });
-    if (!cart.length) tbody.append(h('tr', null, h('td', { colspan: 7, class: 'empty' }, 'امسح الباركود أو ابحث عن صنف لإضافته')));
+    if (!cart.length) tbody.append(h('tr', null, h('td', { colspan: 8, class: 'empty' }, 'امسح الباركود أو ابحث عن صنف لإضافته')));
     if (!payTouched && payMethod.value !== 'credit') payAmt.value = cart.length ? c.total : '';
     syncPay();
     const paid = (num(cashIn.value) || 0) + (num(cardIn.value) || 0);
@@ -195,7 +205,7 @@ async function posView({ el, q }) {
   const invDiscAllowed = isAdmin || !!s.invoice_discount_enabled;
   const invDiscUsed = () => !isAdmin && ((num(invDiscPct.value) || 0) !== 0 || (num(invDiscAmt.value) || 0) !== 0);
   const onInvDisc = () => {
-    if (invDiscUsed() && cart.some((l) => l.discount_pct)) { cart.forEach((l) => { l.discount_pct = ''; }); toast('أُلغيت خصومات الأصناف لأن خصم الفاتورة مستخدم', 'warn'); }
+    if (invDiscUsed() && cart.some((l) => l.discount_pct || l.discount_amt)) { cart.forEach((l) => { l.discount_pct = ''; l.discount_amt = ''; l.discMode = 'pct'; }); toast('أُلغيت خصومات الأصناف لأن خصم الفاتورة مستخدم', 'warn'); }
     draw();
   };
   invDiscPct.addEventListener('input', onInvDisc); invDiscAmt.addEventListener('input', onInvDisc);
@@ -211,7 +221,7 @@ async function posView({ el, q }) {
     return {
       approve, date: dateIn.value, party_id: custSel.value ? Number(custSel.value) : null, warehouse_id: Number(whSel.value), notes: notes.value || null,
       invoice_discount_pct: invDiscPct.value || null, invoice_discount_amount: invDiscAmt.value || null, payments,
-      lines: cart.map((l) => ({ item_id: l.item.id, unit_id: l.unit_id, qty: num(l.qty), price: num(l.price), discount_pct: l.discount_pct || null })), ...extra,
+      lines: cart.map((l) => ({ item_id: l.item.id, unit_id: l.unit_id, qty: num(l.qty), price: num(l.price), discount_pct: l.discMode === 'amt' ? null : (l.discount_pct || null), discount_amount: l.discMode === 'amt' ? (num(l.discount_amt) || null) : null })), ...extra,
     };
   };
 
@@ -282,7 +292,7 @@ async function posView({ el, q }) {
         h('span', { class: 'kbd' }, 'F2'), ' بحث · ', h('span', { class: 'kbd' }, 'Enter'), ' إضافة · ', h('span', { class: 'kbd' }, 'F4'), ' مسودة · ',
         h('span', { class: 'kbd' }, 'F9'), ' اعتماد · ', h('span', { class: 'kbd' }, 'F10'), ' اعتماد وطباعة')),
       h('div', { class: 'table-wrap' }, h('table', { class: 'lines-table' },
-        h('thead', null, h('tr', null, ['الصنف', 'الوحدة', 'الكمية', 'السعر', 'خصم %', 'الإجمالي', ''].map((x) => h('th', null, x)))), tbody))),
+        h('thead', null, h('tr', null, ['الصنف', 'الوحدة', 'الكمية', 'السعر', 'خصم %', 'قيمة الخصم', 'الإجمالي', ''].map((x) => h('th', null, x)))), tbody))),
     h('div', null,
       h('div', { class: 'card' },
         h('div', { class: 'grid' }, field('العميل', custSel), (whSel.options.length > 1 ? field('المستودع', whSel) : null), can('settings.manage') ? field('التاريخ', dateIn) : null),
