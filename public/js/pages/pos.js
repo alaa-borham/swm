@@ -226,6 +226,7 @@ async function posView({ el, q }) {
   const invDiscAllowed = isAdmin || !!s.invoice_discount_enabled;
   const invDiscUsed = () => (num(invDiscAmt.value) || 0) !== 0;
   const onInvDisc = () => {
+    if (!isAdmin && s.invoice_discount_max_pct != null && num(invDiscAmt.value) > s.invoice_discount_max_pct) { invDiscAmt.value = s.invoice_discount_max_pct; toast(`أقصى خصم للفاتورة ${s.invoice_discount_max_pct}%`, 'warn'); }
     if (invDiscUsed() && cart.some((l) => l.discount_pct || l.discount_amt)) { cart.forEach((l) => { l.discount_pct = ''; l.discount_amt = ''; l.discMode = 'pct'; }); toast('أُلغيت خصومات الأصناف لأن خصم الفاتورة مستخدم', 'warn'); }
     draw();
   };
@@ -318,7 +319,7 @@ async function posView({ el, q }) {
       h('div', { class: 'card' },
         h('div', { class: 'grid' }, field('العميل', custSel), (whSel.options.length > 1 ? field('المستودع', whSel) : null), can('settings.manage') ? field('التاريخ', dateIn) : null),
         invDiscAllowed ? h('div', { style: { marginTop: '8px' } }, field('خصم على إجمالي الفاتورة %', stepper(invDiscAmt, { step: 1, min: 0, onChange: onInvDisc })),
-          h('div', { class: 'small muted' }, 'نسبة من إجمالي الفاتورة، ويلغي خصومات الأصناف.')) : null,
+          h('div', { class: 'small muted' }, 'نسبة من إجمالي الفاتورة، ويلغي خصومات الأصناف.', !isAdmin && s.invoice_discount_max_pct != null ? ` الحد الأقصى ${s.invoice_discount_max_pct}%.` : '')) : null,
         h('div', { style: { marginTop: '8px' } }, notes)),
       h('div', { class: 'card' }, totals),
       h('div', { class: 'card' },

@@ -115,6 +115,7 @@ const DEFAULT_SETTINGS = {
   expiry_block_days: '0',             // آخر يوم للبيع = تاريخ الانتهاء - هذا العدد
   expiry_alert_days: '30',
   cashier_max_discount_bp: '1000',    // حد الخصم الافتراضي 10%
+  invoice_discount_max_bp: '1000',    // أقصى خصم على إجمالي الفاتورة للمناديب والكاشير 10%
   extra_cost_basis: 'value',          // توزيع تكاليف الشراء التابعة: value | qty
   session_timeout_minutes: '480',
   locked_until: '',                   // آخر تاريخ مقفل

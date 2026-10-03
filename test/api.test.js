@@ -373,7 +373,7 @@ test('خصم الفاتورة: يفعّله المدير، واستخدامه م
     await t.admin.post('/transfers', { from_warehouse_id: 1, to_warehouse_id: rep.warehouse_id, lines: [{ item_id: item.id, unit_id: item.units[0].id, qty: 10 }] });
     const c = (await t.admin.post('/parties', { name: 'ع', is_customer: 1, rep_id: rep.id })).body;
     const r = await t.client('repx', 'Rep12345');
-    const body = { party_id: c.id, warehouse_id: rep.warehouse_id, invoice_discount_amount: 2, lines: [{ item_id: item.id, qty: 2, discount_pct: 10 }], payments: [] };
+    const body = { party_id: c.id, warehouse_id: rep.warehouse_id, invoice_discount_pct: 10, lines: [{ item_id: item.id, qty: 2, discount_pct: 10 }], payments: [] };
     const off = await r.post('/sales', body);
     assert.equal(off.status, 403, 'غير مفعّل');
     assert.match(off.body.error.message, /غير مفعّل/);
@@ -381,7 +381,13 @@ test('خصم الفاتورة: يفعّله المدير، واستخدامه م
     const on = await r.post('/sales', body);
     assert.equal(on.status, 200, JSON.stringify(on.body));
     assert.equal(on.body.lines[0].line_discount, 0, 'أُلغي خصم الصنف');
-    assert.equal(on.body.discount, 2, 'بقي خصم الفاتورة فقط');
+    assert.equal(on.body.discount, 2, 'بقي خصم الفاتورة فقط (10% من 20)');
+    // حد خصم الفاتورة المستقل (الافتراضي 10%) ولا يتأثر بحد خصم الصنف
+    const over = await r.post('/sales', { ...body, invoice_discount_pct: 15 });
+    assert.equal(over.status, 403); assert.match(over.body.error.message, /يتجاوز الحد المسموح \(10%\)/);
+    await t.admin.put('/settings', { invoice_discount_max_pct: 20 });
+    assert.equal((await r.post('/sales', { ...body, invoice_discount_pct: 15 })).status, 200);
+    assert.equal((await r.post('/sales', { ...body, invoice_discount_pct: null, invoice_discount_amount: 2 })).status, 400, 'خصم الفاتورة نسبة فقط');
     // بدون خصم فاتورة: خصم الصنف يبقى
     const lineOnly = await r.post('/sales', { party_id: c.id, warehouse_id: rep.warehouse_id, lines: [{ item_id: item.id, qty: 1, discount_pct: 10 }], payments: [] });
     assert.equal(lineOnly.body.lines[0].line_discount, 1);

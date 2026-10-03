@@ -1,7 +1,7 @@
 'use strict';
 // المبيعات ومرتجعاتها. اعتماد البيع عملية واحدة ذرية: الفاتورة + صرف الدفعات + التكلفة + المستحقات + السداد.
 const { fail } = require('../lib/errors');
-const { toMinor, fromMinor, fromQty, mulDiv, fromBp } = require('../lib/money');
+const { toMinor, fromMinor, fromQty, mulDiv, fromBp, toBp } = require('../lib/money');
 const { checkDate, addDays } = require('../lib/dates');
 const ledger = require('./ledger');
 const inv = require('./inventory');
@@ -54,7 +54,13 @@ function invoiceOpts(ctx, input) {
 function applyDiscountPolicy(ctx, input) {
   const has = (v) => v != null && v !== '' && Number(v) !== 0;
   if (!has(input.invoice_discount_pct) && !has(input.invoice_discount_amount)) return input;
-  if (!ctx.has('settings.manage') && ctx.setting('invoice_discount_enabled') !== '1') fail('FORBIDDEN', 'خصم الفاتورة غير مفعّل؛ يفعّله المدير من الإعدادات', 403);
+  if (!ctx.has('settings.manage')) {
+    if (ctx.setting('invoice_discount_enabled') !== '1') fail('FORBIDDEN', 'خصم الفاتورة غير مفعّل؛ يفعّله المدير من الإعدادات', 403);
+    // أقصى نسبة لخصم الفاتورة (مستقلة عن حدود خصم الأصناف والمندوب)
+    const max = Number(ctx.setting('invoice_discount_max_bp') ?? 1000);
+    if (has(input.invoice_discount_pct) && toBp(input.invoice_discount_pct, 'خصم الفاتورة') > max) fail('FORBIDDEN', `خصم الفاتورة يتجاوز الحد المسموح (${fromBp(max)}%)`, 403);
+    if (has(input.invoice_discount_amount)) fail('VALIDATION', 'خصم الفاتورة يُكتب نسبة %', 400);
+  }
   // خصم الفاتورة يلغي خصومات الأصناف (للجميع)
   return { ...input, lines: (input.lines || []).map((l) => ({ ...l, discount_pct: null, discount_amount: null })) };
 }
@@ -118,7 +124,8 @@ function approvalChecks(ctx, doc, lines, payments, party, input) {
   const repLimit = ctx.repScope ? (ctx.db.prepare('SELECT discount_limit_bp FROM reps WHERE id=?').get(ctx.repScope) || {}).discount_limit_bp : null;
   for (const l of lines) {
     const listValue = mulDiv(l.qty, l.list_price, 1000);
-    const effective = l.value - l.line_discount - l.doc_discount;
+    // حدود خصم الأصناف/المندوب تخص خصم الصنف فقط؛ خصم الفاتورة له حده المستقل
+    const effective = l.value - l.line_discount;
     if (listValue > 0 && effective < listValue) {
       const discBp = mulDiv(listValue - effective, 10000, listValue);
       const limit = repLimit != null ? repLimit : (l.item.max_discount_bp ?? maxDefault);

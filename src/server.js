@@ -200,7 +200,7 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
         org_logo_url: s.org_logo ? '/api/settings/logo?v=' + crypto.createHash('sha1').update(s.org_logo).digest('hex').slice(0, 10) : null,
         money_decimals: getMoneyDecimals(), prices_include_tax: s.prices_include_tax === '1', default_tax_rate: fromBp(Number(s.default_tax_rate_bp)),
         invoice_footer: s.invoice_footer, receipt_width_mm: Number(s.receipt_width_mm), locked_until: s.locked_until, today: ctx.today(),
-        expiry_alert_days: Number(s.expiry_alert_days), einvoice_qr: s.einvoice_qr === '1', whatsapp_enabled: s.whatsapp_enabled === '1', app_version: APP_VERSION, invoice_discount_enabled: s.invoice_discount_enabled === '1',
+        expiry_alert_days: Number(s.expiry_alert_days), einvoice_qr: s.einvoice_qr === '1', whatsapp_enabled: s.whatsapp_enabled === '1', app_version: APP_VERSION, invoice_discount_enabled: s.invoice_discount_enabled === '1', invoice_discount_max_pct: fromBp(Number(s.invoice_discount_max_bp ?? 1000)),
       },
     };
   }));
@@ -232,7 +232,7 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
     org_name: 'settings.manage', org_address: 'settings.manage', org_phone: 'settings.manage', org_tax_number: 'settings.manage', country: 'settings.manage',
     org_logo: 'settings.manage', org_cr_number: 'settings.manage', reps_all_customers: 'settings.manage', invoice_discount_enabled: 'settings.manage',
     currency: 'settings.manage', timezone: 'settings.manage', expiry_block_days: 'settings.manage', expiry_alert_days: 'settings.manage',
-    cashier_max_discount_pct: 'settings.manage', extra_cost_basis: 'settings.manage', session_timeout_minutes: 'settings.manage', backup_hour: 'backup.manage',
+    cashier_max_discount_pct: 'settings.manage', invoice_discount_max_pct: 'settings.manage', extra_cost_basis: 'settings.manage', session_timeout_minutes: 'settings.manage', backup_hour: 'backup.manage',
     backup_retention: 'backup.manage', invoice_footer: 'settings.manage', receipt_width_mm: 'settings.manage', money_decimals: 'settings.manage',
     default_tax_rate_pct: 'tax.manage', prices_include_tax: 'tax.manage', tax_recoverable: 'tax.manage', einvoice_qr: 'tax.manage', whatsapp_enabled: 'settings.manage', whatsapp_phone_number_id: 'settings.manage', whatsapp_api_version: 'settings.manage', whatsapp_lang: 'settings.manage', whatsapp_country_code: 'settings.manage', whatsapp_template_invoice: 'settings.manage', whatsapp_template_receipt: 'settings.manage', whatsapp_template_reminder: 'settings.manage', whatsapp_auto_invoice: 'settings.manage', whatsapp_auto_receipt: 'settings.manage', whatsapp_verify_token: 'settings.manage', scale_prefix: 'settings.manage', scale_plu_digits: 'settings.manage', scale_value_digits: 'settings.manage', scale_mode: 'settings.manage',
   };
@@ -250,6 +250,7 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
     const s = { ...ctx.settings() };
     s.default_tax_rate_pct = fromBp(Number(s.default_tax_rate_bp));
     s.cashier_max_discount_pct = fromBp(Number(s.cashier_max_discount_bp));
+    s.invoice_discount_max_pct = fromBp(Number(s.invoice_discount_max_bp ?? 1000));
     s.whatsapp_status = WA.status(ctx);
     return s;
   }));
@@ -288,6 +289,7 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
       if (k === 'whatsapp_country_code' && v && !/^\d{1,4}$/.test(String(v))) fail('VALIDATION', 'رمز الدولة أرقام فقط مثل 966 أو 20');
       if (k === 'default_tax_rate_pct') { set.run('default_tax_rate_bp', String(toBp(v))); continue; }
       if (k === 'cashier_max_discount_pct') { set.run('cashier_max_discount_bp', String(toBp(v))); continue; }
+      if (k === 'invoice_discount_max_pct') { const bp = toBp(v); if (bp < 0 || bp > 10000) fail('VALIDATION', 'أقصى خصم الفاتورة بين 0 و100%'); set.run('invoice_discount_max_bp', String(bp)); continue; }
       if (k === 'money_decimals' && String(v) !== before.money_decimals) {
         if (db.prepare('SELECT 1 FROM docs LIMIT 1').get()) fail('VALIDATION', 'لا يمكن تغيير منازل العملة بعد تسجيل مستندات');
         if (![0, 1, 2, 3].includes(Number(v))) fail('VALIDATION', 'منازل العملة بين 0 و3');
