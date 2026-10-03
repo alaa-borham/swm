@@ -270,15 +270,19 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: .85; }
   table.lines-table td .stepper { max-width: 70%; }
   table.lines-table td .stepper input { max-width: none; }
   /* بطاقة مضغوطة: عمودان (الوحدة بجانب الكمية، السعر بجانب الخصم) والعنوان صغير فوق القيمة */
-  table.lines-table tr { display: grid; grid-template-columns: 1fr 1fr; column-gap: 10px; row-gap: 2px; padding: 8px 10px; margin-bottom: 8px; }
+  table.lines-table tr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); width: auto; max-width: 100%; box-sizing: border-box; column-gap: 10px; row-gap: 2px; padding: 8px 10px; margin-bottom: 8px; }
   table.lines-table td { flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 1px; padding: 2px 0; }
   table.lines-table td::before { font-size: 11px; line-height: 1.2; }
   table.lines-table td:first-child, table.lines-table td[colspan],
   table.lines-table tr:has(> td:first-child > input[type=checkbox]) > td:nth-child(2) { grid-column: 1 / -1; font-size: 15px; padding-bottom: 2px; }
   table.lines-table td:first-child .small { font-weight: 400; }
   table.lines-table td input:not([type=checkbox]), table.lines-table td select, table.lines-table td .stepper { max-width: 100%; width: 100% !important; min-height: 34px; }
-  table.lines-table td .stepper input { width: auto !important; flex: 1; }
-  table.lines-table td .stepper button { min-height: 34px; min-width: 34px; padding: 0 8px; }
+  table.lines-table td { min-width: 0; }
+  table.lines-table td .stepper { display: flex; }
+  table.lines-table td .stepper input { width: auto !important; flex: 1; min-width: 0; }
+  table.lines-table td .stepper .step { flex: none; }
+  table.lines-table td .stepper button { min-height: 34px; width: 30px; min-width: 30px; padding: 0; }
+  table.lines-table td .stepper input { padding: 4px 2px; }
   table.lines-table td.n { grid-column: 1 / -1; flex-direction: row; align-items: center; justify-content: space-between; font-weight: 700; font-size: 16px; padding-top: 4px; }
   table.lines-table td.n { font-weight: 800; font-size: 17px; border-top: 1px dashed var(--line); margin-top: 4px; padding-top: 8px; }
 }
