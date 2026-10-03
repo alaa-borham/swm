@@ -95,9 +95,22 @@ export async function transfer({ el, q }) {
     if (!tbody.children.length) tbody.append(h('tr', null, h('td', { colspan: 6, class: 'empty' }, rows.length ? 'لا نتائج للبحث' : 'لا توجد أصناف لها رصيد صالح في هذا المستودع')));
     summary();
   };
+  // تحديد الكل: كل الأصناف الظاهرة (حسب البحث) بكامل الكمية المتاحة، أو إلغاء التحديد
+  const visible = () => { const f = filterIn.value.trim(); return rows.filter((r) => allItems.has(r.item_id) && (!f || r.name.includes(f) || String(r.code).includes(f))); };
+  const allChk = h('input', { type: 'checkbox', title: 'تحديد الكل', onchange: (e) => setAll(e.target.checked) });
+  const setAll = (on) => {
+    for (const r of visible()) {
+      const it = allItems.get(r.item_id);
+      if (on) picked.set(r.item_id, { qty: r.sellable, unit_id: it.units.find((u) => u.is_base).id }); else picked.delete(r.item_id);
+    }
+    draw();
+  };
   const summary = () => {
     const n = [...picked.values()].filter((p) => Number(p.qty) > 0).length;
     countBox.textContent = n ? `${n} صنف محدد للتحويل` : '';
+    const vis = visible();
+    allChk.checked = vis.length > 0 && vis.every((r) => picked.has(r.item_id));
+    allChk.indeterminate = !allChk.checked && vis.some((r) => picked.has(r.item_id));
   };
   const hint = h('div');
   // المستودعات التي فيها رصيد صالح (للاختيار الافتراضي وللتنبيه عند اختيار مستودع فارغ)
@@ -127,8 +140,10 @@ export async function transfer({ el, q }) {
     h('div', { class: 'card' }, h('div', { class: 'grid' }, field('من مستودع', from, { req: true }), field('إلى مستودع', to, { req: true }), field('ملاحظات', notes)),
       h('label', { class: 'check', style: { marginTop: '10px' } }, transit, 'نقل على مراحل: تبقى البضاعة "بالطريق" غير متاحة في الطرفين حتى تستلمها الوجهة')),
     hint,
-    h('div', { class: 'card' }, h('div', { class: 'row', style: { alignItems: 'center' } }, h('div', { style: { flex: 1 } }, filterIn), countBox),
-      h('div', { class: 'table-wrap', style: { marginTop: '10px' } }, h('table', { class: 'lines-table' }, h('thead', null, h('tr', null, ['', 'الصنف', 'المتاح', 'الوحدة', 'الكمية المحوّلة', ''].map((x) => h('th', null, x)))), tbody))),
+    h('div', { class: 'card' }, h('div', { class: 'row', style: { alignItems: 'center' } }, h('div', { style: { flex: 1 } }, filterIn),
+      h('button', { type: 'button', class: 'btn small primary', onclick: () => setAll(true) }, 'تحديد الكل بكامل الكمية'),
+      h('button', { type: 'button', class: 'btn small', onclick: () => setAll(false) }, 'إلغاء التحديد'), countBox),
+      h('div', { class: 'table-wrap', style: { marginTop: '10px' } }, h('table', { class: 'lines-table' }, h('thead', null, h('tr', null, h('th', null, h('label', { class: 'check', title: 'تحديد الكل' }, allChk)), ...['الصنف', 'المتاح', 'الوحدة', 'الكمية المحوّلة', ''].map((x) => h('th', null, x)))), tbody))),
     h('button', { class: 'btn ok', onclick: async () => {
       if (from.value === to.value) return toast('المستودع المصدر والوجهة متطابقان', 'bad');
       const lines = [];
