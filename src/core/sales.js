@@ -120,6 +120,8 @@ function storeDraft(ctx, input, existing) {
 function approvalChecks(ctx, doc, lines, payments, party, input) {
   const overrides = [];
   const maxDefault = ctx.settingInt('cashier_max_discount_bp') ?? 0;
+  // خيار «حد خصم واحد لكل الأصناف»: الحد الافتراضي يحل محل حد كل صنف
+  const uniform = ctx.setting('item_discount_uniform') === '1';
   // المندوب: صلاحية خصم مستقلة (إن حُددت في بطاقته) تحل محل حدود خصم الأصناف
   const repLimit = ctx.repScope ? (ctx.db.prepare('SELECT discount_limit_bp FROM reps WHERE id=?').get(ctx.repScope) || {}).discount_limit_bp : null;
   for (const l of lines) {
@@ -128,7 +130,7 @@ function approvalChecks(ctx, doc, lines, payments, party, input) {
     const effective = l.value - l.line_discount;
     if (listValue > 0 && effective < listValue) {
       const discBp = mulDiv(listValue - effective, 10000, listValue);
-      const limit = repLimit != null ? repLimit : (l.item.max_discount_bp ?? maxDefault);
+      const limit = repLimit != null ? repLimit : uniform ? maxDefault : (l.item.max_discount_bp ?? maxDefault);
       if (repLimit === 0) fail('FORBIDDEN', 'الخصم غير مسموح لك؛ تواصل مع الإدارة', 403);
       if (discBp > limit) {
         if (repLimit != null) fail('FORBIDDEN', `خصم ${fromBp(discBp)}% على ${l.item.name} يتجاوز حد الخصم المسموح لك (${fromBp(repLimit)}%)`, 403);

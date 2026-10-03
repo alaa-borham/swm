@@ -640,3 +640,21 @@ test('خصم الفاتورة يلغي خصومات الأصناف للجميع 
     assert.equal(s.discount, 2, 'بقي خصم الفاتورة');
   } finally { await t.close(); }
 });
+
+test('حد خصم واحد لجميع الأصناف: الحد الافتراضي يحل محل حد كل صنف', async () => {
+  const t = await boot();
+  try {
+    const user = await t.admin.post('/users', { username: 'cash1', full_name: 'ك', password: 'Cash12345', roles: ['cashier'] });
+    assert.equal(user.status, 200, JSON.stringify(user.body));
+    const item = (await t.admin.post('/items', { name: 'شاي', base_unit: 'حبة', track_expiry: 0, sell_price: 100, max_discount_pct: 2 })).body;
+    await t.admin.post('/opening-stock', { warehouse_id: 1, lines: [{ item_id: item.id, qty: 50, unit_cost: 5 }] });
+    const c = (await t.admin.post('/parties', { name: 'ع', is_customer: 1 })).body;
+    const k = await t.client('cash1', 'Cash12345');
+    const sale = (d) => k.post('/sales', { party_id: c.id, warehouse_id: 1, lines: [{ item_id: item.id, qty: 1, discount_amount: d }], payments: [] });
+    await t.admin.put('/settings', { cashier_max_discount_pct: 10 });
+    assert.notEqual((await sale(5)).status, 200, 'حد الصنف 2% يمنع 5%');
+    await t.admin.put('/settings', { item_discount_uniform: true });
+    assert.equal((await sale(5)).status, 200, 'الحد الموحد 10% يسمح 5%');
+    assert.notEqual((await sale(11)).status, 200, 'ولا يتجاوز 10%');
+  } finally { await t.close(); }
+});
