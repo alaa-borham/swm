@@ -200,7 +200,7 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
         org_logo_url: s.org_logo ? '/api/settings/logo?v=' + crypto.createHash('sha1').update(s.org_logo).digest('hex').slice(0, 10) : null,
         money_decimals: getMoneyDecimals(), prices_include_tax: s.prices_include_tax === '1', default_tax_rate: fromBp(Number(s.default_tax_rate_bp)),
         invoice_footer: s.invoice_footer, receipt_width_mm: Number(s.receipt_width_mm), locked_until: s.locked_until, today: ctx.today(),
-        expiry_alert_days: Number(s.expiry_alert_days), einvoice_qr: s.einvoice_qr === '1', whatsapp_enabled: s.whatsapp_enabled === '1', app_version: APP_VERSION, invoice_discount_enabled: s.invoice_discount_enabled === '1', invoice_discount_max_pct: fromBp(Number(s.invoice_discount_max_bp ?? 1000)),
+        expiry_alert_days: Number(s.expiry_alert_days), einvoice_qr: s.einvoice_qr === '1', whatsapp_enabled: s.whatsapp_enabled === '1', app_version: APP_VERSION, invoice_discount_enabled: s.invoice_discount_enabled === '1', item_discount_uniform: s.item_discount_uniform === '1', item_discount_default_pct: fromBp(Number(s.cashier_max_discount_bp ?? 1000)), invoice_discount_max_pct: fromBp(Number(s.invoice_discount_max_bp ?? 1000)),
       },
     };
   }));

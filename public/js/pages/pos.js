@@ -126,6 +126,13 @@ async function posView({ el, q }) {
     draw();
   }
 
+  // حد خصم الصنف (٪): نسبة المندوب من كارته، أو الحد الموحد لكل الأصناف، أو حد الصنف، أو الحد الافتراضي؛ المدير بلا حد
+  const lineLimitPct = (it) => {
+    if (can('settings.manage')) return null;
+    if (isRep && state.rep?.discount_limit_pct != null) return state.rep.discount_limit_pct;
+    if (s.item_discount_uniform) return s.item_discount_default_pct ?? 0;
+    return it.max_discount_bp ?? s.item_discount_default_pct ?? 0;
+  };
   const taxOf = (it) => (it.tax_rate_bp != null ? it.tax_rate_bp : s.default_tax_rate) || 0;
   const picker = itemPicker({ autofocus: true, inStockOnly: true, emptyHint: isRep ? 'لا توجد بضاعة في عهدتك. تُسلَّم البضاعة للمندوب من الإدارة (المناديب ← تسليم بضاعة)' : null, warehouseId: () => whSel.value, onPick: (it) => {
     const unitId = it.selected_unit_id;
@@ -200,11 +207,17 @@ async function posView({ el, q }) {
       const offTitle = repNoDisc ? 'الخصم غير مسموح لك' : offDisc ? 'خصم الأصناف غير متاح مع خصم الفاتورة' : isRep && state.rep?.discount_limit_pct ? `أقصى خصم لك ${state.rep.discount_limit_pct}%` : null;
       // خصم الصنف قيمة (مبلغ) وليس نسبة
       const amtShown = l.discMode === 'amt' ? l.discount_amt : (lc.disc ? (lc.disc / md).toFixed(s.money_decimals ?? 2) : '');
-      const aIn = inp({ type: 'number', value: amtShown, placeholder: '0.00', min: 0, style: { width: '90px' }, disabled: offDisc, title: offTitle, onchange: () => { l.discMode = 'amt'; l.discount_amt = aIn.value; l.discount_pct = ''; redraw(); } });
+      // أقصى قيمة خصم للبند = النسبة × إجمالي البند شامل الضريبة
+      const limPct = lineLimitPct(l.item);
+      const grossLine = (lc.value + (s.prices_include_tax ? 0 : Math.round(lc.value * taxOf(l.item) / 100))) / md;
+      const maxAmt = limPct == null ? null : Math.floor(grossLine * limPct / 100 * md) / md;
+      const clampDisc = () => { if (maxAmt != null && num(l.discount_amt) > maxAmt) { l.discount_amt = maxAmt; toast(`أقصى خصم لـ ${l.item.name}: ${money(maxAmt)} (${limPct}%)`, 'warn'); } };
+      const aIn = inp({ type: 'number', value: amtShown, placeholder: '0.00', min: 0, style: { width: '90px' }, disabled: offDisc, title: offTitle, onchange: () => { l.discMode = 'amt'; l.discount_amt = aIn.value; l.discount_pct = ''; clampDisc(); redraw(); } });
+      const discHint = maxAmt != null && !offDisc ? h('div', { class: 'small muted' }, `الحد ${limPct}% = ${money(maxAmt)}`) : null;
       tbody.append(h('tr', null,
         h('td', null, l.item.name, l.item.sellable_qty != null ? h('div', { class: 'small muted' }, 'متاح ', Q(l.item.sellable_qty), ' ', l.item.base_unit) : null),
         h('td', null, unitSel), h('td', null, stepper(qIn, { step: 1, min: 0, onChange: (v) => { l.qty = v; redraw(); } })),
-        h('td', null, priceEditable ? stepper(pIn, { step: 1, min: 0, onChange: (v) => { l.price = v; redraw(); } }) : h('span', { class: 'n', title: 'سعر البيع ثابت' }, money(l.price))), h('td', null, stepper(aIn, { step: 1, min: 0, onChange: (v) => { l.discMode = 'amt'; l.discount_amt = v; l.discount_pct = ''; redraw(); } })), h('td', { class: 'n' }, M(c.lines[i].total)),
+        h('td', null, priceEditable ? stepper(pIn, { step: 1, min: 0, onChange: (v) => { l.price = v; redraw(); } }) : h('span', { class: 'n', title: 'سعر البيع ثابت' }, money(l.price))), h('td', null, stepper(aIn, { step: 1, min: 0, onChange: (v) => { l.discMode = 'amt'; l.discount_amt = v; l.discount_pct = ''; clampDisc(); redraw(); } }), discHint), h('td', { class: 'n' }, M(c.lines[i].total)),
         h('td', null, h('button', { class: 'btn small danger', 'aria-label': 'حذف', onclick: () => { cart.splice(i, 1); draw(); } }, '×'))));
     });
     if (!cart.length) tbody.append(h('tr', null, h('td', { colspan: 7, class: 'empty' }, 'امسح الباركود أو ابحث عن صنف لإضافته')));
