@@ -244,6 +244,7 @@ tbody tr.sel td { background: var(--brand-soft); }
 .stepper input:focus { outline: none; box-shadow: inset 0 0 0 2px var(--brand); }
 .stepper .step { width: 34px; min-height: 36px; border: 0; background: var(--brand-soft); color: var(--brand); font-size: 20px; font-weight: 700; line-height: 1; cursor: pointer; padding: 0; }
 .stepper .step:active { background: var(--brand); color: var(--brand-ink); }
+.stepper .step:disabled { opacity: .4; cursor: not-allowed; }
 @media (max-width: 900px) { .stepper .step { width: 40px; min-height: 42px; } }
 input::placeholder, textarea::placeholder { color: var(--muted); opacity: .85; }
 .stepper:has(input:disabled) .step { opacity: .4; pointer-events: none; }

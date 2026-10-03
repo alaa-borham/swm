@@ -337,15 +337,16 @@ if (typeof document !== 'undefined') lineTableObserver.observe(document.document
 /** حقل رقمي بزرّي زيادة ونقصان (مفيد على الجوال) */
 export function stepper(input, { step = 1, min = 0, onChange } = {}) {
   const bump = (d) => {
+    if (input.disabled) return;
     const cur = Number(String(input.value).replace(/[٠-٩]/g, (c) => '٠١٢٣٤٥٦٧٨٩'.indexOf(c))) || 0;
     const v = Math.max(min, Number((cur + d * step).toFixed(3)));
     input.value = v;
     onChange?.(v);
   };
   return h('div', { class: 'stepper' },
-    h('button', { type: 'button', class: 'step', 'aria-label': 'نقص', tabindex: -1, onclick: () => bump(-1) }, '−'),
+    h('button', { type: 'button', class: 'step', 'aria-label': 'نقص', tabindex: -1, disabled: input.disabled || null, onclick: () => bump(-1) }, '−'),
     input,
-    h('button', { type: 'button', class: 'step', 'aria-label': 'زيادة', tabindex: -1, onclick: () => bump(1) }, '+'));
+    h('button', { type: 'button', class: 'step', 'aria-label': 'زيادة', tabindex: -1, disabled: input.disabled || null, onclick: () => bump(1) }, '+'));
 }
 
 /** منتقي صنف بالبحث بالاسم أو الباركود */
