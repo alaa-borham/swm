@@ -175,18 +175,16 @@ async function posView({ el, q }) {
       const md = 10 ** (s.money_decimals ?? 2);
       const offDisc = invDiscUsed() || null;
       const offTitle = offDisc ? 'خصم الأصناف غير متاح مع خصم الفاتورة' : null;
-      // نسبة الخصم وقيمته مرتبطتان: كتابة أحدهما تحسب الآخر
-      const pctShown = l.discMode === 'amt' ? (lc.value && lc.disc ? Number((lc.disc / lc.value * 100).toFixed(2)) : '') : l.discount_pct;
+      // خصم الصنف قيمة (مبلغ) وليس نسبة
       const amtShown = l.discMode === 'amt' ? l.discount_amt : (lc.disc ? (lc.disc / md).toFixed(s.money_decimals ?? 2) : '');
-      const dIn = inp({ type: 'number', value: pctShown, placeholder: '%', style: { width: '64px' }, disabled: offDisc, title: offTitle, onchange: () => { l.discMode = 'pct'; l.discount_pct = dIn.value; l.discount_amt = ''; redraw(); } });
-      const aIn = inp({ type: 'number', value: amtShown, placeholder: 'قيمة', style: { width: '80px' }, disabled: offDisc, title: offTitle, onchange: () => { l.discMode = 'amt'; l.discount_amt = aIn.value; l.discount_pct = ''; redraw(); } });
+      const aIn = inp({ type: 'number', value: amtShown, placeholder: '0.00', min: 0, style: { width: '90px' }, disabled: offDisc, title: offTitle, onchange: () => { l.discMode = 'amt'; l.discount_amt = aIn.value; l.discount_pct = ''; redraw(); } });
       tbody.append(h('tr', null,
         h('td', null, l.item.name, l.item.sellable_qty != null ? h('div', { class: 'small muted' }, 'متاح ', Q(l.item.sellable_qty), ' ', l.item.base_unit) : null),
         h('td', null, unitSel), h('td', null, stepper(qIn, { step: 1, min: 0, onChange: (v) => { l.qty = v; redraw(); } })),
-        h('td', null, priceEditable ? stepper(pIn, { step: 1, min: 0, onChange: (v) => { l.price = v; redraw(); } }) : h('span', { class: 'n', title: 'سعر البيع ثابت' }, money(l.price))), h('td', null, dIn), h('td', null, aIn), h('td', { class: 'n' }, M(c.lines[i].total)),
+        h('td', null, priceEditable ? stepper(pIn, { step: 1, min: 0, onChange: (v) => { l.price = v; redraw(); } }) : h('span', { class: 'n', title: 'سعر البيع ثابت' }, money(l.price))), h('td', null, aIn), h('td', { class: 'n' }, M(c.lines[i].total)),
         h('td', null, h('button', { class: 'btn small danger', 'aria-label': 'حذف', onclick: () => { cart.splice(i, 1); draw(); } }, '×'))));
     });
-    if (!cart.length) tbody.append(h('tr', null, h('td', { colspan: 8, class: 'empty' }, 'امسح الباركود أو ابحث عن صنف لإضافته')));
+    if (!cart.length) tbody.append(h('tr', null, h('td', { colspan: 7, class: 'empty' }, 'امسح الباركود أو ابحث عن صنف لإضافته')));
     if (!payTouched && payMethod.value !== 'credit') payAmt.value = cart.length ? c.total : '';
     syncPay();
     const paid = (num(cashIn.value) || 0) + (num(cardIn.value) || 0);
@@ -292,7 +290,7 @@ async function posView({ el, q }) {
         h('span', { class: 'kbd' }, 'F2'), ' بحث · ', h('span', { class: 'kbd' }, 'Enter'), ' إضافة · ', h('span', { class: 'kbd' }, 'F4'), ' مسودة · ',
         h('span', { class: 'kbd' }, 'F9'), ' اعتماد · ', h('span', { class: 'kbd' }, 'F10'), ' اعتماد وطباعة')),
       h('div', { class: 'table-wrap' }, h('table', { class: 'lines-table' },
-        h('thead', null, h('tr', null, ['الصنف', 'الوحدة', 'الكمية', 'السعر', 'خصم %', 'قيمة الخصم', 'الإجمالي', ''].map((x) => h('th', null, x)))), tbody))),
+        h('thead', null, h('tr', null, ['الصنف', 'الوحدة', 'الكمية', 'السعر', 'الخصم (قيمة)', 'الإجمالي', ''].map((x) => h('th', null, x)))), tbody))),
     h('div', null,
       h('div', { class: 'card' },
         h('div', { class: 'grid' }, field('العميل', custSel), (whSel.options.length > 1 ? field('المستودع', whSel) : null), can('settings.manage') ? field('التاريخ', dateIn) : null),
