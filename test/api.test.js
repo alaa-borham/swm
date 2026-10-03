@@ -494,3 +494,50 @@ test('رقم العميل: تلقائي متسلسل، قابل للتعديل �
     assert.equal(t.db.prepare('SELECT COUNT(*) n FROM parties WHERE code IS NULL').get().n, 0);
   } finally { await t.close(); }
 });
+
+test('مخزون افتتاحي بلا تكلفة ثم تحديثها: الباقي في كل المستودعات، تكلفة الفواتير والمرتجعات، والقيد متوازن', async () => {
+  const t = await boot();
+  try {
+    const item = (await t.admin.post('/items', { name: 'سيسي', base_unit: 'شد', track_expiry: 0, sell_price: 20 })).body;
+    const rep = (await t.admin.post('/reps', { name: 'م' })).body;
+    // استيراد بتكلفة فارغة
+    const ExcelJS = require('exceljs');
+    const wb = new ExcelJS.Workbook(); const ws = wb.addWorksheet('x');
+    ws.addRow(['كود الصنف', 'الكمية بوحدة الأساس', 'تكلفة الوحدة']); ws.addRow([item.code, 100, '']);
+    const data = Buffer.from(await wb.xlsx.writeBuffer()).toString('base64');
+    const pv = await t.admin.post('/import/preview', { kind: 'stock', filename: 's.xlsx', data });
+    assert.equal(pv.body.invalid, 0, JSON.stringify(pv.body.rows));
+    const cm = await t.admin.post('/import/commit', { kind: 'stock', filename: 's.xlsx', data, warehouse_id: 1, date: '2026-10-02' });
+    assert.equal(cm.status, 200, JSON.stringify(cm.body));
+    const os = t.db.prepare("SELECT * FROM docs WHERE type='opening_stock'").get();
+    assert.equal(os.total, 0);
+    // تحويل 30 للمندوب، بيع 20 من الرئيسي و5 من المندوب، ثم مرتجع 4
+    await t.admin.post('/transfers', { from_warehouse_id: 1, to_warehouse_id: rep.warehouse_id, lines: [{ item_id: item.id, qty: 30 }] });
+    const s1 = (await t.admin.post('/sales', { warehouse_id: 1, lines: [{ item_id: item.id, qty: 20 }], payments: [{ cash_account_id: 1, amount: 400 }] })).body;
+    const s2 = (await t.admin.post('/sales', { warehouse_id: rep.warehouse_id, lines: [{ item_id: item.id, qty: 5 }], payments: [{ cash_account_id: 1, amount: 100 }] })).body;
+    assert.equal(t.db.prepare('SELECT cost FROM docs WHERE id=?').get(s1.id).cost, 0);
+    const ret = await t.admin.post('/sale-returns', { sale_id: s1.id, reason: 'تجربة', refund: { cash_account_id: 1 }, lines: [{ line_id: s1.lines[0].id, qty: 4, condition: 'ok' }] });
+    assert.equal(ret.status, 200, JSON.stringify(ret.body));
+    // تحديث التكلفة إلى 12 للشد
+    const line = t.db.prepare('SELECT id FROM doc_lines WHERE doc_id=?').get(os.id);
+    const up = await t.admin.post(`/opening-stock/${os.id}/cost`, { lines: [{ line_id: line.id, unit_cost: 12 }] });
+    assert.equal(up.status, 200, JSON.stringify(up.body));
+    assert.equal(up.body.total, 1200);
+    assert.equal(up.body.adjustment.delta, 1200);
+    const batchVal = t.db.prepare('SELECT SUM(cost) c, SUM(qty) q FROM batches WHERE item_id=?').get(item.id);
+    assert.equal(batchVal.q / 1000, 79, 'الباقي 100-20-5+4');
+    assert.equal(batchVal.c / 100, 79 * 12);
+    assert.equal(t.db.prepare('SELECT cost FROM docs WHERE id=?').get(s1.id).cost / 100, 240);
+    assert.equal(t.db.prepare('SELECT cost FROM docs WHERE id=?').get(s2.id).cost / 100, 60);
+    assert.equal(t.db.prepare('SELECT cost FROM docs WHERE id=?').get(ret.body.id).cost / 100, 48);
+    const bal = (acc) => t.db.prepare('SELECT COALESCE(SUM(debit-credit),0) b FROM journal_lines WHERE account=?').get(acc).b / 100;
+    assert.equal(bal('INVENTORY'), 79 * 12, 'المخزون في الدفاتر = قيمة الدفعات');
+    assert.equal(bal('COGS'), 240 + 60 - 48, 'تكلفة المبيعات = الفواتير - المرتجع');
+    assert.equal(bal('OPENING_EQUITY'), -1200);
+    const tb = t.db.prepare('SELECT SUM(debit) d, SUM(credit) c FROM journal_lines').get();
+    assert.equal(tb.d, tb.c);
+    assert.equal(t.db.prepare('SELECT purchase_price FROM item_units WHERE item_id=? AND is_base=1').get(item.id).purchase_price, 1200);
+    // لا تغيير = خطأ واضح
+    assert.equal((await t.admin.post(`/opening-stock/${os.id}/cost`, { lines: [{ line_id: line.id, unit_cost: 12 }] })).status, 400);
+  } finally { await t.close(); }
+});

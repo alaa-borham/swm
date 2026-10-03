@@ -277,6 +277,82 @@ function createOpeningStock(ctx, input) {
   });
 }
 
+/**
+ * تحديث تكلفة بنود مخزون افتتاحي أُدخل بلا تكلفة (أو بتكلفة خاطئة):
+ * - الكمية الباقية (في أي مستودع انتقلت إليه) تأخذ التكلفة الجديدة
+ * - فواتير البيع التي صُرفت منها تُصحَّح تكلفتها حتى يظهر ربحها صحيحًا
+ * - قيد تسوية: مخزون (للباقي) + تكلفة مبيعات (لما خرج) مقابل الأرصدة الافتتاحية
+ * lines: [{line_id, unit_cost}] (تكلفة وحدة الإدخال للبند)
+ */
+function updateOpeningCost(ctx, docId, input = {}) {
+  ctx.require('opening.manage');
+  return ctx.tx(() => {
+    const os = D.loadDoc(ctx, docId, 'opening_stock');
+    if (os.status !== 'approved') fail('INVALID_STATE', 'المستند غير معتمد');
+    const date = ctx.today();
+    ctx.checkPeriod(date);
+    if (!Array.isArray(input.lines) || !input.lines.length) fail('VALIDATION', 'أدخل تكلفة بند واحد على الأقل');
+    const lines = D.docLines(ctx, os.id);
+    const inv_ = new Map(); // warehouse_id → فرق قيمة المخزون
+    let totalDelta = 0, invDelta = 0, changed = 0;
+    const touchedSales = new Set();
+    for (const [i, l] of input.lines.entries()) {
+      const line = lines.find((x) => x.id === Number(l.line_id));
+      if (!line) fail('VALIDATION', `البند ${i + 1} لا يتبع المستند`);
+      if (l.unit_cost === '' || l.unit_cost == null) continue;
+      const price = toMinor(l.unit_cost, `تكلفة ${line.item_name}`);
+      if (price < 0) fail('VALIDATION', 'التكلفة لا يمكن أن تكون سالبة');
+      const newCost = mulDiv(line.qty, price, 1000);
+      if (newCost === line.cost && price === line.price) continue;
+      const Q = line.base_qty;
+      const rate = (q) => mulDiv(q, newCost, Q);
+      const fam = ctx.db.prepare('SELECT * FROM batches WHERE id=? OR origin_batch_id=?').all(line.batch_id, line.batch_id);
+      const famIds = new Set(fam.map((b) => b.id));
+      // الباقي في الدفعات
+      for (const b of fam) {
+        if (b.qty <= 0) continue;
+        const nb = rate(b.qty);
+        if (nb !== b.cost) {
+          ctx.db.prepare('UPDATE batches SET cost=? WHERE id=?').run(nb, b.id);
+          inv_.set(b.warehouse_id, (inv_.get(b.warehouse_id) || 0) + nb - b.cost);
+          invDelta += nb - b.cost;
+        }
+      }
+      // ما خرج بالبيع: تصحيح تكلفة البند والفاتورة
+      // ومرتجعات البيع التي عادت إليها تُصحَّح كذلك (تكلفة المرتجع من تكلفة البيع الأصلية)
+      const moves = ctx.db.prepare(`SELECT m.*, d.type FROM stock_moves m JOIN docs d ON d.id=m.doc_id
+        WHERE m.batch_id IN (${[...famIds].join(',')}) AND ((m.qty<0 AND d.type='sale') OR (m.qty>0 AND d.type='sale_return'))`).all();
+      for (const m of moves) {
+        const nc = m.qty < 0 ? -rate(-m.qty) : rate(m.qty);
+        const diff = m.qty < 0 ? m.cost - nc : nc - m.cost; // موجب = زيادة تكلفة المستند
+        if (!diff) continue;
+        ctx.db.prepare('UPDATE stock_moves SET cost=?, returned_cost=? WHERE id=?').run(nc, m.qty < 0 ? rate(m.returned_qty) : m.returned_cost, m.id);
+        if (m.line_id) ctx.db.prepare('UPDATE doc_lines SET cost=cost+? WHERE id=?').run(diff, m.line_id);
+        ctx.db.prepare('UPDATE docs SET cost=cost+? WHERE id=?').run(diff, m.doc_id);
+        touchedSales.add(m.doc_id);
+      }
+      ctx.db.prepare('UPDATE doc_lines SET price=?, value=?, cost=? WHERE id=?').run(price, newCost, newCost, line.id);
+      // سعر الشراء المقترح للصنف إن لم يكن محددًا
+      ctx.db.prepare('UPDATE item_units SET purchase_price=? WHERE id=? AND (purchase_price IS NULL OR purchase_price=0)').run(price, line.unit_id);
+      totalDelta += newCost - line.cost;
+      changed++;
+    }
+    if (!changed) fail('VALIDATION', 'لم تتغير أي تكلفة');
+    const total = ctx.db.prepare('SELECT COALESCE(SUM(cost),0) c FROM doc_lines WHERE doc_id=?').get(os.id).c;
+    D.updateDoc(ctx, os.id, { cost: total, total });
+    const adj = D.insertDoc(ctx, 'cost_adjust', { date, warehouse_id: os.warehouse_id, ref_doc_id: os.id, total: totalDelta, cost: totalDelta,
+      notes: `تحديث تكلفة ${os.number}${input.notes ? ' — ' + input.notes : ''}` });
+    D.markApproved(ctx, adj);
+    ledger.post(ctx, D.getDocRow(ctx, adj.id), [
+      ...[...inv_].map(([wh, v]) => ({ account: 'INVENTORY', warehouse_id: wh, debit: v })),
+      { account: 'COGS', debit: totalDelta - invDelta },
+      { account: 'OPENING_EQUITY', credit: totalDelta },
+    ], `تحديث تكلفة ${os.number}`);
+    ctx.audit('opening_stock.cost_update', { entity: 'doc', entity_id: os.id, doc_number: os.number, after: { delta: fromMinor(totalDelta), lines: changed, sales: touchedSales.size } });
+    return { ...D.fullDoc(ctx, os.id), adjustment: { id: adj.id, number: adj.number, delta: fromMinor(totalDelta), sales_updated: touchedSales.size } };
+  });
+}
+
 // ===================== تغيير حالة دفعة (عزل/إفراج/نتيجة فحص المرتجع) =====================
 /**
  * نقل كمية من دفعة إلى حالة أخرى: ok | isolated | damaged (تالف يخرج من المخزون كخسارة)
@@ -390,5 +466,5 @@ function reverseTransfer(ctx, id, reason) {
 }
 
 module.exports = {
-  createTransfer, receiveTransfer, reverseTransfer, createDamage, approveDamage, createCount, enterCounts, approveCount, createOpeningStock, changeBatchStatus,
+  createTransfer, receiveTransfer, reverseTransfer, createDamage, approveDamage, createCount, enterCounts, approveCount, createOpeningStock, updateOpeningCost, changeBatchStatus,
 };

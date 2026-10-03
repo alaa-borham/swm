@@ -78,6 +78,10 @@ export async function view({ el, params }) {
   if (state.settings.whatsapp_enabled && can('messages.send') && d.status === 'approved' && d.party_id && (d.type === 'sale' || (d.type === 'receipt' && d.ledger_account === 'AR'))) {
     A('إرسال واتساب', async () => { if (await run(() => api('POST', `/docs/${d.id}/whatsapp`, {}), 'أُرسلت الرسالة')) reload(); });
   }
+  if (d.type === 'opening_stock' && d.status === 'approved' && can('opening.manage')) {
+    const zero = d.lines.filter((l) => !l.cost).length;
+    A(zero ? `تحديث التكلفة (${zero} بلا تكلفة)` : 'تحديث التكلفة', () => openingCostModal(d, reload), zero ? 'primary' : '');
+  }
   if (d.type === 'sale') {
     if (d.status === 'draft') {
       if (can('sales.create')) L('فتح في فاتورة البيع للتعديل', `#/pos?draft=${d.id}`, 'primary');
@@ -300,6 +304,31 @@ export async function saleReturn({ el, params }) {
           const d = await run(() => send('POST', '/sale-returns', body), 'تم حفظ المرتجع');
           if (d) location.hash = '#/doc/' + d.id;
         } }, can('sale_returns.approve') ? 'اعتماد المرتجع' : 'حفظ للمراجعة والاعتماد'))));
+}
+
+/** تحديث تكلفة المخزون الافتتاحي: تكلفة وحدة الإدخال لكل بند (الفارغ لا يتغير) */
+async function openingCostModal(d, reload) {
+  const rows = d.lines.map((l) => ({ l, inp: inp({ type: 'number', step: 'any', min: 0, value: l.cost ? l.price : '', placeholder: 'التكلفة', style: { width: '110px' } }) }));
+  const total = h('b');
+  const sum = () => { total.textContent = money(rows.reduce((a, r) => a + (num(r.inp.value) || 0) * r.l.qty, 0)); };
+  rows.forEach((r) => r.inp.addEventListener('input', sum));
+  sum();
+  modal('تحديث تكلفة ' + d.number, h('div', null,
+    h('p', { class: 'small muted' }, 'اكتب تكلفة الوحدة لكل صنف. تتحدّث قيمة الكمية الباقية في كل المستودعات، وتُصحَّح تكلفة فواتير البيع التي صُرفت منها حتى يظهر الربح صحيحًا، ويُسجَّل قيد تسوية.'),
+    h('div', { class: 'table-wrap' }, h('table', { class: 'lines-table' },
+      h('thead', null, h('tr', null, ['الصنف', 'الكمية', 'الوحدة', 'التكلفة الحالية', 'تكلفة الوحدة'].map((x) => h('th', null, x)))),
+      h('tbody', null, rows.map(({ l, inp: i }) => h('tr', { style: l.cost ? {} : { background: 'var(--warn-bg, rgba(255,200,0,.12))' } },
+        h('td', null, l.item_name), h('td', null, Q(l.qty)), h('td', null, l.unit_name), h('td', null, l.cost ? M(l.price) : 'بلا تكلفة'), h('td', null, i)))))),
+    h('p', null, 'إجمالي قيمة المستند بعد التحديث: ', total)),
+  [{ label: 'حفظ التكلفة', class: 'primary', onClick: async () => {
+    const lines = rows.filter((r) => r.inp.value !== '').map((r) => ({ line_id: r.l.id, unit_cost: num(r.inp.value) }));
+    if (!lines.length) return toast('اكتب تكلفة صنف واحد على الأقل', 'bad'), false;
+    const r = await run(() => api('POST', `/opening-stock/${d.id}/cost`, { lines }));
+    if (!r) return false;
+    toast(`تم تحديث التكلفة (${r.adjustment.number})${r.adjustment.sales_updated ? ` وتصحيح ${r.adjustment.sales_updated} فاتورة` : ''}`, 'ok');
+    reload();
+    return true;
+  } }]);
 }
 
 // ===================== الطباعة =====================

@@ -142,7 +142,8 @@ function preview(ctx, kind, rows) {
       const it = ctx.db.prepare('SELECT * FROM items WHERE code=?').get(r['كود الصنف']);
       if (!it) errors.push(`الصنف ${r['كود الصنف']} غير موجود`);
       if (!(Number(r['الكمية بوحدة الأساس']) > 0)) errors.push('الكمية يجب أن تكون أكبر من صفر');
-      if (r['تكلفة الوحدة'] === '' || !(Number(r['تكلفة الوحدة']) >= 0)) errors.push('تكلفة الوحدة مطلوبة');
+      // التكلفة اختيارية: الفارغة = صفر، وتُحدَّث لاحقًا من المستند (زر «تحديث التكلفة»)
+      if (r['تكلفة الوحدة'] !== '' && !(Number(r['تكلفة الوحدة']) >= 0)) errors.push('تكلفة الوحدة ليست رقمًا صحيحًا');
       if (it && it.track_expiry && !r['تاريخ الانتهاء']) errors.push('تاريخ الانتهاء مطلوب');
       for (const k of ['تاريخ الإنتاج', 'تاريخ الانتهاء']) if (r[k] && !/^\d{4}-\d{2}-\d{2}$/.test(r[k])) errors.push(`${k} بصيغة YYYY-MM-DD`);
     }
@@ -190,7 +191,7 @@ function commit(ctx, kind, rows, opts = {}) {
       }
     } else if (kind === 'stock') {
       const lines = pv.rows.map((r) => ({
-        item_id: ctx.db.prepare('SELECT id FROM items WHERE code=?').get(r['كود الصنف']).id, qty: r['الكمية بوحدة الأساس'], unit_cost: r['تكلفة الوحدة'],
+        item_id: ctx.db.prepare('SELECT id FROM items WHERE code=?').get(r['كود الصنف']).id, qty: r['الكمية بوحدة الأساس'], unit_cost: r['تكلفة الوحدة'] === '' ? 0 : r['تكلفة الوحدة'],
         batch_no: r['رقم الدفعة'] || null, prod_date: r['تاريخ الإنتاج'] || null, expiry_date: r['تاريخ الانتهاء'] || null,
       }));
       S.createOpeningStock(ctx, { warehouse_id: opts.warehouse_id, date: opts.date, lines });

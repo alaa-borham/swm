@@ -471,6 +471,7 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
   api.put('/counts/:id', h((ctx, req) => S.enterCounts(ctx, id(req), req.body.counts)));
   api.post('/counts/:id/approve', h((ctx, req) => S.approveCount(ctx, id(req), req.body)));
   api.post('/opening-stock', h((ctx, req) => S.createOpeningStock(ctx, req.body)));
+  api.post('/opening-stock/:id/cost', h((ctx, req) => S.updateOpeningCost(ctx, id(req), req.body)));
   api.post('/batches/:id/status', h((ctx, req) => S.changeBatchStatus(ctx, { ...req.body, batch_id: id(req) })));
   api.post('/opening-balances', h((ctx, req) => F.createOpeningBalance(ctx, req.body)));
   api.post('/period/lock', h((ctx, req) => F.lockPeriod(ctx, req.body)));
