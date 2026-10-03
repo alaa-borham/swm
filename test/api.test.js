@@ -541,3 +541,30 @@ test('مخزون افتتاحي بلا تكلفة ثم تحديثها: البا�
     assert.equal((await t.admin.post(`/opening-stock/${os.id}/cost`, { lines: [{ line_id: line.id, unit_cost: 12 }] })).status, 400);
   } finally { await t.close(); }
 });
+
+test('تصفير بيانات التجربة: نسخة احتياطية ثم حذف المستندات والأصناف، ويبقى العملاء والإعدادات، والترقيم من 1', async () => {
+  const t = await boot();
+  try {
+    const item = (await t.admin.post('/items', { name: 'تجربة', base_unit: 'حبة', track_expiry: 0, sell_price: 10 })).body;
+    await t.admin.post('/opening-stock', { warehouse_id: 1, lines: [{ item_id: item.id, qty: 10, unit_cost: 5 }] });
+    const c = (await t.admin.post('/parties', { name: 'عميل باقٍ', is_customer: 1 })).body;
+    await t.admin.post('/sales', { party_id: c.id, lines: [{ item_id: item.id, qty: 2 }], payments: [] });
+    await t.admin.put('/settings', { org_name: 'مؤسستي' });
+    assert.equal((await t.admin.post('/admin/reset', { confirm: 'خطأ' })).status, 400, 'يلزم التأكيد');
+    const r = await t.admin.post('/admin/reset', { confirm: 'تصفير', items: true, parties: false });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.match(r.body.backup, /before-reset/);
+    const n = (tb) => t.db.prepare(`SELECT COUNT(*) n FROM ${tb}`).get().n;
+    for (const tb of ['docs', 'doc_lines', 'batches', 'stock_moves', 'journal_lines', 'allocations', 'items', 'item_units']) assert.equal(n(tb), 0, tb);
+    assert.equal(n('parties'), 1, 'العملاء باقون');
+    assert.equal(t.db.prepare("SELECT value FROM settings WHERE key='org_name'").get().value, 'مؤسستي');
+    assert.ok(n('warehouses') >= 1 && n('users') >= 1 && n('cash_accounts') >= 1);
+    // يعمل النظام بعده والترقيم من 1
+    const it2 = (await t.admin.post('/items', { name: 'جديد', base_unit: 'حبة', track_expiry: 0, sell_price: 10 })).body;
+    await t.admin.post('/opening-stock', { warehouse_id: 1, lines: [{ item_id: it2.id, qty: 5, unit_cost: 2 }] });
+    const s = (await t.admin.post('/sales', { party_id: c.id, lines: [{ item_id: it2.id, qty: 1 }], payments: [] })).body;
+    assert.equal(s.number, 'INV-000001');
+    const backups = (await t.admin.get('/backups')).body;
+    assert.ok(backups.some((b) => b.name === r.body.backup));
+  } finally { await t.close(); }
+});

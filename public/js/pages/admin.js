@@ -164,8 +164,33 @@ export async function backup({ el }) {
     h('button', { class: 'btn primary', style: { marginBottom: '12px' }, onclick: async () => { if (await run(() => api('POST', '/backups', {}), 'تم إنشاء النسخة')) load(); } }, 'إنشاء نسخة الآن'),
     body, h('div', { class: 'card', style: { marginTop: '16px' } }, h('h3', null, 'الاستعادة'),
       h('p', null, 'الاستعادة تتم والخادم متوقف بالأمر: ', h('code', { style: { direction: 'ltr', display: 'inline-block' } }, 'npm run restore -- <اسم النسخة>'),
-        '. يتحقق الأمر من سلامة النسخة ومطابقة أعدادها قبل الاستبدال، ويحتفظ بالقاعدة الحالية باسم احتياطي. التفاصيل في دليل النسخ والاستعادة.')));
+        '. يتحقق الأمر من سلامة النسخة ومطابقة أعدادها قبل الاستبدال، ويحتفظ بالقاعدة الحالية باسم احتياطي. التفاصيل في دليل النسخ والاستعادة.')),
+    can('users.manage') && can('backup.manage') ? resetCard() : null);
   await load();
+}
+
+/** تصفير بيانات التجربة قبل بدء العمل الفعلي */
+function resetCard() {
+  const items = h('input', { type: 'checkbox', checked: true });
+  const parties = h('input', { type: 'checkbox' });
+  const confirmIn = inp({ placeholder: 'اكتب: تصفير' });
+  return h('div', { class: 'card', style: { marginTop: '16px', borderColor: 'var(--bad)' } },
+    h('h3', { style: { color: 'var(--bad)' } }, 'تصفير بيانات التجربة'),
+    h('p', null, 'يحذف كل الفواتير والسندات والمستندات وحركات المخزون والقيود، ويعيد ترقيم المستندات من 1. ',
+      'يبقى كما هو: الإعدادات، المستخدمون والصلاحيات، الفروع والمستودعات والحسابات، والمناديب. ',
+      h('b', null, 'تُؤخذ نسخة احتياطية تلقائيًا قبل الحذف'), ' (تظهر في القائمة أعلاه) يمكن الاستعادة منها.'),
+    h('div', { class: 'row' }, h('label', { class: 'check' }, items, 'حذف الأصناف أيضًا'), h('label', { class: 'check' }, parties, 'حذف العملاء والموردين أيضًا')),
+    h('div', { class: 'row', style: { marginTop: '10px', alignItems: 'end' } }, field('للتأكيد اكتب «تصفير»', confirmIn),
+      h('button', { class: 'btn danger', onclick: async () => {
+        if (confirmIn.value.trim() !== 'تصفير') return toast('اكتب كلمة «تصفير» للتأكيد', 'bad');
+        const what = ['المستندات', items.checked ? 'الأصناف' : null, parties.checked ? 'العملاء والموردين' : null].filter(Boolean).join(' و');
+        if (!confirm(`سيتم حذف ${what} نهائيًا (مع نسخة احتياطية قبلها). متابعة؟`)) return;
+        const r = await run(() => api('POST', '/admin/reset', { confirm: confirmIn.value, items: items.checked, parties: parties.checked }));
+        if (!r) return;
+        try { Object.keys(localStorage).filter((k) => k.startsWith('frs-lookup-')).forEach((k) => localStorage.removeItem(k)); } catch (_) { /* ignore */ }
+        alert(`تم التصفير: حُذف ${r.deleted.docs} مستند${r.deleted.items ? ` و${r.deleted.items} صنف` : ''}${r.deleted.parties ? ` و${r.deleted.parties} عميل/مورد` : ''}.\nالنسخة الاحتياطية: ${r.backup}`);
+        location.hash = '#/'; location.reload();
+      } }, 'تصفير البيانات')));
 }
 
 function verifyView(r) {

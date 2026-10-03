@@ -20,6 +20,7 @@ const F = require('./core/finance');
 const Reps = require('./core/reps');
 const R = require('./core/reports');
 const Backup = require('./core/backup');
+const Reset = require('./core/reset');
 const Importer = require('./core/importer');
 const Export = require('./api/export');
 const WA = require('./core/whatsapp');
@@ -572,6 +573,14 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
     const r = Backup.createBackup(db, { backupDir, uploadsDir, retention: Number(ctx.setting('backup_retention') || 30), label: 'manual' });
     ctx.audit('backup.create', { entity: 'backup', after: { name: r.name } });
     return r;
+  }));
+  // تصفير بيانات التجربة: نسخة احتياطية أولًا ثم الحذف
+  api.post('/admin/reset', h((ctx, req) => {
+    ctx.require('users.manage'); ctx.require('backup.manage');
+    if (String(req.body.confirm || '').trim() !== Reset.CONFIRM) fail('VALIDATION', `اكتب كلمة «${Reset.CONFIRM}» للتأكيد`);
+    const b = Backup.createBackup(db, { backupDir, uploadsDir, retention: Number(ctx.setting('backup_retention') || 30), label: 'before-reset' });
+    const r = Reset.resetData(ctx, { confirm: req.body.confirm, items: req.body.items !== false, parties: !!req.body.parties, uploadsDir });
+    return { ...r, backup: b.name };
   }));
   api.post('/backups/:name/verify', h((ctx, req) => {
     ctx.require('backup.manage');
