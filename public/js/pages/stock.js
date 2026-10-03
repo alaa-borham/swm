@@ -140,7 +140,7 @@ export async function transfer({ el, q }) {
     h('div', { class: 'card' }, h('div', { class: 'grid' }, field('من مستودع', from, { req: true }), field('إلى مستودع', to, { req: true }), field('ملاحظات', notes)),
       h('label', { class: 'check', style: { marginTop: '10px' } }, transit, 'نقل على مراحل: تبقى البضاعة "بالطريق" غير متاحة في الطرفين حتى تستلمها الوجهة')),
     hint,
-    h('div', { class: 'card' }, h('div', { class: 'row', style: { alignItems: 'center' } }, h('div', { style: { flex: 1 } }, filterIn),
+    h('div', { class: 'card' }, h('div', { class: 'row', style: { alignItems: 'center', flexWrap: 'wrap' } }, h('div', { style: { flex: 1, minWidth: '220px' } }, filterIn),
       h('button', { type: 'button', class: 'btn small primary', onclick: () => setAll(true) }, 'تحديد الكل بكامل الكمية'),
       h('button', { type: 'button', class: 'btn small', onclick: () => setAll(false) }, 'إلغاء التحديد'), countBox),
       h('div', { class: 'table-wrap', style: { marginTop: '10px' } }, h('table', { class: 'lines-table' }, h('thead', null, h('tr', null, h('th', null, h('label', { class: 'check', title: 'تحديد الكل' }, allChk)), ...['الصنف', 'المتاح', 'الوحدة', 'الكمية المحوّلة', ''].map((x) => h('th', null, x)))), tbody))),
