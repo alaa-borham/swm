@@ -194,8 +194,9 @@ async function posView({ el, q }) {
       const pIn = inp({ type: 'number', value: l.price, style: { width: '90px' }, onchange: () => { l.price = pIn.value; redraw(); } });
       const lc = c.lines[i];
       const md = 10 ** (s.money_decimals ?? 2);
-      const offDisc = invDiscUsed() || null;
-      const offTitle = offDisc ? 'خصم الأصناف غير متاح مع خصم الفاتورة' : null;
+      const repNoDisc = isRep && state.rep?.discount_limit_pct === 0;
+      const offDisc = invDiscUsed() || repNoDisc || null;
+      const offTitle = repNoDisc ? 'الخصم غير مسموح لك' : offDisc ? 'خصم الأصناف غير متاح مع خصم الفاتورة' : isRep && state.rep?.discount_limit_pct ? `أقصى خصم لك ${state.rep.discount_limit_pct}%` : null;
       // خصم الصنف قيمة (مبلغ) وليس نسبة
       const amtShown = l.discMode === 'amt' ? l.discount_amt : (lc.disc ? (lc.disc / md).toFixed(s.money_decimals ?? 2) : '');
       const aIn = inp({ type: 'number', value: amtShown, placeholder: '0.00', min: 0, style: { width: '90px' }, disabled: offDisc, title: offTitle, onchange: () => { l.discMode = 'amt'; l.discount_amt = aIn.value; l.discount_pct = ''; redraw(); } });

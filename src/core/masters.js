@@ -541,9 +541,15 @@ function updateRep(ctx, id, input) {
   return ctx.tx(() => {
     const ex = ctx.db.prepare('SELECT * FROM reps WHERE id=?').get(id);
     if (!ex) notFound('المندوب');
-    ctx.db.prepare('UPDATE reps SET name=?, phone=?, area=?, active=? WHERE id=?')
+    // حد الخصم: null = حسب حد الصنف، 0 = لا يسمح، وإلا نسبة مئوية
+    let limit = ex.discount_limit_bp;
+    if (input.discount_limit_pct !== undefined) {
+      limit = input.discount_limit_pct === null || input.discount_limit_pct === '' ? null : toBp(input.discount_limit_pct, 'حد خصم المندوب');
+      if (limit != null && (limit < 0 || limit > 10000)) fail('VALIDATION', 'حد الخصم بين 0 و100%');
+    }
+    ctx.db.prepare('UPDATE reps SET name=?, phone=?, area=?, active=?, discount_limit_bp=? WHERE id=?')
       .run(s(input.name) || ex.name, input.phone !== undefined ? s(input.phone) : ex.phone, input.area !== undefined ? s(input.area) : ex.area,
-        input.active !== undefined ? bool(input.active, 1) : ex.active, id);
+        input.active !== undefined ? bool(input.active, 1) : ex.active, limit, id);
     ctx.audit('rep.update', { entity: 'rep', entity_id: id, before: ex, after: input });
     return getRep(ctx, id);
   });
@@ -584,6 +590,7 @@ function getRep(ctx, id) {
     LEFT JOIN warehouses w ON w.id=r.warehouse_id LEFT JOIN cash_accounts c ON c.id=r.custody_account_id WHERE r.id=?`).get(id);
   if (!r) notFound('المندوب');
   r.plans = ctx.db.prepare('SELECT * FROM commission_plans WHERE rep_id=? ORDER BY valid_from').all(id).map(present);
+  r.discount_limit_pct = r.discount_limit_bp == null ? null : r.discount_limit_bp / 100;
   return r;
 }
 

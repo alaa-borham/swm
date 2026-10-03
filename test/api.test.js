@@ -588,3 +588,37 @@ test('سعر البيع ثابت للمندوب: يُتجاهل السعر ال�
     assert.equal(a.lines[0].price, 28, 'المدير يعدّل');
   } finally { await t.close(); }
 });
+
+test('صلاحية خصم المندوب المستقلة: غير مسموح / حتى نسبة (تتجاوز حد الصنف) / حسب حد الصنف', async () => {
+  const t = await boot();
+  try {
+    const rep = (await t.admin.post('/reps', { name: 'م' })).body;
+    await t.admin.post('/users', { username: 'repd', full_name: 'م', password: 'Rep12345', roles: ['rep'], rep_id: rep.id });
+    const item = (await t.admin.post('/items', { name: 'سيسي', base_unit: 'شد', track_expiry: 0, sell_price: 100, max_discount_pct: 2 })).body;
+    await t.admin.post('/opening-stock', { warehouse_id: 1, lines: [{ item_id: item.id, qty: 50, unit_cost: 5 }] });
+    await t.admin.post('/transfers', { from_warehouse_id: 1, to_warehouse_id: rep.warehouse_id, lines: [{ item_id: item.id, qty: 40 }] });
+    const c = (await t.admin.post('/parties', { name: 'ع', is_customer: 1, rep_id: rep.id })).body;
+    const r = await t.client('repd', 'Rep12345');
+    const sale = async (amt) => { const x = await r.post('/sales', { party_id: c.id, warehouse_id: rep.warehouse_id, lines: [{ item_id: item.id, qty: 1, discount_amount: amt }], payments: [] }); return x; };
+    // افتراضيًا حسب حد الصنف (2%)
+    assert.equal((await sale(2)).status, 200);
+    assert.equal((await sale(3)).status, 403);
+    // غير مسموح
+    await t.admin.put('/reps/' + rep.id, { discount_limit_pct: 0 });
+    const none = await sale(1);
+    assert.equal(none.status, 403); assert.match(none.body.error.message, /غير مسموح/);
+    assert.equal((await sale(null)).status, 200, 'بدون خصم يعمل');
+    // حتى 5% مستقلة عن حد الصنف 2%
+    await t.admin.put('/reps/' + rep.id, { discount_limit_pct: 5 });
+    assert.equal((await t.admin.get('/reps/' + rep.id)).body.discount_limit_pct, 5);
+    assert.equal((await sale(5)).status, 200, '5% مسموحة رغم حد الصنف 2%');
+    const over = await sale(6);
+    assert.equal(over.status, 403); assert.match(over.body.error.message, /حد الخصم المسموح لك/);
+    // العودة لحد الصنف
+    await t.admin.put('/reps/' + rep.id, { discount_limit_pct: null });
+    assert.equal((await sale(3)).status, 403);
+    // المدير غير متأثر
+    const adm = await t.admin.post('/sales', { party_id: c.id, warehouse_id: 1, lines: [{ item_id: item.id, qty: 1, discount_amount: 10 }], payments: [], override_reason: 'عرض خاص' });
+    assert.equal(adm.status, 200, JSON.stringify(adm.body));
+  } finally { await t.close(); }
+});

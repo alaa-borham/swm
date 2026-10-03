@@ -151,7 +151,14 @@ export async function editRep(repId, onSaved) {
     rateReason: inp({ placeholder: 'مثال: اتفاق جديد' }),
     username: inp({ value: user ? user.username : '', disabled: !!user || null, autocomplete: 'off' }),
     password: inp({ type: 'password', placeholder: user ? 'اتركها فارغة لعدم التغيير' : 'كلمة المرور', autocomplete: 'new-password' }),
+    discMode: sel([{ value: 'item', label: 'حسب حد خصم كل صنف' }, { value: 'none', label: 'غير مسموح بالخصم' }, { value: 'limit', label: 'مسموح حتى نسبة محددة' }],
+      rep.discount_limit_pct == null ? 'item' : rep.discount_limit_pct === 0 ? 'none' : 'limit'),
+    discPct: inp({ type: 'number', min: 0, max: 100, step: 'any', value: rep.discount_limit_pct || '', placeholder: '%' }),
   };
+  const discPctField = field('أقصى خصم للمندوب %', f.discPct, { req: true });
+  const syncDisc = () => { discPctField.style.display = f.discMode.value === 'limit' ? '' : 'none'; };
+  f.discMode.addEventListener('change', syncDisc);
+  syncDisc();
   const rateReasonField = field('سبب تغيير النسبة', f.rateReason, { req: true });
   rateReasonField.style.display = 'none';
   f.rate.addEventListener('input', () => { rateReasonField.style.display = num(f.rate.value) !== (current ? current.rate_bp : null) ? '' : 'none'; });
@@ -164,14 +171,20 @@ export async function editRep(repId, onSaved) {
   modal('تعديل بيانات المندوب', h('div', null,
     h('div', { class: 'grid' }, field('الاسم', f.name, { req: true }), field('الهاتف', f.phone), field('المنطقة', f.area),
       canPlans ? field('نسبة العمولة %', f.rate) : null, canPlans ? rateReasonField : null),
-    h('label', { class: 'check', style: { marginTop: '8px' } }, f.active, 'نشط'), login),
+    h('label', { class: 'check', style: { marginTop: '8px' } }, f.active, 'نشط'),
+    h('h4', { style: { margin: '14px 0 6px' } }, 'صلاحية الخصم'),
+    h('div', { class: 'grid' }, field('الخصم في فواتير البيع', f.discMode), discPctField),
+    h('p', { class: 'small muted', style: { margin: '4px 0 0' } }, 'مستقلة عن حدود خصم الأصناف: النسبة المحددة هنا هي أقصى خصم يعطيه المندوب على أي صنف (من قيمة الصنف).'),
+    login),
   [{ label: 'حفظ', class: 'primary', onClick: async () => {
     const newRate = num(f.rate.value);
     const rateChanged = canPlans && newRate != null && newRate !== (current ? current.rate_bp : null);
     if (rateChanged && f.rateReason.value.trim().length < 3) { toast('اكتب سبب تغيير النسبة', 'bad'); return false; }
     if (!user && (f.username.value || f.password.value) && !(f.username.value && f.password.value)) { toast('اكتب اسم المستخدم وكلمة المرور معًا', 'bad'); return false; }
+    if (f.discMode.value === 'limit' && !(num(f.discPct.value) > 0 && num(f.discPct.value) <= 100)) { toast('اكتب أقصى نسبة خصم بين 0 و100', 'bad'); return false; }
+    const discount_limit_pct = f.discMode.value === 'item' ? null : f.discMode.value === 'none' ? 0 : num(f.discPct.value);
     const ok = await run(async () => {
-      await api('PUT', '/reps/' + rep.id, { name: f.name.value, phone: f.phone.value, area: f.area.value, active: f.active.checked ? 1 : 0 });
+      await api('PUT', '/reps/' + rep.id, { name: f.name.value, phone: f.phone.value, area: f.area.value, active: f.active.checked ? 1 : 0, discount_limit_pct });
       if (rateChanged) await api('POST', `/reps/${rep.id}/plans`, { rate_pct: newRate, valid_from: today(), reason: f.rateReason.value.trim() });
       if (user && f.password.value) await api('PUT', '/users/' + user.id, { password: f.password.value });
       if (!user && f.username.value && f.password.value) await api('POST', '/users', { username: f.username.value, full_name: f.name.value, password: f.password.value, roles: ['rep'], rep_id: rep.id });

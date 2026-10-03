@@ -86,6 +86,10 @@ const MIGRATIONS = {
     const up = db.prepare('UPDATE parties SET code=? WHERE id=?');
     for (const r of rows) up.run('A' + Number(r.code.slice(1)), r.id);
   },
+  11: (db) => {
+    // صلاحية خصم المندوب المستقلة عن حدود خصم الأصناف: فارغ = حسب حد الصنف، 0 = لا خصم، غير ذلك = أقصى نسبة
+    addColumn(db, 'reps', 'discount_limit_bp', 'INTEGER');
+  },
 };
 const SCHEMA_VERSION = Math.max(1, ...Object.keys(MIGRATIONS).map(Number));
 
