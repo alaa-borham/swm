@@ -87,7 +87,15 @@ async function posView({ el, q }) {
     const m = modal('مسودات فواتير البيع', r.rows.length ? h('div', { class: 'table-wrap' }, h('table', null,
       h('thead', null, h('tr', null, ['الرقم', 'التاريخ', 'العميل', 'الإجمالي', ''].map((x) => h('th', null, x)))),
       h('tbody', null, r.rows.map((d) => h('tr', null, h('td', null, d.number), h('td', null, d.date), h('td', null, d.party_name || '—'), h('td', null, M(d.total)),
-        h('td', null, h('button', { class: 'btn small primary', onclick: async () => { m.close(); await loadDraft(d.id); } }, 'فتح'))))))) : h('p', { class: 'muted' }, 'لا توجد مسودات'));
+        h('td', null, h('button', { class: 'btn small primary', onclick: async () => { m.close(); await loadDraft(d.id); } }, 'فتح'), ' ',
+          h('button', { class: 'btn small danger', onclick: async (e) => {
+            const tr = e.currentTarget.closest('tr');
+            if (!confirm(`حذف المسودة ${d.number}${d.party_name ? ' — ' + d.party_name : ''}؟`)) return;
+            if (!await run(() => api('POST', `/docs/${d.id}/cancel`, { reason: 'حذف مسودة من شاشة البيع' }), 'حُذفت المسودة')) return;
+            tr.remove();
+            if (draftId === d.id) resetForm();
+            refreshDraftCount();
+          } }, 'حذف'))))))) : h('p', { class: 'muted' }, 'لا توجد مسودات'));
   }
   async function loadDraft(id) {
     if (cart.length && !confirm('في الفاتورة الحالية أصناف لم تُحفظ. استبدالها بالمسودة؟')) return;
