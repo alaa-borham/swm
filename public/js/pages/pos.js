@@ -211,7 +211,14 @@ async function posView({ el, q }) {
       const limPct = lineLimitPct(l.item);
       const grossLine = (lc.value + (s.prices_include_tax ? 0 : Math.round(lc.value * taxOf(l.item) / 100))) / md;
       const maxAmt = limPct == null ? null : Math.floor(grossLine * limPct / 100 * md) / md;
-      const clampDisc = () => { if (maxAmt != null && num(l.discount_amt) > maxAmt) { l.discount_amt = maxAmt; toast(`أقصى خصم لـ ${l.item.name}: ${money(maxAmt)} (${limPct}%)`, 'warn'); } };
+      // تنبيه واحد فقط عند بلوغ الحد، ولا يتكرر مع كل ضغطة + حتى ينزل الخصم تحت الحد
+      const clampDisc = () => {
+        if (maxAmt == null) return;
+        if (num(l.discount_amt) > maxAmt) {
+          l.discount_amt = maxAmt;
+          if (!l.limitWarned) { l.limitWarned = true; toast(`أقصى خصم لـ ${l.item.name}: ${money(maxAmt)} (${limPct}%)`, 'warn'); }
+        } else if (num(l.discount_amt) < maxAmt) l.limitWarned = false;
+      };
       const aIn = inp({ type: 'number', value: amtShown, placeholder: '0.00', min: 0, style: { width: '90px' }, disabled: offDisc, title: offTitle, onchange: () => { l.discMode = 'amt'; l.discount_amt = aIn.value; l.discount_pct = ''; clampDisc(); redraw(); } });
       const discHint = maxAmt != null && !offDisc ? h('div', { class: 'small muted' }, `الحد ${limPct}% = ${money(maxAmt)}`) : null;
       tbody.append(h('tr', null,
@@ -238,8 +245,14 @@ async function posView({ el, q }) {
   const isAdmin = can('settings.manage');
   const invDiscAllowed = isAdmin || !!s.invoice_discount_enabled;
   const invDiscUsed = () => (num(invDiscAmt.value) || 0) !== 0;
+  let invLimitWarned = false;
   const onInvDisc = () => {
-    if (!isAdmin && s.invoice_discount_max_pct != null && num(invDiscAmt.value) > s.invoice_discount_max_pct) { invDiscAmt.value = s.invoice_discount_max_pct; toast(`أقصى خصم للفاتورة ${s.invoice_discount_max_pct}%`, 'warn'); }
+    if (!isAdmin && s.invoice_discount_max_pct != null) {
+      if (num(invDiscAmt.value) > s.invoice_discount_max_pct) {
+        invDiscAmt.value = s.invoice_discount_max_pct;
+        if (!invLimitWarned) { invLimitWarned = true; toast(`أقصى خصم للفاتورة ${s.invoice_discount_max_pct}%`, 'warn'); }
+      } else if (num(invDiscAmt.value) < s.invoice_discount_max_pct) invLimitWarned = false;
+    }
     if (invDiscUsed() && cart.some((l) => l.discount_pct || l.discount_amt)) { cart.forEach((l) => { l.discount_pct = ''; l.discount_amt = ''; l.discMode = 'pct'; }); toast('أُلغيت خصومات الأصناف لأن خصم الفاتورة مستخدم', 'warn'); }
     draw();
   };
