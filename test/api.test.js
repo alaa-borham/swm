@@ -622,3 +622,15 @@ test('صلاحية خصم المندوب المستقلة: غير مسموح / �
     assert.equal(adm.status, 200, JSON.stringify(adm.body));
   } finally { await t.close(); }
 });
+
+test('خصم الفاتورة يلغي خصومات الأصناف للجميع (والمدير أيضًا)', async () => {
+  const t = await boot();
+  try {
+    const item = (await t.admin.post('/items', { name: 'بيض', base_unit: 'شد', track_expiry: 0, sell_price: 18, max_discount_pct: 50 })).body;
+    await t.admin.post('/opening-stock', { warehouse_id: 1, lines: [{ item_id: item.id, qty: 20, unit_cost: 5 }] });
+    const c = (await t.admin.post('/parties', { name: 'ع', is_customer: 1 })).body;
+    const s = (await t.admin.post('/sales', { party_id: c.id, lines: [{ item_id: item.id, qty: 2, discount_amount: 3 }], invoice_discount_amount: 2, payments: [] })).body;
+    assert.equal(s.lines[0].line_discount, 0, 'أُلغي خصم الصنف');
+    assert.equal(s.discount, 2, 'بقي خصم الفاتورة');
+  } finally { await t.close(); }
+});

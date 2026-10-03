@@ -205,7 +205,7 @@ test('القيود متوازنة دائمًا وسجل التدقيق لا يُ
   const e = setup();
   const item = e.item({ price: 10, tax: 15 });
   e.stock(item, 10, 4);
-  Sales.createSale(e.admin, { lines: [{ item_id: item.id, qty: 3, discount_amount: 1 }], invoice_discount_pct: 3, payments: [{ cash_account_id: 1, amount: 32.35 }] });
+  Sales.createSale(e.admin, { lines: [{ item_id: item.id, qty: 3, discount_amount: 1 }], payments: [{ cash_account_id: 1, amount: 33.35 }] });
   const r = e.db.prepare('SELECT SUM(debit) d, SUM(credit) c FROM journal_lines').get();
   assert.equal(r.d, r.c);
   assert.throws(() => e.db.prepare('DELETE FROM audit_log').run(), /append-only/);

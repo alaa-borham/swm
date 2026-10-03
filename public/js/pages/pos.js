@@ -40,7 +40,7 @@ async function posView({ el, q }) {
   const dateIn = inp({ type: 'date', value: today() });
   const notes = inp({ placeholder: 'ملاحظات' });
   const invDiscPct = inp({ type: 'number', placeholder: '%' });
-  const invDiscAmt = inp({ type: 'number', placeholder: 'مبلغ' });
+  const invDiscAmt = inp({ type: 'number', placeholder: '0.00', min: 0 });
   const cashIn = inp({ type: 'number', placeholder: '0' });
   const cardIn = inp({ type: 'number', placeholder: '0' });
   const bankSel = await cashSelect('', {}, (a) => a.kind === 'bank', { empty: '— اختر طريقة السداد —' });
@@ -118,8 +118,9 @@ async function posView({ el, q }) {
     custSel.value = d.party_id ? String(d.party_id) : '';
     if (d.warehouse_id) whSel.value = String(d.warehouse_id);
     notes.value = d.notes || '';
-    invDiscPct.value = d.invoice_discount_bp ?? '';
-    invDiscAmt.value = d.invoice_discount_bp == null && d.invoice_discount_amount ? d.invoice_discount_amount : '';
+    // خصم الفاتورة المحفوظ يُعرض كما كُتب: الإجمالي قبل خصم الفاتورة ناقص إجمالي المسودة
+    invDiscAmt.value = '';
+    if (d.invoice_discount_amount || d.invoice_discount_bp) { const c0 = calc(); invDiscAmt.value = Math.max(0, Number((c0.total - d.total).toFixed(s.money_decimals ?? 2))); }
     draftId = d.id;
     draftNote.replaceChildren(h('div', { class: 'note warn', style: { marginBottom: '8px' } }, `تعمل على المسودة ${d.number} — الحفظ يحدّثها والاعتماد يعتمدها `,
       h('button', { class: 'btn small', onclick: () => { resetForm(); draw(); } }, 'فاتورة جديدة بدلًا منها')));
@@ -163,8 +164,13 @@ async function posView({ el, q }) {
     });
     const sumAfter = lines.reduce((a, x) => a + x.after, 0);
     let inv = 0;
-    if (num(invDiscPct.value)) inv += Math.round(sumAfter * num(invDiscPct.value) / 100);
-    if (num(invDiscAmt.value)) inv += Math.round(num(invDiscAmt.value) * md);
+    // خصم الفاتورة قيمة تُطرح من الإجمالي بعد الضريبة؛ يُحوَّل إلى خصم قبل الضريبة بنسبة الصافي إلى الإجمالي
+    const D = Math.max(Math.round((num(invDiscAmt.value) || 0) * md), 0);
+    if (D) {
+      const G = lines.reduce((a, x) => a + x.after + (s.prices_include_tax ? 0 : Math.round(x.after * taxOf(x.l.item) / 100)), 0);
+      inv = s.prices_include_tax || !G ? D : Math.round(D * sumAfter / G);
+      inv = Math.min(inv, sumAfter);
+    }
     let sub = 0, dsc = 0, net = 0, tax = 0;
     for (const x of lines) {
       const share = sumAfter ? Math.round(inv * x.after / sumAfter) : 0;
@@ -175,7 +181,7 @@ async function posView({ el, q }) {
       x.total = (n + t) / md;
       sub += x.value; dsc += x.disc + share; net += n; tax += t;
     }
-    return { lines, subtotal: sub / md, discount: dsc / md, net: net / md, tax: tax / md, total: (net + tax) / md };
+    return { lines, inv: inv / md, subtotal: sub / md, discount: dsc / md, net: net / md, tax: tax / md, total: (net + tax) / md };
   }
 
   // خصم البند قبل الضريبة (يُرسل للخادم) كما يحسبه calc
@@ -223,12 +229,12 @@ async function posView({ el, q }) {
   // سياسة خصم الفاتورة: يظهر لغير المدير فقط إذا فعّله المدير، واستخدامه يلغي خصومات الأصناف
   const isAdmin = can('settings.manage');
   const invDiscAllowed = isAdmin || !!s.invoice_discount_enabled;
-  const invDiscUsed = () => !isAdmin && ((num(invDiscPct.value) || 0) !== 0 || (num(invDiscAmt.value) || 0) !== 0);
+  const invDiscUsed = () => (num(invDiscAmt.value) || 0) !== 0;
   const onInvDisc = () => {
     if (invDiscUsed() && cart.some((l) => l.discount_pct || l.discount_amt)) { cart.forEach((l) => { l.discount_pct = ''; l.discount_amt = ''; l.discMode = 'pct'; }); toast('أُلغيت خصومات الأصناف لأن خصم الفاتورة مستخدم', 'warn'); }
     draw();
   };
-  invDiscPct.addEventListener('input', onInvDisc); invDiscAmt.addEventListener('input', onInvDisc);
+  invDiscAmt.addEventListener('input', onInvDisc);
   for (const x of [cashIn, cardIn]) x.addEventListener('input', draw);
 
   const payload = (approve, extra = {}) => {
@@ -240,7 +246,7 @@ async function posView({ el, q }) {
     if (card > 0) payments.push({ method: 'card', amount: Number(card.toFixed(3)), cash_account_id: bankSel.value ? Number(bankSel.value) : undefined });
     return {
       approve, date: dateIn.value, party_id: custSel.value ? Number(custSel.value) : null, warehouse_id: Number(whSel.value), notes: notes.value || null,
-      invoice_discount_pct: invDiscPct.value || null, invoice_discount_amount: invDiscAmt.value || null, payments,
+      invoice_discount_pct: null, invoice_discount_amount: num(invDiscAmt.value) ? calc().inv : null, payments,
       lines: cart.map((l) => ({ item_id: l.item.id, unit_id: l.unit_id, qty: num(l.qty), price: num(l.price), discount_pct: l.discMode === 'amt' ? null : (l.discount_pct || null), discount_amount: l.discMode === 'amt' ? (netDisc(l) || null) : null })), ...extra,
     };
   };
@@ -316,7 +322,8 @@ async function posView({ el, q }) {
     h('div', null,
       h('div', { class: 'card' },
         h('div', { class: 'grid' }, field('العميل', custSel), (whSel.options.length > 1 ? field('المستودع', whSel) : null), can('settings.manage') ? field('التاريخ', dateIn) : null),
-        invDiscAllowed ? h('div', { class: 'row', style: { marginTop: '8px' } }, field('خصم الفاتورة %', invDiscPct), field('أو مبلغ', invDiscAmt)) : null,
+        invDiscAllowed ? h('div', { style: { marginTop: '8px' } }, field('خصم على إجمالي الفاتورة (قيمة)', stepper(invDiscAmt, { step: 1, min: 0, onChange: onInvDisc })),
+          h('div', { class: 'small muted' }, 'يُطرح من الإجمالي شامل الضريبة، ويلغي خصومات الأصناف.')) : null,
         h('div', { style: { marginTop: '8px' } }, notes)),
       h('div', { class: 'card' }, totals),
       h('div', { class: 'card' },

@@ -52,10 +52,10 @@ function invoiceOpts(ctx, input) {
  * وعند استخدامه تُلغى خصومات الأصناف (لا يجتمع الخصمان).
  */
 function applyDiscountPolicy(ctx, input) {
-  if (ctx.has('settings.manage')) return input;
   const has = (v) => v != null && v !== '' && Number(v) !== 0;
   if (!has(input.invoice_discount_pct) && !has(input.invoice_discount_amount)) return input;
-  if (ctx.setting('invoice_discount_enabled') !== '1') fail('FORBIDDEN', 'خصم الفاتورة غير مفعّل؛ يفعّله المدير من الإعدادات', 403);
+  if (!ctx.has('settings.manage') && ctx.setting('invoice_discount_enabled') !== '1') fail('FORBIDDEN', 'خصم الفاتورة غير مفعّل؛ يفعّله المدير من الإعدادات', 403);
+  // خصم الفاتورة يلغي خصومات الأصناف (للجميع)
   return { ...input, lines: (input.lines || []).map((l) => ({ ...l, discount_pct: null, discount_amount: null })) };
 }
 
