@@ -658,3 +658,33 @@ test('حد خصم واحد لجميع الأصناف: الحد الافتراض�
     assert.notEqual((await sale(11)).status, 200, 'ولا يتجاوز 10%');
   } finally { await t.close(); }
 });
+
+test('استرجاع مباشر من نسخة: يعيد الأصناف والعملاء والفواتير بعد التصفير، ويبقي المستخدمين وكلمات المرور الحالية', async () => {
+  const t = await boot();
+  try {
+    const item = (await t.admin.post('/items', { name: 'سيسي', base_unit: 'شد', track_expiry: 0, sell_price: 15 })).body;
+    await t.admin.post('/opening-stock', { warehouse_id: 1, lines: [{ item_id: item.id, qty: 30, unit_cost: 5 }] });
+    const c = (await t.admin.post('/parties', { name: 'اسواق نجد', is_customer: 1 })).body;
+    await t.admin.post('/sales', { party_id: c.id, lines: [{ item_id: item.id, qty: 2 }], payments: [] });
+    const reset = (await t.admin.post('/admin/reset', { confirm: 'تصفير', items: true, parties: true })).body;
+    const n = (tb) => t.db.prepare(`SELECT COUNT(*) n FROM ${tb}`).get().n;
+    assert.equal(n('items'), 0); assert.equal(n('parties'), 0);
+    // تغيير كلمة المرور بعد النسخة: يجب ألا تعود القديمة
+    const pw = await t.admin.post('/auth/password', { current: 'Admin12345', password: 'NewAdmin999' });
+    assert.equal(pw.status, 200, JSON.stringify(pw.body));
+    assert.equal((await t.admin.post(`/backups/${reset.backup}/restore`, { confirm: 'خطأ' })).status, 400);
+    const r = await t.admin.post(`/backups/${reset.backup}/restore`, { confirm: 'استرجاع' });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.match(r.body.safety, /before-restore/);
+    assert.equal(n('items'), 1); assert.equal(n('parties'), 1);
+    assert.equal(t.db.prepare("SELECT COUNT(*) n FROM docs WHERE type='sale'").get().n, 1);
+    const stock = (await t.admin.get(`/reports/stock?item_id=${item.id}`)).body.rows[0];
+    assert.equal(stock.sellable, 28);
+    const tb = t.db.prepare('SELECT SUM(debit) d, SUM(credit) c FROM journal_lines').get(); assert.equal(tb.d, tb.c);
+    assert.equal(t.db.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND name='jl_no_delete'").get()?.name, 'jl_no_delete', 'الحماية عادت');
+    await t.client('admin', 'NewAdmin999');
+    // يعمل النظام بعده والترقيم يكمل
+    const s2 = (await t.admin.post('/sales', { party_id: c.id, lines: [{ item_id: item.id, qty: 1 }], payments: [] })).body;
+    assert.equal(s2.number, 'INV-000002');
+  } finally { await t.close(); }
+});

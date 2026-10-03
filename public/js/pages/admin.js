@@ -160,7 +160,8 @@ export async function backup({ el }) {
       { key: 'size', label: 'الحجم', render: (b) => Math.round(b.size / 1024) + ' ك.ب' }, { key: 'docs', label: 'المستندات', render: (b) => b.counts.docs }, { key: 'files', label: 'المرفقات' },
       { key: 'a', label: '', render: (b) => [
         h('button', { class: 'btn small', onclick: async () => { const r = await run(() => api('POST', `/backups/${b.name}/verify`, {})); if (r) modal('نتيجة اختبار الاسترجاع', verifyView(r)); } }, 'اختبار الاسترجاع'), ' ',
-        h('button', { class: 'btn small', onclick: () => download(`/backups/${b.name}/download`, b.name + '.db') }, 'تنزيل')] }], rows: list, empty: 'لا توجد نسخ بعد' }));
+        h('button', { class: 'btn small', onclick: () => download(`/backups/${b.name}/download`, b.name + '.db') }, 'تنزيل'), ' ',
+        can('users.manage') ? h('button', { class: 'btn small danger', onclick: () => restoreFrom(b) }, 'استرجاع') : null] }], rows: list, empty: 'لا توجد نسخ بعد' }));
   };
   el.append(h('div', { class: 'note' }, 'نسخة يومية تلقائية تشمل قاعدة البيانات والمرفقات مع الاحتفاظ بآخر 30 نسخة (قابل للتعديل من الإعدادات). احفظ نسخة خارج الخادم دوريًا.'),
     h('button', { class: 'btn primary', style: { marginBottom: '12px' }, onclick: async () => { if (await run(() => api('POST', '/backups', {}), 'تم إنشاء النسخة')) load(); } }, 'إنشاء نسخة الآن'),
@@ -193,6 +194,27 @@ function resetCard() {
         alert(`تم التصفير: حُذف ${r.deleted.docs} مستند${r.deleted.items ? ` و${r.deleted.items} صنف` : ''}${r.deleted.parties ? ` و${r.deleted.parties} عميل/مورد` : ''}.\nالنسخة الاحتياطية: ${r.backup}`);
         location.hash = '#/'; location.reload();
       } }, 'تصفير البيانات')));
+}
+
+/** استرجاع مباشر من نسخة (مع نسخة احتياطية للوضع الحالي قبله) */
+function restoreFrom(b) {
+  const confirmIn = inp({ placeholder: 'اكتب: استرجاع' });
+  modal('استرجاع النسخة', h('div', null,
+    h('div', { class: 'note warn' }, 'سيعود النظام كما كان وقت هذه النسخة (', dt(b.created_at), ' — ', String(b.counts?.docs ?? '—'), ' مستند). ',
+      'كل ما أُدخل بعدها من فواتير وأصناف وعملاء سيُستبدل.'),
+    h('ul', { class: 'small' },
+      h('li', null, 'تُؤخذ نسخة احتياطية للوضع الحالي أولًا (باسم before-restore) فيمكن التراجع.'),
+      h('li', null, 'المستخدمون وكلمات المرور وسجل التدقيق تبقى كما هي الآن.')),
+    field('للتأكيد اكتب «استرجاع»', confirmIn)),
+  [{ label: 'استرجاع الآن', class: 'danger', onClick: async () => {
+    if (confirmIn.value.trim() !== 'استرجاع') return toast('اكتب كلمة «استرجاع» للتأكيد', 'bad'), false;
+    const r = await run(() => api('POST', `/backups/${b.name}/restore`, { confirm: confirmIn.value }));
+    if (!r) return false;
+    try { Object.keys(localStorage).filter((k) => k.startsWith('frs-lookup-')).forEach((k) => localStorage.removeItem(k)); } catch (_) { /* ignore */ }
+    alert(`تم الاسترجاع من ${b.name}.\nنسخة الوضع السابق: ${r.safety}`);
+    location.hash = '#/'; location.reload();
+    return true;
+  } }]);
 }
 
 function verifyView(r) {

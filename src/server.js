@@ -584,6 +584,16 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
     const r = Reset.resetData(ctx, { confirm: req.body.confirm, items: req.body.items !== false, parties: !!req.body.parties, uploadsDir });
     return { ...r, backup: b.name };
   }));
+  // استرجاع مباشر من نسخة: نسخة احتياطية للوضع الحالي أولًا ثم الاسترجاع (المستخدمون وكلمات المرور تبقى الحالية)
+  api.post('/backups/:name/restore', h((ctx, req) => {
+    ctx.require('backup.manage'); ctx.require('users.manage');
+    if (String(req.body.confirm || '').trim() !== 'استرجاع') fail('VALIDATION', 'اكتب كلمة «استرجاع» للتأكيد');
+    Backup.safeName(backupDir, req.params.name);
+    const safety = Backup.createBackup(db, { backupDir, uploadsDir, retention: Number(ctx.setting('backup_retention') || 30) + 1, label: 'before-restore' });
+    const r = Backup.restoreLive(db, { backupDir, name: req.params.name, uploadsDir, openDb, tmpRoot: dataDir });
+    ctx.audit('backup.restore', { entity: 'backup', after: { name: req.params.name, safety: safety.name } });
+    return { ...r, safety: safety.name };
+  }));
   api.post('/backups/:name/verify', h((ctx, req) => {
     ctx.require('backup.manage');
     const r = Backup.verifyBackup(backupDir, req.params.name, dataDir);

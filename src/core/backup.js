@@ -105,4 +105,52 @@ function restoreBackup(backupDir, name, dataFile, uploadsDir) {
   return v;
 }
 
-module.exports = { createBackup, listBackups, verifyBackup, restoreBackup, safeName, tableCounts };
+/**
+ * استرجاع مباشر والخادم يعمل: تُرحَّل النسخة إلى المخطط الحالي في ملف مؤقت، ثم تُنسخ جداولها إلى القاعدة الحية في معاملة واحدة.
+ * يبقى كما هو الآن: المستخدمون وكلمات المرور والجلسات وسجل التدقيق (حتى لا يُقفل الدخول ولا يضيع السجل).
+ */
+const KEEP_TABLES = new Set(['users', 'sessions', 'login_attempts', 'audit_log', 'meta', 'idempotency']);
+function restoreLive(db, { backupDir, name, uploadsDir, openDb, tmpRoot }) {
+  const dir = safeName(backupDir, name);
+  const v = verifyBackup(backupDir, name, tmpRoot);
+  if (!v.ok) fail('BACKUP_INVALID', 'النسخة لم تجتز التحقق؛ لن تتم الاستعادة', 409, v);
+  const tmp = fs.mkdtempSync(path.join(tmpRoot || require('os').tmpdir(), 'restore-'));
+  const f = path.join(tmp, 'data.db');
+  fs.copyFileSync(path.join(dir, 'data.db'), f);
+  openDb(f).close(); // ترحيل النسخة القديمة إلى المخطط الحالي
+  db.prepare('ATTACH DATABASE ? AS bk').run(f);
+  db.pragma('foreign_keys = OFF');
+  const restored = {};
+  try {
+    db.transaction(() => {
+      const guards = db.prepare("SELECT name, sql FROM main.sqlite_master WHERE type='trigger' AND tbl_name IN ('journal_lines','stock_moves')").all();
+      for (const g of guards) db.exec(`DROP TRIGGER main.${g.name}`);
+      const tables = db.prepare("SELECT name FROM main.sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all().map((r) => r.name);
+      for (const t of tables) {
+        if (KEEP_TABLES.has(t)) continue;
+        db.prepare(`DELETE FROM main.${t}`).run();
+        if (!db.prepare("SELECT 1 FROM bk.sqlite_master WHERE type='table' AND name=?").get(t)) continue;
+        const cur = db.prepare(`PRAGMA main.table_info(${t})`).all().map((c) => c.name);
+        const old = new Set(db.prepare(`PRAGMA bk.table_info(${t})`).all().map((c) => c.name));
+        const cols = cur.filter((c) => old.has(c)).map((c) => `"${c}"`).join(',');
+        restored[t] = db.prepare(`INSERT INTO main.${t}(${cols}) SELECT ${cols} FROM bk.${t}`).run().changes;
+      }
+      db.prepare('DELETE FROM main.idempotency').run();
+      for (const g of guards) db.exec(g.sql);
+      const bad = db.pragma('foreign_key_check');
+      if (bad.length) fail('INTEGRITY', 'تعذر الاسترجاع: بيانات مرتبطة غير متطابقة مع المستخدمين الحاليين', 409, { rows: bad.slice(0, 5) });
+    })();
+  } finally {
+    db.pragma('foreign_keys = ON');
+    db.prepare('DETACH DATABASE bk').run();
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+  const up = path.join(dir, 'uploads');
+  if (uploadsDir && fs.existsSync(up)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+    for (const x of fs.readdirSync(up)) fs.copyFileSync(path.join(up, x), path.join(uploadsDir, x));
+  }
+  return { name, restored, counts: tableCounts(db) };
+}
+
+module.exports = { createBackup, listBackups, verifyBackup, restoreBackup, restoreLive, safeName, tableCounts };
