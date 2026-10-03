@@ -3,7 +3,7 @@
   --panel: #ffffff;
   --ink: #1d2733;
   --muted: #667385;
-  --line: #dde3ea;
+  --line: #dde3ea; --grid: #b9c4d0;
   --brand: #1f5f8b;
   --brand-ink: #ffffff;
   --brand-soft: #e7f0f7;
@@ -19,7 +19,7 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #12171d; --panel: #1b222b; --ink: #e6ebf1; --muted: #9aa6b4; --line: #2c3642; --brand: #4f9ad0; --brand-ink: #0c1218;
+    --bg: #12171d; --panel: #1b222b; --ink: #e6ebf1; --muted: #9aa6b4; --line: #2c3642; --grid: #4a5868; --brand: #4f9ad0; --brand-ink: #0c1218;
     --brand-soft: #1c2f3f; --ok: #5cc795; --ok-ink: #0b1f15; --ok-soft: #173326; --warn: #e3b14d; --warn-soft: #3a2e14; --bad: #f08a83; --bad-soft: #3d1f1d;
     --shadow: none;
   }
@@ -27,13 +27,13 @@
 :root[data-theme="gray"] {
   /* رمادي «جرافيت»: خلفية متوسطة، بطاقات أفتح، حقول غائرة أغمق، وشريط وقائمة أعمق */
   --bg: #474e58; --panel: #59616d; --field: #464c56; --chrome: #3b4149; --thead: #4f5a68;
-  --ink: #ffffff; --muted: #dbe1e8; --line: #6f7885;
+  --ink: #ffffff; --muted: #dbe1e8; --line: #6f7885; --grid: #9aa3ae;
   --brand: #7cc0ff; --brand-ink: #0b1a28; --brand-soft: #5c6f86;
   --ok: #6fe0a0; --ok-ink: #0b2415; --ok-soft: #4c6a5a; --warn: #ffd166; --warn-soft: #6d6448; --bad: #ff9d94; --bad-soft: #745656;
   --shadow: 0 1px 2px rgba(0, 0, 0, .25), 0 6px 16px rgba(0, 0, 0, .14);
 }
 :root[data-theme="dark"] {
-  --bg: #12171d; --panel: #1b222b; --ink: #e6ebf1; --muted: #9aa6b4; --line: #2c3642; --brand: #4f9ad0; --brand-ink: #0c1218;
+  --bg: #12171d; --panel: #1b222b; --ink: #e6ebf1; --muted: #9aa6b4; --line: #2c3642; --grid: #4a5868; --brand: #4f9ad0; --brand-ink: #0c1218;
   --brand-soft: #1c2f3f; --ok: #5cc795; --ok-ink: #0b1f15; --ok-soft: #173326; --warn: #e3b14d; --warn-soft: #3a2e14; --bad: #f08a83; --bad-soft: #3d1f1d;
   --shadow: none;
 }
@@ -124,6 +124,11 @@ textarea { min-height: 70px; }
 table { border-collapse: collapse; width: 100%; }
 th, td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: right; vertical-align: middle; }
 th { background: var(--thead, var(--brand-soft)); font-weight: 600; font-size: 13px; white-space: nowrap; position: sticky; top: 0; }
+/* فواصل واضحة بين المربعات (أعمدة وصفوف) في جداول الشاشة */
+.table-wrap th, .table-wrap td { border-bottom: 1px solid var(--grid, var(--line)); border-left: 1px solid var(--grid, var(--line)); }
+.table-wrap th:last-child, .table-wrap td:last-child { border-left: 0; }
+.table-wrap thead th { border-bottom: 2px solid var(--grid, var(--line)); }
+.table-wrap tbody tr:last-child td { border-bottom: 0; }
 tbody tr:hover { background: color-mix(in srgb, var(--brand-soft) 50%, transparent); }
 tfoot td { font-weight: 700; background: var(--bg); }
 td.n, th.n { text-align: left; white-space: nowrap; }
@@ -244,6 +249,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: .85; }
 .stepper:has(input:disabled) .step { opacity: .4; pointer-events: none; }
 /* بنود الفواتير كبطاقات على الجوال */
 @media (max-width: 700px) {
+  .table-wrap table.lines-table td { border-left: 0; }
   .table-wrap:has(> table.lines-table) { overflow: visible; border: 0; background: none; }
   table.lines-table, table.lines-table tbody, table.lines-table tr, table.lines-table td { display: block; width: 100%; }
   table.lines-table thead { display: none; }
