@@ -238,10 +238,64 @@ export async function lookup(name, force) {
 }
 export function invalidate(...names) { for (const n of names) state.cache.delete(n); }
 
-/** قائمة اختيار بحث للعميل/المورد */
+/** قائمة اختيار بحث للعميل/المورد (تُكتب فيها الحروف فتظهر المطابقات بالاسم أو الرقم أو الهاتف) */
 export async function partySelect(kind, value, attrs = {}) {
   const list = await lookup(kind === 'supplier' ? 'suppliers' : 'customers');
-  return sel([{ value: '', label: kind === 'supplier' ? '— اختر المورد —' : '— عميل نقدي —' }, ...list.map((p) => ({ value: p.id, label: (p.code ? p.code + ' — ' : '') + p.name + (p.phone ? ' — ' + p.phone : '') }))], value, attrs);
+  const s = sel([{ value: '', label: kind === 'supplier' ? '— اختر المورد —' : '— عميل نقدي —' }, ...list.map((p) => ({ value: p.id, label: (p.code ? p.code + ' — ' : '') + p.name + (p.phone ? ' — ' + p.phone : '') }))], value, attrs);
+  searchableSelect(s, kind === 'supplier' ? 'ابحث عن المورد بالاسم أو الرقم أو الهاتف' : 'ابحث عن العميل بالاسم أو الرقم أو الهاتف');
+  return s;
+}
+
+// توحيد الحروف العربية للبحث (أ/إ/آ ← ا، ة ← ه، ى/ئ ← ي، ؤ ← و، وحذف الهمزة والتشكيل)
+const normAr = (t) => String(t || '').toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/[ىئ]/g, 'ي').replace(/ؤ/g, 'و').replace(/[ءـ\u064B-\u0652]/g, '').replace(/\s+/g, ' ').trim();
+
+/**
+ * يحوّل قائمة اختيار إلى خانة بحث مع نتائج، مع بقاء القائمة الأصلية (مخفية) مصدرًا للقيمة،
+ * فتعمل الشاشات كما هي (value وحدث change).
+ */
+export function searchableSelect(select, placeholder = 'ابحث…') {
+  const input = inp({ class: 'search', placeholder, autocomplete: 'off' });
+  const box = h('div', { class: 'results hidden', style: { position: 'absolute', insetInline: 0, zIndex: 20, marginTop: '2px', boxShadow: 'var(--shadow)' } });
+  const wrap = h('div', { class: 'searchable', style: { position: 'relative' } }, input, box);
+  let matches = [], idx = 0;
+  const label = () => { const o = select.selectedOptions[0]; return o && o.value ? o.textContent : ''; };
+  const sync = () => { input.value = label(); input.disabled = select.disabled; };
+  const close = () => { box.classList.add('hidden'); clear(box); matches = []; };
+  const render = () => {
+    clear(box);
+    const q = normAr(input.value);
+    const words = q.split(' ').filter(Boolean);
+    matches = [...select.options].filter((o) => !words.length || words.every((w) => normAr(o.textContent).includes(w))).slice(0, 50);
+    idx = Math.max(0, matches.findIndex((o) => o.value === select.value));
+    matches.forEach((o, i) => box.append(h('div', { class: 'r' + (i === idx ? ' sel' : ''), onmousedown: (e) => { e.preventDefault(); choose(o); } }, o.textContent)));
+    if (!matches.length) box.append(h('div', { class: 'r', style: { cursor: 'default' } }, h('span', { class: 'muted' }, 'لا نتائج')));
+    box.classList.remove('hidden');
+  };
+  const choose = (o) => {
+    const changed = select.value !== o.value;
+    setValue.call(select, o.value);
+    sync(); close(); input.blur();
+    if (changed) select.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+  input.addEventListener('focus', () => { input.select(); render(); });
+  input.addEventListener('input', render);
+  input.addEventListener('blur', () => setTimeout(() => { close(); sync(); }, 150));
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); if (!matches.length) return; idx = (idx + (e.key === 'ArrowDown' ? 1 : -1) + matches.length) % matches.length; [...box.children].forEach((c, i) => c.classList.toggle('sel', i === idx)); box.children[idx]?.scrollIntoView({ block: 'nearest' }); }
+    else if (e.key === 'Enter') { e.preventDefault(); if (matches[idx]) choose(matches[idx]); }
+    else if (e.key === 'Escape') { close(); sync(); input.blur(); }
+  });
+  // تعيين القيمة برمجيًا (مثل فتح مسودة) يحدّث الخانة الظاهرة
+  const desc = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
+  const setValue = desc.set;
+  Object.defineProperty(select, 'value', { configurable: true, get() { return desc.get.call(this); }, set(v) { setValue.call(this, v); sync(); } });
+  select.addEventListener('change', sync);
+  // تُدرج الخانة مكان القائمة عند إضافتها للصفحة
+  select.style.display = 'none';
+  const mount = () => { if (select.isConnected && !wrap.isConnected) { select.before(wrap); sync(); return true; } return false; };
+  let tries = 0;
+  const t = setInterval(() => { if (mount() || ++tries > 100) clearInterval(t); }, 30);
+  return select;
 }
 /** اختيار الفرع للتقارير (يظهر فقط عند تعدد الفروع ولمستخدم غير مقيد بفرع) */
 export async function branchFilter(value) {
