@@ -97,6 +97,14 @@ async function posView({ el, q }) {
             refreshDraftCount();
           } }, 'حذف'))))))) : h('p', { class: 'muted' }, 'لا توجد مسودات'));
   }
+  // الخصم المحفوظ (قبل الضريبة) يُعرض كما أدخله المستخدم: الفرق بين إجمالي البند بالضريبة قبل الخصم وبعده
+  const grossDiscOf = (l) => {
+    const r = l.tax_rate_bp || 0; // نسبة مئوية (معروضة من الخادم)
+    if (s.prices_include_tax || !r) return l.line_discount;
+    const md = 10 ** (s.money_decimals ?? 2);
+    const v = Math.round(l.value * md);
+    return (v + Math.round(v * r / 100) - Math.round(l.total * md)) / md;
+  };
   async function loadDraft(id) {
     if (cart.length && !confirm('في الفاتورة الحالية أصناف لم تُحفظ. استبدالها بالمسودة؟')) return;
     const d = await run(() => get('/docs/' + id));
@@ -105,7 +113,7 @@ async function posView({ el, q }) {
     resetForm();
     for (const l of d.lines) {
       const item = await get('/items/' + l.item_id);
-      cart.push({ item, unit_id: l.unit_id, qty: l.qty, price: priceEditable ? l.price : (item.units.find((u) => u.id === l.unit_id)?.sell_price ?? l.price), discount_pct: '', discMode: l.line_discount ? 'amt' : 'pct', discount_amt: l.line_discount || '' });
+      cart.push({ item, unit_id: l.unit_id, qty: l.qty, price: priceEditable ? l.price : (item.units.find((u) => u.id === l.unit_id)?.sell_price ?? l.price), discount_pct: '', discMode: l.line_discount ? 'amt' : 'pct', discount_amt: l.line_discount ? grossDiscOf(l) : '' });
     }
     custSel.value = d.party_id ? String(d.party_id) : '';
     if (d.warehouse_id) whSel.value = String(d.warehouse_id);
@@ -138,8 +146,18 @@ async function posView({ el, q }) {
     const md = 10 ** (s.money_decimals ?? 2);
     const lines = cart.map((l) => {
       const value = Math.round(num(l.qty) * num(l.price) * md) || 0;
-      // الخصم إما نسبة أو قيمة (آخر ما كتبه المستخدم)، ولا يتجاوز قيمة البند
-      let disc = l.discMode === 'amt' ? Math.round(num(l.discount_amt) * md) || 0 : (l.discount_pct ? Math.round(value * num(l.discount_pct) / 100) : 0);
+      // الخصم قيمة تُطرح من إجمالي البند بعد الضريبة: يُحوَّل إلى خصم قبل الضريبة يعطي نفس الإجمالي
+      let disc;
+      if (l.discMode === 'amt') {
+        const D = Math.max(Math.round(num(l.discount_amt) * md) || 0, 0);
+        const rate = taxOf(l.item);
+        if (s.prices_include_tax || !rate) disc = D;
+        else {
+          const grossBefore = value + Math.round(value * rate / 100);
+          const netAfter = Math.round(Math.max(grossBefore - D, 0) * 100 / (100 + rate));
+          disc = D ? value - netAfter : 0;
+        }
+      } else disc = l.discount_pct ? Math.round(value * num(l.discount_pct) / 100) : 0;
       disc = Math.min(Math.max(disc, 0), value);
       return { l, value, disc, after: value - disc };
     });
@@ -159,6 +177,9 @@ async function posView({ el, q }) {
     }
     return { lines, subtotal: sub / md, discount: dsc / md, net: net / md, tax: tax / md, total: (net + tax) / md };
   }
+
+  // خصم البند قبل الضريبة (يُرسل للخادم) كما يحسبه calc
+  const netDisc = (l) => { const c = calc(); const x = c.lines.find((y) => y.l === l); return x ? x.disc / 10 ** (s.money_decimals ?? 2) : 0; };
 
   let pending = false;
   const redraw = () => { if (!pending) { pending = true; setTimeout(() => { pending = false; draw(); }, 0); } };
@@ -219,7 +240,7 @@ async function posView({ el, q }) {
     return {
       approve, date: dateIn.value, party_id: custSel.value ? Number(custSel.value) : null, warehouse_id: Number(whSel.value), notes: notes.value || null,
       invoice_discount_pct: invDiscPct.value || null, invoice_discount_amount: invDiscAmt.value || null, payments,
-      lines: cart.map((l) => ({ item_id: l.item.id, unit_id: l.unit_id, qty: num(l.qty), price: num(l.price), discount_pct: l.discMode === 'amt' ? null : (l.discount_pct || null), discount_amount: l.discMode === 'amt' ? (num(l.discount_amt) || null) : null })), ...extra,
+      lines: cart.map((l) => ({ item_id: l.item.id, unit_id: l.unit_id, qty: num(l.qty), price: num(l.price), discount_pct: l.discMode === 'amt' ? null : (l.discount_pct || null), discount_amount: l.discMode === 'amt' ? (netDisc(l) || null) : null })), ...extra,
     };
   };
 
