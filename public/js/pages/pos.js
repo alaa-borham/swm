@@ -36,6 +36,7 @@ async function posView({ el, q }) {
   const isRep = !!state.rep && !can('parties.all');
   const whSel = await warehouseSelect(isRep ? state.rep.warehouse_id : (state.session?.warehouse_id || ''), { disabled: isRep || null });
   const custSel = await partySelect('customer', q.party || '');
+  const priceEditable = can('sales.price.edit');
   const dateIn = inp({ type: 'date', value: today() });
   const notes = inp({ placeholder: 'ملاحظات' });
   const invDiscPct = inp({ type: 'number', placeholder: '%' });
@@ -96,7 +97,7 @@ async function posView({ el, q }) {
     resetForm();
     for (const l of d.lines) {
       const item = await get('/items/' + l.item_id);
-      cart.push({ item, unit_id: l.unit_id, qty: l.qty, price: l.price, discount_pct: l.line_discount && l.value ? Number((l.line_discount / l.value * 100).toFixed(2)) : '' });
+      cart.push({ item, unit_id: l.unit_id, qty: l.qty, price: priceEditable ? l.price : (item.units.find((u) => u.id === l.unit_id)?.sell_price ?? l.price), discount_pct: l.line_discount && l.value ? Number((l.line_discount / l.value * 100).toFixed(2)) : '' });
     }
     custSel.value = d.party_id ? String(d.party_id) : '';
     if (d.warehouse_id) whSel.value = String(d.warehouse_id);
@@ -164,7 +165,7 @@ async function posView({ el, q }) {
       tbody.append(h('tr', null,
         h('td', null, l.item.name, l.item.sellable_qty != null ? h('div', { class: 'small muted' }, 'متاح ', Q(l.item.sellable_qty), ' ', l.item.base_unit) : null),
         h('td', null, unitSel), h('td', null, stepper(qIn, { step: 1, min: 0, onChange: (v) => { l.qty = v; redraw(); } })),
-        h('td', null, stepper(pIn, { step: 1, min: 0, onChange: (v) => { l.price = v; redraw(); } })), h('td', null, dIn), h('td', { class: 'n' }, M(c.lines[i].total)),
+        h('td', null, priceEditable ? stepper(pIn, { step: 1, min: 0, onChange: (v) => { l.price = v; redraw(); } }) : h('span', { class: 'n', title: 'سعر البيع ثابت' }, money(l.price))), h('td', null, dIn), h('td', { class: 'n' }, M(c.lines[i].total)),
         h('td', null, h('button', { class: 'btn small danger', 'aria-label': 'حذف', onclick: () => { cart.splice(i, 1); draw(); } }, '×'))));
     });
     if (!cart.length) tbody.append(h('tr', null, h('td', { colspan: 7, class: 'empty' }, 'امسح الباركود أو ابحث عن صنف لإضافته')));

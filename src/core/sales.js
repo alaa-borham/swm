@@ -27,7 +27,8 @@ function buildLines(ctx, linesInput, opts) {
     const unit = D.getUnit(ctx, item, l.unit_id);
     if (!unit.active || !unit.for_sale) fail('INVALID_UNIT', `الوحدة ${unit.name} غير متاحة للبيع`);
     const { qty, base } = D.toBaseQty(item, unit, l.qty, `البند ${i + 1}`);
-    const price = l.price != null && l.price !== '' ? toMinor(l.price, `سعر البند ${i + 1}`) : unit.sell_price;
+    // من لا يملك صلاحية تعديل السعر يبيع دائمًا بسعر الصنف المسجل (يُتجاهل أي سعر مرسل)
+    const price = l.price != null && l.price !== '' && ctx.has('sales.price.edit') ? toMinor(l.price, `سعر البند ${i + 1}`) : unit.sell_price;
     if (price < 0) fail('VALIDATION', 'السعر لا يكون سالبًا');
     return {
       item, unit, qty, base, price, list_price: unit.sell_price, tax_rate_bp: D.itemTaxBp(ctx, item), ...D.parseLineMoney(l, i),

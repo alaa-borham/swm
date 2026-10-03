@@ -27,6 +27,7 @@ const PERMISSIONS = {
   'sales.create': 'إنشاء واعتماد فاتورة بيع',
   'sales.view': 'عرض المبيعات',
   'sales.discount.override': 'تجاوز حد الخصم',
+  'sales.price.edit': 'تعديل سعر البيع في الفاتورة',
   'sales.price.override': 'البيع بأقل من الحد الأدنى',
   'sales.reverse': 'إلغاء فاتورة بيع معتمدة',
   'sales.print': 'طباعة المستندات',
@@ -82,7 +83,7 @@ const ROLES = {
   admin: { name: 'المدير', permissions: ALL },
   cashier: {
     name: 'الكاشير',
-    permissions: ['items.view', 'parties.view', 'parties.all', 'sales.create', 'sales.view', 'sales.print', 'sale_returns.create',
+    permissions: ['items.view', 'parties.view', 'parties.all', 'sales.create', 'sales.view', 'sales.print', 'sales.price.edit', 'sale_returns.create',
       'cash.receipt', 'sessions.own', 'stock.view', 'messages.send'],
   },
   purchasing: {
