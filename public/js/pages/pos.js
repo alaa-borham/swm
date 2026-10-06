@@ -76,6 +76,36 @@ async function posView({ el, q }) {
       draftsBtn.textContent = r.total ? `المسودات (${r.total})` : 'المسودات';
     } catch { /* بلا اتصال */ }
   };
+  // الفاتورة الجارية تُحفظ على الجهاز تلقائيًا: لو أُعيد تحميل الصفحة (سحب للأسفل، إغلاق التطبيق) تعود كما كانت
+  const wipKey = `frs-pos-wip-${state.me?.id || 'u'}`;
+  let wipReady = false;
+  const saveWip = () => {
+    if (!wipReady) return;
+    try {
+      if (!cart.length) { localStorage.removeItem(wipKey); return; }
+      localStorage.setItem(wipKey, JSON.stringify({ t: Date.now(), draftId, party: custSel.value, wh: whSel.value, notes: notes.value, invDisc: invDiscAmt.value,
+        pay: payMethod.value, payAmt: payAmt.value, payTouched,
+        cart: cart.map((l) => ({ item_id: l.item.id, unit_id: l.unit_id, qty: l.qty, price: l.price, discMode: l.discMode, discount_amt: l.discount_amt, discount_pct: l.discount_pct })) }));
+    } catch (_) { /* تخزين غير متاح */ }
+  };
+  const restoreWip = async () => {
+    let w = null;
+    try { w = JSON.parse(localStorage.getItem(wipKey) || 'null'); } catch (_) { w = null; }
+    if (!w || Date.now() - w.t > 2 * 864e5 || !w.cart?.length) return;
+    for (const l of w.cart || []) {
+      try {
+        const item = await get('/items/' + l.item_id);
+        cart.push({ item, unit_id: l.unit_id, qty: l.qty, price: priceEditable ? l.price : (item.units.find((u) => u.id === l.unit_id)?.sell_price ?? l.price), discMode: l.discMode, discount_amt: l.discount_amt, discount_pct: l.discount_pct });
+      } catch (_) { /* صنف محذوف أو بلا اتصال */ }
+    }
+    if (w.party) custSel.value = w.party;
+    if (w.wh && !isRep) whSel.value = w.wh;
+    notes.value = w.notes || ''; invDiscAmt.value = w.invDisc || '';
+    if (w.pay) payMethod.value = w.pay;
+    if (w.payTouched) { payTouched = true; payAmt.value = w.payAmt || ''; }
+    if (w.draftId) draftId = w.draftId;
+    toast('استُرجعت الفاتورة التي لم تُحفظ', 'ok');
+  };
   const resetForm = () => {
     cart.length = 0; cashIn.value = ''; cardIn.value = ''; invDiscPct.value = ''; invDiscAmt.value = ''; notes.value = '';
     payTouched = false; payMethod.value = 'cash';
@@ -192,6 +222,10 @@ async function posView({ el, q }) {
   let pending = false;
   const redraw = () => { if (!pending) { pending = true; setTimeout(() => { pending = false; draw(); }, 0); } };
   function draw() {
+    drawInner();
+    saveWip();
+  }
+  function drawInner() {
     const c = calc();
     clear(tbody);
     cart.forEach((l, i) => {
@@ -359,7 +393,11 @@ async function posView({ el, q }) {
           h('button', { class: 'btn primary', onclick: () => submit(true, 'thermal') }, 'اعتماد وطباعة'),
           h('button', { class: 'btn', onclick: () => submit(false) }, 'حفظ مسودة'),
           draftsBtn)))));
+  if (!q.draft) await restoreWip();
+  wipReady = true;
   draw();
+  custSel.addEventListener('change', saveWip);
+  notes.addEventListener('input', saveWip);
   refreshDraftCount();
   if (q.draft) loadDraft(Number(q.draft));
   if (navigator.onLine) refreshCatalog(whSel.value);

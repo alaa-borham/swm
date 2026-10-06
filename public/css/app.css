@@ -39,6 +39,8 @@
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
+/* منع إعادة تحميل الصفحة بالسحب للأسفل على الجوال (حتى لا تضيع البيانات غير المحفوظة) */
+html, body { overscroll-behavior-y: contain; }
 body { background: var(--bg); color: var(--ink); font: 15px/1.55 var(--font); }
 button, input, select, textarea { font: inherit; color: inherit; }
 a { color: var(--brand); text-decoration: none; }

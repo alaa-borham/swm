@@ -2,7 +2,7 @@
 import { h, clear, state, api, get, toast, can, inp, field } from './lib.js';
 
 // يُرفع مع كل تحديث للواجهة لمعرفة النسخة التي يعمل بها الجهاز
-const UI_VERSION = 99;
+const UI_VERSION = 100;
 import { icon, GROUP_ICONS, ROUTE_ICONS } from './icons.js';
 import * as Dash from './pages/dashboard.js';
 import * as Home from './pages/home.js';
