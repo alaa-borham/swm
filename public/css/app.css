@@ -196,15 +196,17 @@ tr.clickable { cursor: pointer; }
 .print-a4 table { font-size: 13px; }
 .print-a4 th { background: #eee; }
 /* فواصل واضحة للأعمدة والصفوف في الفواتير المطبوعة A4 (البيع والشراء وغيرها) */
-.print-a4 table { border-collapse: collapse; width: 100%; border: 1px solid #444; }
-.print-a4 th, .print-a4 td { border: 1px solid #555 !important; padding: 5px 8px; color: #000; }
+.print-a4 table { border-collapse: collapse; width: 100%; border: 1.5px solid #000; }
+.print-a4 th, .print-a4 td { border: 1px solid #000 !important; padding: 5px 8px; color: #000; }
 .print-a4 th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 .print-a4 .head { display: flex; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 10px; }
 .print-thermal { font-size: 12px; margin: 0 auto; }
 .print-thermal table { font-size: 12px; }
 .print-thermal th, .print-thermal td { padding: 2px; border-bottom: 1px dashed #999; }
 .print-thermal .c { text-align: center; }
-.print-thermal .t-lines { width: 100%; border-collapse: collapse; table-layout: auto; }
+.print-thermal .t-lines { width: 100%; border-collapse: collapse; table-layout: auto; border: 1px solid #000; }
+/* فواصل الأعمدة والصفوف في الإيصال الحراري */
+.print-thermal .t-lines th, .print-thermal .t-lines td { border: 1px solid #000 !important; padding: 3px 4px !important; }
 .print-thermal .t-lines th { font-weight: 800; text-align: right; border-bottom: 1px solid #000; background: none; color: #000; white-space: nowrap; }
 .print-thermal .t-lines td { vertical-align: top; }
 .print-thermal .t-lines td:first-child { width: 100%; word-break: break-word; }
