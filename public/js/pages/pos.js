@@ -1,5 +1,5 @@
 // نقطة البيع: بحث بالباركود أو الاسم، وحدات وكميات، خصم وضريبة، سداد نقدي/شبكة/آجل جزئي.
-import { stepper, h, clear, state, get, api, submitter, toast, run, M, money, Q, inp, sel, field, num, itemPicker, partySelect, warehouseSelect, cashSelect, pageHead, can, askReason, today, modal, lookup } from '../lib.js';
+import { stepper, h, clear, state, get, api, submitter, toast, run, M, money, Q, inp, sel, field, num, itemPicker, isTouch, partySelect, warehouseSelect, cashSelect, pageHead, can, askReason, today, modal, lookup } from '../lib.js';
 import { printDoc } from './docs.js';
 import { enqueue, refreshCatalog } from '../offline.js';
 
@@ -340,7 +340,7 @@ async function posView({ el, q }) {
         send = submitter();
         draw();
         if (approve) done(doc, print);
-        picker.input.focus();
+        if (!isTouch()) picker.input.focus();
         return;
       } catch (e) {
         if (e.code === 'NETWORK' && approve && !draftId) {
@@ -351,7 +351,7 @@ async function posView({ el, q }) {
           cart.length = 0; cashIn.value = ''; cardIn.value = ''; invDiscPct.value = ''; invDiscAmt.value = ''; notes.value = '';
           payTouched = false; payMethod.value = 'cash';
           draw();
-          picker.input.focus();
+          if (!isTouch()) picker.input.focus();
           return;
         }
         if (e.code === 'REASON_REQUIRED' && attempt === 0) {

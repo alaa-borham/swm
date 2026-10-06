@@ -151,7 +151,7 @@ export function modal(title, body, actions = []) {
         h('button', { class: 'btn', onclick: () => close(undefined) }, 'إغلاق'))));
   document.body.appendChild(bg);
   document.addEventListener('keydown', esc);
-  setTimeout(() => { const f = bg.querySelector('input,select,textarea'); if (f) f.focus(); }, 30);
+  setTimeout(() => { const f = bg.querySelector('input,select,textarea'); if (f && !(isTouch() && f.classList.contains('search'))) f.focus(); }, 30);
   return { close, done };
 }
 
@@ -171,6 +171,9 @@ export function confirmBox(title, text) {
 export function field(label, input, opts = {}) {
   return h('div', { class: 'field' + (opts.req ? ' req' : ''), style: opts.style }, h('label', null, label), input);
 }
+/** جهاز لمس (جوال/لوحي): لا نفتح لوحة المفاتيح تلقائيًا لأنها تغطي نصف الشاشة */
+export const isTouch = () => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+
 export function inp(attrs = {}) {
   const a = { ...attrs };
   if (a.type === 'number') { a.type = 'text'; a.inputmode = 'decimal'; a.class = (a.class || '') + ' num-in'; }
@@ -351,7 +354,7 @@ export function stepper(input, { step = 1, min = 0, onChange } = {}) {
 
 /** منتقي صنف بالبحث بالاسم أو الباركود */
 export function itemPicker({ onPick, warehouseId, placeholder = 'ابحث بالاسم أو امسح الباركود', autofocus, allowCreate, inStockOnly, emptyHint, keepOpen }) {
-  const input = inp({ class: 'search', placeholder, autocomplete: 'off', autofocus });
+  const input = inp({ class: 'search', placeholder, autocomplete: 'off', autocorrect: 'off', spellcheck: 'false', enterkeyhint: 'search', autofocus: autofocus && !isTouch() });
   const box = h('div', { class: 'results hidden' });
   let results = [], idx = 0, timer, empty = '';
   const render = () => {
@@ -372,7 +375,7 @@ export function itemPicker({ onPick, warehouseId, placeholder = 'ابحث بال
     const it = results[i]; if (!it) return;
     // keepOpen: تبقى القائمة ظاهرة لإضافة أصناف متتالية بالضغط (نافذة الاختيار في شاشة البيع)
     if (keepOpen) { onPick(it); return; }
-    results = []; empty = ''; render(); input.value = ''; onPick(it); input.focus();
+    results = []; empty = ''; render(); input.value = ''; onPick(it); if (isTouch()) input.blur(); else input.focus();
   };
   const search = async (exact, browse) => {
     const q = input.value.trim();
