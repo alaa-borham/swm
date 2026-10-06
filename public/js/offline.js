@@ -34,7 +34,8 @@ export function searchCatalog(q) {
   const c = loadCatalog();
   if (!c) return [];
   const term = String(q || '').trim();
-  if (!term) return [];
+  // بلا نص (قائمة الزر العائم): كل الأصناف المحفوظة على الجهاز
+  if (!term) return c.items.map((it) => ({ ...it, selected_unit_id: (it.units.find((u) => u.is_base) || it.units[0]).id }));
   const sc = c.scale || {};
   if (sc.prefix && /^\d+$/.test(term) && term.startsWith(sc.prefix) && term.length === sc.prefix.length + sc.plu + sc.val + 1) {
     const plu = term.slice(sc.prefix.length, sc.prefix.length + sc.plu);
