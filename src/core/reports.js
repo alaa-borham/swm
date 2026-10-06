@@ -467,7 +467,37 @@ function auditLog(ctx, opts = {}) {
   return ctx.db.prepare(`SELECT * FROM audit_log WHERE ${w.join(' AND ')} ORDER BY id DESC LIMIT ? OFFSET ?`).all(...p, limit, Number(opts.offset) || 0);
 }
 
+/** ملخص الصفحة الرئيسية لكل مستخدم حسب نطاقه: مبيعات وتحصيلات اليوم، المسودات، والرصيد (الصندوق أو عهدة المندوب) */
+function homeSummary(ctx) {
+  const today = ctx.today();
+  const w = []; const p = [today];
+  if (ctx.repScope) { w.push('rep_id=?'); p.push(ctx.repScope); }
+  else if (ctx.branchScope) { w.push('branch_id=?'); p.push(ctx.branchScope); }
+  const scope = w.length ? ' AND ' + w.join(' AND ') : '';
+  const m = (v) => require('../lib/money').fromMinor(v || 0);
+  const out = { today };
+  if (ctx.has('sales.view') || ctx.has('sales.create')) {
+    const s = ctx.db.prepare(`SELECT COUNT(*) n, COALESCE(SUM(total),0) v FROM docs WHERE type='sale' AND status='approved' AND date=?${scope}`).get(...p);
+    out.sales_today = m(s.v); out.sales_count = s.n;
+    out.drafts = ctx.db.prepare(`SELECT COUNT(*) n FROM docs WHERE type='sale' AND status='draft'${scope.replace(' AND ', ' AND ')}`).get(...p.slice(1)).n;
+  }
+  if (ctx.has('cash.receipt') || ctx.has('cash.view')) {
+    out.collections_today = m(ctx.db.prepare(`SELECT COALESCE(SUM(total),0) v FROM docs WHERE type='receipt' AND ledger_account='AR' AND status='approved' AND date=?${scope}`).get(...p).v);
+  }
+  const bal = (id) => ctx.db.prepare("SELECT COALESCE(SUM(debit-credit),0) v FROM journal_lines WHERE account='CASH' AND cash_account_id=?").get(id).v;
+  if (ctx.repScope) {
+    const r = ctx.db.prepare('SELECT custody_account_id, warehouse_id FROM reps WHERE id=?').get(ctx.repScope);
+    if (r && r.custody_account_id) out.balance = { label: 'عهدتك النقدية', value: m(bal(r.custody_account_id)) };
+    out.stock_items = ctx.db.prepare("SELECT COUNT(DISTINCT item_id) n FROM batches WHERE warehouse_id=? AND qty>0 AND status='ok'").get(r ? r.warehouse_id : 0).n;
+  } else if (ctx.has('cash.view')) {
+    const c = ctx.db.prepare(`SELECT id, name FROM cash_accounts WHERE active=1 AND kind='cash'${ctx.branchScope ? ' AND branch_id=' + Number(ctx.branchScope) : ''} ORDER BY id LIMIT 1`).get();
+    if (c) out.balance = { label: c.name, value: m(bal(c.id)) };
+  }
+  return out;
+}
+
 module.exports = {
+  homeSummary,
   profitLoss, dashboard, alerts, salesReport, purchasesReport, partyStatement, aging, stockReport, itemCard, expensesReport, cashReport, repsReport, taxReport,
   listDocs, auditLog,
 };

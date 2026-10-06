@@ -503,6 +503,7 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
     sales: R.salesReport, purchases: R.purchasesReport, statement: R.partyStatement, aging: R.aging, stock: R.stockReport,
     'item-card': R.itemCard, 'trial-balance': A.trialBalance, ledger: A.generalLedger, expenses: R.expensesReport, cash: R.cashReport, reps: R.repsReport,
   };
+  api.get('/home', h((ctx) => R.homeSummary(ctx)));
   api.get('/reports/dashboard', h((ctx, req) => R.dashboard(ctx, req.query)));
   api.get('/reports/alerts', h((ctx) => { ctx.requireAny(['stock.view', 'dashboard.view']); return R.alerts(ctx); }));
   api.get('/reports/profit', h((ctx, req) => R.profitLoss(ctx, req.query)));

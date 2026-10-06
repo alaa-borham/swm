@@ -2,9 +2,10 @@
 import { h, clear, state, api, get, toast, can, inp, field } from './lib.js';
 
 // يُرفع مع كل تحديث للواجهة لمعرفة النسخة التي يعمل بها الجهاز
-const UI_VERSION = 95;
+const UI_VERSION = 97;
 import { icon, GROUP_ICONS, ROUTE_ICONS } from './icons.js';
 import * as Dash from './pages/dashboard.js';
+import * as Home from './pages/home.js';
 import * as Pos from './pages/pos.js';
 import * as Docs from './pages/docs.js';
 import * as Purchases from './pages/purchases.js';
@@ -21,6 +22,7 @@ const app = document.getElementById('app');
 
 // المسارات: [المسار, الدالة, الصلاحية]
 const ROUTES = [
+  ['home', Home.render, null],
   ['dashboard', Dash.render, 'dashboard.view'],
   ['pos', Pos.render, 'sales.create'],
   ['sales', (c) => Docs.list(c, 'sale'), 'sales.view'],
@@ -73,7 +75,7 @@ const ROUTES = [
 ];
 
 const NAV = [
-  ['', [['dashboard', 'لوحة الإدارة']]],
+  ['', [['home', 'الرئيسية'], ['dashboard', 'لوحة الإدارة']]],
   ['المبيعات', [['pos', 'فاتورة بيع جديدة'], ['sales', 'فواتير البيع'], ['sale-returns', 'مرتجعات المبيعات'], ['sessions', 'الورديات'], ['offline-queue', 'العمليات دون اتصال']]],
   ['المشتريات', [['purchase-order', 'طلب شراء جديد'], ['purchase-orders', 'طلبات الشراء'], ['purchase', 'فاتورة شراء جديدة'], ['purchases', 'فواتير الشراء']]],
   ['المخزون', [['stock', 'رصيد المخزون'], ['alerts', 'تنبيهات المخزون'], ['transfer', 'تحويل / تسليم عهدة'], ['transfers', 'سجل التحويلات'], ['counts', 'الجرد'], ['damage', 'تسجيل تالف'], ['item-card', 'بطاقة صنف']]],
@@ -203,11 +205,8 @@ async function route() {
 }
 
 function defaultRoute() {
-  if (can('dashboard.view')) return 'dashboard';
-  if (can('sales.create')) return 'pos';
-  if (can('purchases.view')) return 'purchases';
-  if (can('stock.view')) return 'stock';
-  return 'password';
+  // الصفحة الرئيسية لكل المستخدمين (أزرارها حسب الصلاحيات)
+  return 'home';
 }
 
 async function refreshMe() {
