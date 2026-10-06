@@ -2,7 +2,7 @@
 import { h, clear, state, api, get, toast, can, inp, field } from './lib.js';
 
 // يُرفع مع كل تحديث للواجهة لمعرفة النسخة التي يعمل بها الجهاز
-const UI_VERSION = 108;
+const UI_VERSION = 109;
 import { icon, GROUP_ICONS, ROUTE_ICONS } from './icons.js';
 import * as Dash from './pages/dashboard.js';
 import * as Home from './pages/home.js';
@@ -15,6 +15,7 @@ import * as Reps from './pages/reps.js';
 import * as Masters from './pages/masters.js';
 import * as Reports from './pages/reports.js';
 import * as Admin from './pages/admin.js';
+import * as Field from './pages/field.js';
 import * as Offline from './offline.js';
 import { table, badge, M, dt, run, confirmBox } from './lib.js';
 
@@ -72,15 +73,17 @@ const ROUTES = [
   ['whatsapp', Admin.whatsapp, 'messages.view'],
   ['password', Admin.password, null],
   ['offline-queue', queuePage, 'sales.create'],
+  ['collect', Field.collect, 'parties.view'],
+  ['rep-day', Field.repDay, null],
 ];
 
 const NAV = [
   ['', [['home', 'الرئيسية'], ['dashboard', 'لوحة الإدارة']]],
-  ['المبيعات', [['pos', 'فاتورة بيع جديدة'], ['sales', 'فواتير البيع'], ['sale-returns', 'مرتجعات المبيعات'], ['sessions', 'الورديات'], ['offline-queue', 'العمليات دون اتصال']]],
+  ['المبيعات', [['pos', 'فاتورة بيع جديدة'], ['sales', 'فواتير البيع'], ['sale-returns', 'مرتجعات المبيعات'], ['collect', 'المطلوب تحصيله'], ['sessions', 'الورديات'], ['offline-queue', 'العمليات دون اتصال']]],
   ['المشتريات', [['purchase-order', 'طلب شراء جديد'], ['purchase-orders', 'طلبات الشراء'], ['purchase', 'فاتورة شراء جديدة'], ['purchases', 'فواتير الشراء']]],
   ['المخزون', [['stock', 'رصيد المخزون'], ['alerts', 'تنبيهات المخزون'], ['transfer', 'تحويل / تسليم عهدة'], ['transfers', 'سجل التحويلات'], ['counts', 'الجرد'], ['damage', 'تسجيل تالف'], ['item-card', 'بطاقة صنف']]],
   ['المالية', [['receipt', 'سند قبض'], ['payment', 'سند صرف'], ['expenses', 'المصروفات'], ['cash', 'الصناديق والبنوك'], ['cash-transfer', 'تحويل نقدي / توريد'], ['cash-docs', 'سجل السندات'], ['journal', 'قيد يدوي']]],
-  ['المناديب', [['reps', 'المناديب والعهد'], ['commissions', 'العمولات']]],
+  ['المناديب', [['rep-day', 'تقرير المندوب اليومي'], ['reps', 'المناديب والعهد'], ['commissions', 'العمولات']]],
   ['البيانات الأساسية', [['items', 'الأصناف والباركود'], ['parties?type=customer', 'العملاء'], ['parties?type=supplier', 'الموردون'], ['warehouses', 'الفروع والمستودعات والحسابات'], ['categories', 'التصنيفات']]],
   ['المراجعة', [['reports', 'التقارير'], ['whatsapp', 'رسائل واتساب'], ['import', 'الاستيراد'], ['backup', 'النسخ الاحتياطي'], ['audit', 'سجل التدقيق']]],
   ['الإدارة', [['settings', 'الإعدادات'], ['users', 'المستخدمون والأدوار'], ['opening', 'الأرصدة الافتتاحية'], ['period', 'إقفال الفترات']]],
@@ -88,6 +91,7 @@ const NAV = [
 
 function routePerm(name) { const r = ROUTES.find((x) => x[0] === name.split('?')[0]); return r ? r[2] : null; }
 function allowed(name) {
+  if (name === 'rep-day') return !!state.rep || can('reps.view');
   if (name === 'reports') return ['reports.sales', 'reports.purchases', 'reports.stock', 'reports.finance', 'profit.view', 'reps.view'].some(can);
   const p = routePerm(name);
   return !p || can(p);
@@ -113,6 +117,10 @@ function loginView(msg) {
   app.appendChild(form);
   u.focus();
 }
+
+// تثبيت التطبيق على الشاشة الرئيسية: نحتفظ بطلب التثبيت الذي يرسله المتصفح لنعرضه بزر في الرئيسية
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); window.__installPrompt = e; window.dispatchEvent(new Event('install-ready')); });
+window.addEventListener('appinstalled', () => { window.__installPrompt = null; toast('ثُبّت التطبيق على الشاشة الرئيسية', 'ok'); });
 
 function layout() {
   clear(app);

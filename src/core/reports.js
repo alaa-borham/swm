@@ -2,6 +2,7 @@
 // التقارير ولوحة الإدارة. كل تقرير جدولي يعيد {title, columns, rows, totals} ليُعرض ويُصدّر بنفس الشكل.
 const { fromMinor, fromQty } = require('../lib/money');
 const { addDays, checkDate } = require('../lib/dates');
+const { fail } = require('../lib/errors');
 const ledger = require('./ledger');
 const inv = require('./inventory');
 const D = require('./docs');
@@ -496,8 +497,70 @@ function homeSummary(ctx) {
   return out;
 }
 
+/** المطلوب تحصيله: العملاء الذين عليهم أرصدة، مرتبين بالمتأخر ثم بالرصيد (للمندوب: عملاؤه أو فواتيره فقط) */
+function collections(ctx, { rep_id, only_overdue } = {}) {
+  ctx.require('parties.view');
+  const today = ctx.today();
+  const rep = ctx.repScope || (rep_id ? Number(rep_id) : null);
+  const docs = ctx.db.prepare(`SELECT d.id, d.date, d.due_date, d.party_id, p.name, p.code, p.phone, p.rep_id p_rep, r.name rep_name FROM docs d JOIN parties p ON p.id=d.party_id LEFT JOIN reps r ON r.id=p.rep_id
+    WHERE d.status='approved' AND d.ledger_account='AR' AND d.ledger_side='D' ${rep ? 'AND (p.rep_id=' + rep + ' OR d.rep_id=' + rep + ')' : ''}`).all();
+  const parties = new Map();
+  for (const d of docs) {
+    const open = D.openAmount(ctx, d.id);
+    if (open <= 0) continue;
+    const due = d.due_date || d.date;
+    const days = Math.floor((Date.parse(today) - Date.parse(due)) / 86400000);
+    const r = parties.get(d.party_id) || { party_id: d.party_id, name: d.name, code: d.code, phone: d.phone, rep_name: d.rep_name, open: 0, overdue: 0, days: 0, invoices: 0, oldest: due };
+    r.open += open; r.invoices++;
+    if (days > 0) { r.overdue += open; r.days = Math.max(r.days, days); }
+    if (due < r.oldest) r.oldest = due;
+    parties.set(d.party_id, r);
+  }
+  const lastRc = ctx.db.prepare("SELECT MAX(date) d FROM docs WHERE type='receipt' AND status='approved' AND party_id=?");
+  let rows = [...parties.values()].map((r) => ({ ...r, open: m(r.open), overdue: m(r.overdue), last_receipt: lastRc.get(r.party_id).d }));
+  if (only_overdue === '1' || only_overdue === true) rows = rows.filter((r) => r.overdue > 0);
+  rows.sort((a, b) => b.overdue - a.overdue || b.days - a.days || b.open - a.open);
+  const cols = [{ key: 'code', label: 'الرقم' }, { key: 'name', label: 'العميل', link: 'party_id' }, { key: 'phone', label: 'الهاتف' }, { key: 'invoices', label: 'فواتير مفتوحة', type: 'int' },
+    { key: 'open', label: 'الرصيد المستحق', type: 'money' }, { key: 'overdue', label: 'المتأخر', type: 'money' }, { key: 'days', label: 'أقدم تأخير (يوم)', type: 'int' }, { key: 'last_receipt', label: 'آخر تحصيل' }];
+  if (!ctx.repScope) cols.splice(3, 0, { key: 'rep_name', label: 'المندوب' });
+  return { title: 'المطلوب تحصيله', as_of: today, columns: cols, rows, totals: totalsOf(rows, cols) };
+}
+
+/** تقرير المندوب اليومي: المبيعات والتحصيل والمرتجع والنقد الذي معه والبضاعة المتبقية في عهدته */
+function repDay(ctx, { rep_id, date } = {}) {
+  const repId = ctx.repScope || Number(rep_id);
+  if (!ctx.repScope) ctx.require('reps.view');
+  const rep = ctx.db.prepare('SELECT * FROM reps WHERE id=?').get(repId);
+  if (!rep) fail('NOT_FOUND', 'اختر المندوب', 404);
+  const day = date ? checkDate(date) : ctx.today();
+  const sales = ctx.db.prepare(`SELECT d.id, d.number, d.total, p.name party FROM docs d LEFT JOIN parties p ON p.id=d.party_id
+    WHERE d.type='sale' AND d.status='approved' AND d.rep_id=? AND d.date=? ORDER BY d.id`).all(repId, day);
+  const paidAtSale = ctx.db.prepare("SELECT COALESCE(SUM(total),0) v FROM docs WHERE type='receipt' AND status='approved' AND ref_doc_id=?");
+  const saleRows = sales.map((d) => { const paid = paidAtSale.get(d.id).v; return { doc_id: d.id, number: d.number, party: d.party || 'نقدي', total: m(d.total), paid: m(paid), credit: m(Math.max(d.total - paid, 0)) }; });
+  const returns = ctx.db.prepare(`SELECT d.id doc_id, d.number, d.total, p.name party FROM docs d LEFT JOIN parties p ON p.id=d.party_id
+    WHERE d.type='sale_return' AND d.status='approved' AND d.rep_id=? AND d.date=? ORDER BY d.id`).all(repId, day).map((r) => ({ ...r, party: r.party || 'نقدي', total: m(r.total) }));
+  const saleIds = new Set(sales.map((s) => s.id));
+  const receipts = ctx.db.prepare(`SELECT d.id doc_id, d.number, d.total, d.ref_doc_id, p.name party FROM docs d LEFT JOIN parties p ON p.id=d.party_id
+    WHERE d.type='receipt' AND d.status='approved' AND d.rep_id=? AND d.date=? ORDER BY d.id`).all(repId, day);
+  const collected = receipts.filter((r) => !saleIds.has(r.ref_doc_id)).map((r) => ({ doc_id: r.doc_id, number: r.number, party: r.party || '—', total: m(r.total) }));
+  const refunds = ctx.db.prepare("SELECT COALESCE(SUM(total),0) v FROM docs WHERE type='payment' AND status='approved' AND rep_id=? AND date=? AND ledger_account='AR'").get(repId, day).v;
+  const sum = (a, k) => Math.round(a.reduce((x, r) => x + r[k], 0) * 1000) / 1000;
+  const cash = rep.custody_account_id ? ledger.balance(ctx.db, 'CASH', { cash_account_id: rep.custody_account_id }) : 0;
+  const stock = ctx.db.prepare(`SELECT i.name, i.base_unit, SUM(b.qty) q FROM batches b JOIN items i ON i.id=b.item_id WHERE b.warehouse_id=? AND b.status='ok' AND b.qty>0 GROUP BY i.id ORDER BY i.name`)
+    .all(rep.warehouse_id || 0).map((r) => ({ name: r.name, unit: r.base_unit, qty: r.q / 1000 }));
+  return {
+    title: `تقرير المندوب اليومي: ${rep.name}`, rep: { id: rep.id, name: rep.name }, date: day,
+    summary: {
+      sales_count: saleRows.length, sales_total: sum(saleRows, 'total'), sales_cash: sum(saleRows, 'paid'), sales_credit: sum(saleRows, 'credit'),
+      returns_total: sum(returns, 'total'), collections: sum(collected, 'total'), refunds: m(refunds),
+      cash_in_day: Math.round((sum(saleRows, 'paid') + sum(collected, 'total') - m(refunds)) * 1000) / 1000, cash_custody: m(cash),
+    },
+    sales: saleRows, returns, collections: collected, stock,
+  };
+}
+
 module.exports = {
-  homeSummary,
+  homeSummary, collections, repDay,
   profitLoss, dashboard, alerts, salesReport, purchasesReport, partyStatement, aging, stockReport, itemCard, expensesReport, cashReport, repsReport, taxReport,
   listDocs, auditLog,
 };

@@ -52,7 +52,7 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
       'X-Frame-Options': 'DENY',
       'Referrer-Policy': 'same-origin',
       'Content-Security-Policy': "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'",
-      'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+      'Permissions-Policy': 'camera=(self), microphone=(), geolocation=()',
     });
     next();
   });
@@ -60,6 +60,18 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
   // فحص صحة الخادم للاستضافة (لا يكشف بيانات)
   app.get('/healthz', (req, res) => {
     try { db.prepare('SELECT 1').get(); res.json({ ok: true, version: APP_VERSION }); } catch (_) { res.status(503).json({ ok: false }); }
+  });
+  // ملف التطبيق (PWA) باسم المؤسسة حتى يظهر اسمها تحت أيقونة الشاشة الرئيسية
+  app.get('/manifest.webmanifest', (req, res) => {
+    let org = '';
+    try { org = (db.prepare("SELECT value FROM settings WHERE key='org_name'").get() || {}).value || ''; } catch (_) { /* قبل التهيئة */ }
+    const name = org || 'نظام إدارة المواد الغذائية';
+    res.type('application/manifest+json').set('Cache-Control', 'no-cache').send(JSON.stringify({
+      id: '/', name, short_name: name.length > 14 ? name.split(/\s+/).slice(0, 2).join(' ') : name, lang: 'ar', dir: 'rtl',
+      start_url: '/#/home', scope: '/', display: 'standalone', orientation: 'portrait', background_color: '#f4f6f9', theme_color: '#1f5f8b',
+      icons: [{ src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' }, { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+        { src: '/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }, { src: '/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' }],
+    }));
   });
   app.use(express.static(path.join(__dirname, '..', 'public'), { index: 'index.html', maxAge: 0 }));
 
@@ -200,7 +212,7 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
         org_logo_url: s.org_logo ? '/api/settings/logo?v=' + crypto.createHash('sha1').update(s.org_logo).digest('hex').slice(0, 10) : null,
         money_decimals: getMoneyDecimals(), prices_include_tax: s.prices_include_tax === '1', default_tax_rate: fromBp(Number(s.default_tax_rate_bp)),
         invoice_footer: s.invoice_footer, receipt_width_mm: Number(s.receipt_width_mm), locked_until: s.locked_until, today: ctx.today(),
-        expiry_alert_days: Number(s.expiry_alert_days), einvoice_qr: s.einvoice_qr === '1', whatsapp_enabled: s.whatsapp_enabled === '1', app_version: APP_VERSION, invoice_discount_enabled: s.invoice_discount_enabled === '1', item_discount_uniform: s.item_discount_uniform === '1', item_discount_default_pct: fromBp(Number(s.cashier_max_discount_bp ?? 1000)), invoice_discount_max_pct: fromBp(Number(s.invoice_discount_max_bp ?? 1000)),
+        expiry_alert_days: Number(s.expiry_alert_days), einvoice_qr: s.einvoice_qr === '1', whatsapp_enabled: s.whatsapp_enabled === '1', country_code: s.whatsapp_country_code || '966', app_version: APP_VERSION, invoice_discount_enabled: s.invoice_discount_enabled === '1', item_discount_uniform: s.item_discount_uniform === '1', item_discount_default_pct: fromBp(Number(s.cashier_max_discount_bp ?? 1000)), invoice_discount_max_pct: fromBp(Number(s.invoice_discount_max_bp ?? 1000)),
       },
     };
   }));
@@ -501,9 +513,10 @@ function createApp({ db, dataDir, today, logger = console } = {}) {
   api.get('/reports/balance-sheet', h((ctx, req) => A.balanceSheet(ctx, req.query)));
   const REPORTS = {
     sales: R.salesReport, purchases: R.purchasesReport, statement: R.partyStatement, aging: R.aging, stock: R.stockReport,
-    'item-card': R.itemCard, 'trial-balance': A.trialBalance, ledger: A.generalLedger, expenses: R.expensesReport, cash: R.cashReport, reps: R.repsReport,
+    'item-card': R.itemCard, collections: R.collections, 'trial-balance': A.trialBalance, ledger: A.generalLedger, expenses: R.expensesReport, cash: R.cashReport, reps: R.repsReport,
   };
   api.get('/home', h((ctx) => R.homeSummary(ctx)));
+  api.get('/rep-day', h((ctx, req) => R.repDay(ctx, req.query)));
   api.get('/reports/dashboard', h((ctx, req) => R.dashboard(ctx, req.query)));
   api.get('/reports/alerts', h((ctx) => { ctx.requireAny(['stock.view', 'dashboard.view']); return R.alerts(ctx); }));
   api.get('/reports/profit', h((ctx, req) => R.profitLoss(ctx, req.query)));

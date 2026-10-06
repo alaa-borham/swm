@@ -339,6 +339,7 @@ body.public-receipt .public-bar .small { color: #fff; flex-basis: auto; font-wei
 .home-tile.main .ic { background: rgba(255,255,255,.18); color: #fff; }
 .home-tile.c1 { --tc: #1f7ae0; } .home-tile.c2 { --tc: #7a4fd6; } .home-tile.c3 { --tc: #12a06a; } .home-tile.c4 { --tc: #e07a1f; }
 .home-tile.c5 { --tc: #0f9bb3; } .home-tile.c6 { --tc: #c2477a; } .home-tile.c7 { --tc: #d14b4b; } .home-tile.c8 { --tc: #5a6b7d; } .home-tile.c9 { --tc: #2e9e3e; }
+.home-tile.c10 { --tc: #b8860b; } .home-tile.c11 { --tc: #3b5bdb; }
 .home-links { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
 .home-link { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); color: var(--ink); text-decoration: none; }
 .home-link:hover { text-decoration: none; border-color: var(--brand); }
@@ -420,3 +421,26 @@ body.public-receipt .public-bar .small { color: #fff; flex-basis: auto; font-wei
 .side-scrim { display: none; }
 .side-close { display: none; position: sticky; top: 0; margin-inline-start: auto; margin-bottom: 4px; width: 40px; height: 40px; align-items: center; justify-content: center; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--ink); font-size: 18px; cursor: pointer; z-index: 1; }
 @media (max-width: 900px) { .side-close { display: flex; } .side-scrim.open { display: block; position: fixed; inset: 0; z-index: 59; background: rgba(0,0,0,.5); } }
+/* رصيد العميل في شاشة البيع */
+.cust-info { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; padding: 6px 10px; border-radius: 8px; background: var(--panel); border: 1px solid var(--line); }
+.cust-info.hidden { display: none; }
+.cust-info.late { border-color: #e0a21f; }
+.cust-info.over { border-color: var(--bad); background: color-mix(in srgb, var(--bad) 10%, var(--panel)); }
+.cust-info .late-t { color: #b8760b; }
+.cust-info .over-t { flex-basis: 100%; color: var(--bad); font-weight: 800; }
+.collect-acts { display: flex; gap: 6px; flex-wrap: wrap; }
+/* ماسح الباركود بالكاميرا */
+.scan-btn { flex: 0 0 auto; }
+.scan-box { position: relative; background: #000; border-radius: 10px; overflow: hidden; aspect-ratio: 4 / 3; }
+.scan-box video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.scan-box .scan-line { position: absolute; left: 10%; right: 10%; top: 50%; height: 2px; background: #ff3b3b; box-shadow: 0 0 8px #ff3b3b; }
+.scan-box .scan-frame { position: absolute; inset: 22% 10%; border: 2px solid rgba(255,255,255,.85); border-radius: 10px; }
+.home-install { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin: 0 0 12px; padding: 10px 14px; border: 1px dashed var(--brand); border-radius: 12px; background: var(--brand-soft); color: var(--brand); font: inherit; font-weight: 700; cursor: pointer; }
+.collect-list { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); }
+.collect-card { background: var(--panel); border: 1px solid var(--line); border-inline-start: 5px solid var(--line); border-radius: 12px; padding: 10px 12px; box-shadow: var(--shadow); }
+.collect-card.late { border-inline-start-color: #e0a21f; }
+.collect-card.bad { border-inline-start-color: var(--bad); }
+.collect-card .cc-top { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; margin-bottom: 8px; }
+.collect-card .cc-amt { text-align: left; white-space: nowrap; font-size: 16px; }
+.collect-card .cc-late { font-size: 12px; color: var(--bad); font-weight: 700; }
+body:has(.pos-fab) #toasts { bottom: 86px; }

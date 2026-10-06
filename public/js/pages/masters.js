@@ -1,6 +1,6 @@
 // البيانات الأساسية: الأصناف والوحدات والباركود، العملاء والموردون، المستودعات والحسابات، التصنيفات.
 import { canAddStock, addStockModal } from './addstock.js';
-import { h, clear, state, get, api, submitter, toast, run, M, inp, sel, field, num, table, pageHead, can, lookup, invalidate, today, download } from '../lib.js';
+import { h, clear, state, get, api, submitter, toast, run, M, inp, sel, field, num, table, pageHead, can, lookup, invalidate, today, download, money, openWhatsApp } from '../lib.js';
 
 // ===================== الأصناف =====================
 export async function items({ el, q, isCurrent }) {
@@ -192,12 +192,16 @@ export async function party({ el, params, q }) {
       h('h3', null, 'المستندات المفتوحة'),
       table({ columns: [{ key: 'number', label: 'المستند', render: (d) => h('a', { href: '#/doc/' + d.id }, d.number) }, { key: 'label', label: 'النوع' }, { key: 'date', label: 'التاريخ' },
         { key: 'due_date', label: 'الاستحقاق' }, { key: 'total', label: 'الإجمالي', type: 'money' }, { key: 'open_amount', label: 'المتبقي/غير المخصص', type: 'money' }], rows: r.open_docs, empty: 'لا توجد مستندات مفتوحة' }),
+      account.value === 'AR' ? h('div', { class: 'actions', style: { marginTop: '10px' } },
+        h('button', { class: 'btn primary', onclick: async () => { const { statementNode } = await import('./field.js'); const { previewNode } = await import('./docs.js'); previewNode(statementNode(p, r), { format: 'thermal', filename: `كشف-حساب-${p.code || p.id}.png` }); } }, 'مشاركة / طباعة كشف الحساب'),
+        h('button', { class: 'btn', onclick: async () => { const { reminderText } = await import('./field.js'); openWhatsApp(p.phone, reminderText({ ...p, open: r.closing })); } }, 'تذكير بالرصيد (واتساب)')) : null,
       can('reports.export') ? h('button', { class: 'btn', style: { marginTop: '10px' }, onclick: () => download(`/reports/statement/export?format=xlsx&party_id=${p.id}&account=${account.value}&from=${from.value}&to=${to.value}`, `statement-${p.id}.xlsx`) }, 'تصدير Excel') : null);
   };
   el.append(h('div', { class: 'card' }, h('div', { class: 'doc-head' },
     h('div', null, h('b', null, 'الهاتف'), p.phone || '—'), h('div', null, h('b', null, 'العنوان'), p.address || '—'), h('div', null, h('b', null, 'الحد الائتماني'), p.credit_limit == null ? 'بلا حد' : M(p.credit_limit)),
     h('div', null, h('b', null, 'مدة السداد'), `${p.payment_terms_days} يوم`), h('div', null, h('b', null, 'المندوب'), p.all_reps ? 'كل المناديب' : p.rep_name || '—'),
-    p.is_customer ? h('div', null, h('b', null, 'رصيد العميل (عليه)'), M(p.ar_balance)) : null, p.is_supplier ? h('div', null, h('b', null, 'رصيد المورد (له)'), M(p.ap_balance)) : null)),
+    p.is_customer ? h('div', null, h('b', null, 'رصيد العميل (عليه)'), M(p.ar_balance)) : null,
+    p.is_customer && p.overdue ? h('div', null, h('b', null, 'متأخر السداد'), h('span', { class: 'badge bad' }, money(p.overdue), ` · ${p.overdue_days} يوم`)) : null, p.is_supplier ? h('div', null, h('b', null, 'رصيد المورد (له)'), M(p.ap_balance)) : null)),
   h('form', { class: 'row card filters', style: { padding: '12px' }, onsubmit: (e) => { e.preventDefault(); load(); } }, field('الحساب', account), field('من', from), field('إلى', to), h('button', { class: 'btn primary' }, 'كشف الحساب')), body);
   await load();
 }

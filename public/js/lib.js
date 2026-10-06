@@ -458,7 +458,15 @@ export function itemPicker({ onPick, warehouseId, placeholder = 'ابحث بال
   });
   const addBtn = allowCreate && can('items.manage')
     ? h('button', { type: 'button', class: 'btn primary', style: { whiteSpace: 'nowrap' }, onclick: () => quickItem(input.value.trim()) }, '+ صنف جديد') : null;
-  return { el: h('div', null, addBtn ? h('div', { class: 'row', style: { gap: '6px', flexWrap: 'nowrap' } }, input, addBtn) : input, box), input };
+  // زر الكاميرا لمسح الباركود (على الأجهزة التي فيها كاميرا)
+  const camBtn = navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? h('button', { type: 'button', class: 'btn scan-btn', title: 'مسح الباركود بالكاميرا', 'aria-label': 'مسح الباركود بالكاميرا', onclick: async () => {
+    const { scanBarcode } = await import('./scan.js');
+    const code = await scanBarcode();
+    if (!code) return;
+    input.value = code;
+    await search(true);
+  } }, '📷') : null;
+  return { el: h('div', null, addBtn || camBtn ? h('div', { class: 'row', style: { gap: '6px', flexWrap: 'nowrap' } }, input, camBtn, addBtn) : input, box), input };
 }
 
 /** شريط فلاتر بسيط */
@@ -506,3 +514,15 @@ document.addEventListener('input', (e) => {
   clearTimeout(filterTimer);
   filterTimer = setTimeout(() => submitFilters(form), 450);
 });
+
+/** رقم واتساب دولي من رقم محلي (يحذف الصفر الأول ويضيف رمز الدولة من الإعدادات) */
+export function waPhone(phone) {
+  let p = String(phone || '').replace(/[^0-9]/g, '');
+  if (p.startsWith('00')) p = p.slice(2);
+  else if (p.startsWith('0')) p = (state.settings.country_code || '966') + p.slice(1);
+  return p;
+}
+/** فتح محادثة واتساب (مع العميل إن وُجد رقمه) والنص جاهز للإرسال */
+export function openWhatsApp(phone, text) {
+  window.open(`https://wa.me/${waPhone(phone)}?text=` + encodeURIComponent(text), '_blank');
+}

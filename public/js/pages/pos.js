@@ -237,9 +237,35 @@ async function posView({ el, q }) {
 
   let pending = false;
   const redraw = () => { if (!pending) { pending = true; setTimeout(() => { pending = false; draw(); }, 0); } };
+  // رصيد العميل وحده الائتماني والمتأخر عليه: يظهر تحت اسم العميل، مع تنبيه إن تجاوزت هذه الفاتورة الحد
+  const custInfo = h('div', { class: 'cust-info hidden' });
+  let custData = null, custFor = '';
+  const loadCust = async () => {
+    const id = custSel.value;
+    if (id === custFor) return;
+    custFor = id; custData = null;
+    if (id && can('parties.view')) { try { const p = await get('/parties/' + id); if (custFor === id) custData = p; } catch (_) { /* دون اتصال */ } }
+    drawCust();
+  };
+  function drawCust() {
+    const p = custData;
+    custInfo.classList.toggle('hidden', !p);
+    if (!p) return clear(custInfo);
+    const unpaid = Math.max(calc().total - num(payAmt.value), 0);
+    const after = Math.round((p.ar_balance + unpaid) * 1000) / 1000;
+    const over = p.credit_limit != null && after > p.credit_limit;
+    custInfo.className = 'cust-info' + (over ? ' over' : p.overdue ? ' late' : '');
+    custInfo.replaceChildren(
+      h('span', null, 'الرصيد: ', h('b', null, money(p.ar_balance))),
+      h('span', null, 'الحد: ', h('b', null, p.credit_limit == null ? 'بلا حد' : money(p.credit_limit))),
+      p.overdue ? h('span', { class: 'late-t' }, 'متأخر: ', h('b', null, money(p.overdue)), ` (${p.overdue_days} يوم)`) : null,
+      unpaid > 0 ? h('span', null, 'بعد الفاتورة: ', h('b', null, money(after))) : null,
+      over ? h('div', { class: 'over-t' }, '⚠ هذه الفاتورة تتجاوز الحد الائتماني للعميل') : null);
+  }
   function draw() {
     drawInner();
     syncFab();
+    if (custSel.value !== custFor) loadCust(); else drawCust();
     saveWip();
   }
   function drawInner() {
@@ -388,7 +414,7 @@ async function posView({ el, q }) {
     h('div', null,
       draftNote,
       // العميل أولًا ثم الأصناف
-      h('div', { class: 'card pos-sec pos-customer' }, h('div', { class: 'pos-sec-h' }, '١ · العميل'), h('div', { class: 'grid' }, field('العميل', custSel), (whSel.options.length > 1 ? field('المستودع', whSel) : null), can('settings.manage') ? field('التاريخ', dateIn) : null)),
+      h('div', { class: 'card pos-sec pos-customer' }, h('div', { class: 'pos-sec-h' }, '١ · العميل'), h('div', { class: 'grid' }, field('العميل', custSel), custInfo, (whSel.options.length > 1 ? field('المستودع', whSel) : null), can('settings.manage') ? field('التاريخ', dateIn) : null)),
       h('div', { class: 'card pos-sec pos-search' }, h('div', { class: 'pos-sec-h' }, '٢ · الأصناف'), picker.el, h('div', { class: 'small muted pos-keys', style: { marginTop: '6px' } },
         h('span', { class: 'kbd' }, 'F2'), ' بحث · ', h('span', { class: 'kbd' }, 'Enter'), ' إضافة · ', h('span', { class: 'kbd' }, 'F4'), ' مسودة · ',
         h('span', { class: 'kbd' }, 'F9'), ' اعتماد · ', h('span', { class: 'kbd' }, 'F10'), ' اعتماد وطباعة')),
@@ -413,7 +439,7 @@ async function posView({ el, q }) {
   if (!q.draft) await restoreWip();
   wipReady = true;
   draw();
-  custSel.addEventListener('change', saveWip);
+  custSel.addEventListener('change', () => { saveWip(); loadCust(); });
   // بعد اختيار العميل تصعد الشاشة حتى يصبح قسم الأصناف في الأعلى فتتسع المساحة لاختيار الأصناف
   custSel.addEventListener('change', () => {
     if (!custSel.value) return;

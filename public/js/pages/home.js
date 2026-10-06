@@ -1,6 +1,6 @@
 // الصفحة الرئيسية: ترحيب، ملخص اليوم، أزرار كبيرة للعمليات اليومية حسب الصلاحيات، وشريط الرصيد.
 import { icon as svgIcon } from '../icons.js';
-import { h, get, money, state, can, dt, pageHead } from '../lib.js';
+import { h, get, money, state, can, dt, pageHead, modal } from '../lib.js';
 
 const ROLE_NAMES = { admin: 'المدير', cashier: 'الكاشير', purchasing: 'المشتريات', storekeeper: 'أمين المستودع', accountant: 'المحاسب', rep: 'المندوب' };
 
@@ -38,12 +38,14 @@ export async function render({ el, isCurrent }) {
     ['sales.create', '#/pos', 'sales', 'فاتورة بيع جديدة', 'c1'],
     ['purchases.create', '#/purchase', 'purchases', 'فاتورة شراء جديدة', 'c2'],
     ['cash.receipt', '#/receipt', 'in', 'تحصيل من عميل', 'c3'],
+    ['parties.view', '#/collect', 'bell', 'المطلوب تحصيله', 'c10'],
+    ['rep-day', '#/rep-day', 'clipboard', isRep ? 'تقريري اليومي' : 'تقرير المندوب اليومي', 'c11'],
     ['parties.manage', '#/parties?type=customer&new=customer', 'user', 'عميل جديد', 'c4'],
     ['stock.view', '#/stock', 'boxes', isRep ? 'بضاعتي' : 'رصيد المخزون', 'c5'],
     ['stock.transfer', '#/transfer', 'truck', 'تحويل / تسليم مندوب', 'c6'],
     ['sale_returns.create', '#/sales?type=sale_return', 'ret', 'المرتجعات', 'c7'],
     ['items.view', '#/items', 'barcode', 'الأصناف', 'c8'],
-  ].filter(([p]) => can(p));
+  ].filter(([p]) => (p === 'rep-day' ? !!state.rep || can('reps.view') : can(p)));
   const { canAddStock, addStockModal } = await import('./addstock.js');
   const tileEls = tiles.map(([, href, ic, label, c], i) => h('a', { class: `home-tile ${c}${i === 0 ? ' main' : ''}`, href }, h('span', { class: 'ic' }, svgIcon(ic, 30)), h('span', { class: 't' }, label)));
   if (canAddStock()) tileEls.push(h('button', { type: 'button', class: 'home-tile c9', onclick: () => addStockModal(null, () => {}) }, h('span', { class: 'ic' }, svgIcon('plus', 30)), h('span', { class: 't' }, 'إضافة رصيد')));
@@ -72,7 +74,19 @@ export async function render({ el, isCurrent }) {
   const balanceBar = sum.balance ? h('a', { class: 'home-balance', href: can('cash.view') ? '#/cash' : null },
     h('span', null, svgIcon('card', 20), ' ', sum.balance.label), h('b', null, money(sum.balance.value))) : null;
 
-  el.append(h('div', { class: 'home' }, hero, balanceBar,
+  // زر تثبيت التطبيق (يختفي إن كان مثبتًا ويعمل من أيقونته)
+  const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  const installBar = standalone ? null : h('button', { type: 'button', class: 'home-install', onclick: async () => {
+    const pr = window.__installPrompt;
+    if (pr) { pr.prompt(); const r = await pr.userChoice.catch(() => null); if (r && r.outcome === 'accepted') installBar.remove(); window.__installPrompt = null; return; }
+    const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    modal('تثبيت التطبيق على الجوال', h('div', null,
+      ios ? h('ol', null, h('li', null, 'افتح النظام في متصفح Safari.'), h('li', null, 'اضغط زر المشاركة (المربع والسهم للأعلى) أسفل الشاشة.'), h('li', null, 'اختر «إضافة إلى الشاشة الرئيسية» ثم «إضافة».'))
+        : h('ol', null, h('li', null, 'افتح النظام في متصفح Chrome.'), h('li', null, 'اضغط القائمة ⋮ أعلى الشاشة.'), h('li', null, 'اختر «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية» ثم «تثبيت».')),
+      h('p', { class: 'small muted' }, 'بعدها يظهر النظام كأيقونة على شاشة الجوال ويفتح بملء الشاشة دون شريط المتصفح.')), []);
+  } }, svgIcon('plus', 18), h('span', null, 'تثبيت التطبيق على شاشة الجوال'));
+
+  el.append(h('div', { class: 'home' }, hero, balanceBar, installBar,
     stats.length ? h('div', { class: 'home-stats' }, stats) : null,
     h('div', { class: 'home-tiles' }, tileEls),
     linkEls.length ? h('div', { class: 'home-links' }, linkEls) : null,

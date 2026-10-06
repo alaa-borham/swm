@@ -391,6 +391,23 @@ export async function viewDoc(id, format = 'a4', { count = false } = {}) {
   } catch (e) { toast(e.message, 'bad'); }
 }
 
+/** معاينة أي مستند مُعدّ مسبقًا (كشف حساب، تقرير المندوب) مع طباعة وبلوتوث ومشاركة كصورة */
+export async function previewNode(node, { format = 'thermal', filename = 'document.png' } = {}) {
+  const area = document.querySelector('.print-area') || document.body.appendChild(h('div', { class: 'print-area' }));
+  clear(area); area.append(node);
+  document.querySelectorAll('.print-page-style').forEach((x) => x.remove());
+  document.head.appendChild(pageStyle(format, state.settings));
+  await waitImages(area);
+  const close = () => { document.body.classList.remove('printing', 'print-preview'); clear(area); document.querySelectorAll('.print-page-style').forEach((x) => x.remove()); document.querySelector('.print-toolbar')?.remove(); };
+  document.querySelector('.print-toolbar')?.remove();
+  document.body.classList.add('printing', 'print-preview');
+  document.body.appendChild(h('div', { class: 'print-toolbar' },
+    h('button', { class: 'btn primary', onclick: () => shareAsImage(node, filename, format) }, 'مشاركة (واتساب)'),
+    h('button', { class: 'btn ok', onclick: async () => { if (format === 'thermal' && isAndroid()) await thermalPrint(node, 'rawbt'); else window.print(); } }, 'طباعة'),
+    format === 'thermal' && canBluetooth() ? h('button', { class: 'btn', onclick: async (e) => { const btn = e.currentTarget; await thermalPrint(node, 'ble', btn); } }, 'بلوتوث مباشر') : null,
+    h('button', { class: 'btn', onclick: close }, 'إغلاق')));
+}
+
 export async function printDoc(id, format = 'a4') {
   // على الجوال: متصفحات أندرويد تُنهي window.print فورًا قبل التقاط المعاينة، فتُعرض معاينة بأزرار بدل الطباعة المباشرة
   const mobile = window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 900;

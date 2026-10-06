@@ -322,6 +322,16 @@ function getParty(ctx, id) {
   p.ar_balance = balance(ctx.db, 'AR', { party_id: id }) / 10 ** require('../lib/money').getMoneyDecimals();
   p.ap_balance = -balance(ctx.db, 'AP', { party_id: id }) / 10 ** require('../lib/money').getMoneyDecimals();
   p.rep_name = p.rep_id ? (ctx.db.prepare('SELECT name FROM reps WHERE id=?').get(p.rep_id) || {}).name : null;
+  if (p.is_customer) {
+    // المتأخر: فواتير مفتوحة تجاوزت تاريخ استحقاقها، وأقدمها بالأيام (يظهر في شاشة البيع وكشف الحساب)
+    const today = ctx.today();
+    let overdue = 0, days = 0;
+    for (const d of require('./payments').openDocs(ctx, { party_id: id, account: 'AR' })) {
+      const due = d.due_date || d.date;
+      if (d.open_amount > 0 && due < today) { overdue += d.open_amount; days = Math.max(days, Math.floor((Date.parse(today) - Date.parse(due)) / 86400000)); }
+    }
+    p.overdue = Math.round(overdue * 1000) / 1000; p.overdue_days = days;
+  }
   return p;
 }
 

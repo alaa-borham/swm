@@ -65,7 +65,7 @@ export function icon(name, size = 18) {
 // أيقونة كل مجموعة وكل صفحة في القائمة
 export const GROUP_ICONS = { المبيعات: 'sales', المشتريات: 'purchases', المخزون: 'stock', المالية: 'finance', المناديب: 'reps', 'البيانات الأساسية': 'master', المراجعة: 'review', الإدارة: 'admin' };
 export const ROUTE_ICONS = {
-  home: 'home', dashboard: 'chart', pos: 'plus', sales: 'list', 'sale-returns': 'ret', sessions: 'clock', 'offline-queue': 'offline',
+  home: 'home', dashboard: 'chart', pos: 'plus', sales: 'list', 'sale-returns': 'ret', sessions: 'clock', 'offline-queue': 'offline', collect: 'in', 'rep-day': 'clipboard',
   'purchase-order': 'order', 'purchase-orders': 'list', purchase: 'invoice', purchases: 'list',
   stock: 'boxes', alerts: 'bell', transfer: 'transfer', transfers: 'history', counts: 'clipboard', damage: 'trash', 'item-card': 'card',
   receipt: 'in', payment: 'out', expenses: 'receipt', cash: 'bank', 'cash-transfer': 'transfer', 'cash-docs': 'list', journal: 'journal',
