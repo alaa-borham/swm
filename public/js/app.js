@@ -2,7 +2,7 @@
 import { h, clear, state, api, get, toast, can, inp, field } from './lib.js';
 
 // يُرفع مع كل تحديث للواجهة لمعرفة النسخة التي يعمل بها الجهاز
-const UI_VERSION = 107;
+const UI_VERSION = 108;
 import { icon, GROUP_ICONS, ROUTE_ICONS } from './icons.js';
 import * as Dash from './pages/dashboard.js';
 import * as Home from './pages/home.js';
@@ -116,7 +116,12 @@ function loginView(msg) {
 
 function layout() {
   clear(app);
+  // القائمة الجانبية على الجوال: تُغلق بزر ✕ أو بالضغط خارجها أو بالسحب لليمين أو عند الانتقال لصفحة
+  const closeSide = () => { side.classList.remove('open'); scrim.classList.remove('open'); };
+  const toggleSide = () => { const o = !side.classList.contains('open'); side.classList.toggle('open', o); scrim.classList.toggle('open', o); };
+  const scrim = h('div', { class: 'side-scrim', onclick: () => closeSide() });
   const side = h('nav', { class: 'side', 'aria-label': 'القائمة' },
+    h('button', { type: 'button', class: 'side-close', 'aria-label': 'إغلاق القائمة', onclick: () => closeSide() }, '✕'),
     h('div', { class: 'org' }, state.settings.org_name, h('small', null, state.me.full_name, state.branch ? ' — ' + state.branch.name : ''),
       h('small', { class: 'ver', title: 'إصدار الواجهة · إصدار الخادم' }, `الإصدار ${UI_VERSION} · ${state.settings.app_version || '-'}`)));
   // مجموعات قابلة للطي؛ تُحفظ المجموعات المفتوحة على الجهاز
@@ -127,7 +132,7 @@ function layout() {
     // المندوب يتعامل مع العملاء فقط
     const vis = items.filter(([r]) => allowed(r) && !(state.rep && !can('parties.all') && r === 'parties?type=supplier'));
     if (!vis.length) continue;
-    const links = vis.map(([r, label]) => h('a', { class: 'nav', href: '#/' + r, 'data-route': r, onclick: () => side.classList.remove('open') }, icon(ROUTE_ICONS[r]), h('span', null, label)));
+    const links = vis.map(([r, label]) => h('a', { class: 'nav', href: '#/' + r, 'data-route': r, onclick: () => closeSide() }, icon(ROUTE_ICONS[r]), h('span', null, label)));
     if (!group) { side.append(...links); continue; }
     const body = h('div', { class: 'nav-items', id: 'nav-' + group, role: 'group' }, links);
     const head = h('button', { type: 'button', class: 'nav-group', 'aria-expanded': 'false', 'aria-controls': 'nav-' + group, 'data-group': group },
@@ -162,7 +167,7 @@ function layout() {
   window.addEventListener('hashchange', syncBack);
   setTimeout(syncBack, 0);
   const top = h('header', { class: 'top' },
-    h('button', { class: 'btn small menu-btn', 'aria-label': 'القائمة', onclick: () => side.classList.toggle('open') }, '☰'),
+    h('button', { class: 'btn small menu-btn', 'aria-label': 'القائمة', onclick: () => toggleSide() }, '☰'),
     backBtn,
     h('div', { class: 'title' }, ''), net, sessionBadge,
     h('span', { class: 'who' }, state.me.full_name),
@@ -172,8 +177,18 @@ function layout() {
       if (Offline.pendingCount() && !(await confirmBox('عمليات غير مرسلة', 'توجد مبيعات محفوظة على الجهاز لم تُرسل بعد. ستبقى على الجهاز وتُرسل عند الدخول مجددًا. متابعة الخروج؟'))) return;
       await api('POST', '/auth/logout', {}).catch(() => null); Offline.clearMe(); state.me = null; loginView();
     } }, 'خروج'));
+  let sx = null, sy = 0;
+  side.addEventListener('touchstart', (e) => { sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
+  side.addEventListener('touchend', (e) => {
+    if (sx == null) return;
+    const dx = e.changedTouches[0].clientX - sx, dy = Math.abs(e.changedTouches[0].clientY - sy);
+    sx = null;
+    if (dx > 60 && dx > dy) closeSide();
+  }, { passive: true });
+  window.addEventListener('hashchange', closeSide);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSide(); });
   const content = h('main', { class: 'content', id: 'content' });
-  app.appendChild(h('div', { class: 'layout' }, side, h('div', { class: 'main' }, top, content)));
+  app.appendChild(h('div', { class: 'layout' }, scrim, side, h('div', { class: 'main' }, top, content)));
 }
 
 let navSeq = 0;
