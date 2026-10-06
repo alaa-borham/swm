@@ -403,3 +403,16 @@ body.public-receipt .public-bar .small { color: #fff; flex-basis: auto; font-wei
 .pos-pay { --sc: #0f9bb3; }
 /* بطاقات الأصناف المضافة: لون الأصناف نفسه */
 .pos-compact .lines-table tbody tr:not(:has(> td[colspan])) { border: 2px solid #12a06a; border-inline-start-width: 8px; background: color-mix(in srgb, #12a06a 10%, var(--panel)); }
+/* زر عائم لاختيار الأصناف في شاشة البيع */
+.pos-fab { position: fixed; bottom: calc(18px + env(safe-area-inset-bottom)); inset-inline-end: 18px; z-index: 40; display: flex; align-items: center; gap: 6px; padding: 12px 18px 12px 16px; border: 0; border-radius: 999px; background: #12a06a; color: #fff; font: inherit; font-weight: 800; font-size: 16px; box-shadow: 0 6px 18px rgba(0,0,0,.28); cursor: pointer; }
+.pos-fab:active { transform: scale(.96); }
+.pos-fab-plus { font-size: 24px; line-height: 1; }
+.pos-fab-n { min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px; background: #fff; color: #12a06a; font-size: 13px; display: inline-flex; align-items: center; justify-content: center; }
+.pos-fab-n.hidden { display: none; }
+.pos-compact { padding-bottom: 80px; }
+.pick-modal .results { max-height: 55vh; }
+.pick-modal .results .r { padding: 12px 10px; }
+.pick-added { margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: color-mix(in srgb, #12a06a 14%, var(--panel)); }
+.pick-added.flash { animation: pickflash .6s; }
+@keyframes pickflash { from { background: color-mix(in srgb, #12a06a 45%, var(--panel)); } }
+@media print { .pos-fab { display: none; } }

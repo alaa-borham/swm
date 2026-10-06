@@ -350,7 +350,7 @@ export function stepper(input, { step = 1, min = 0, onChange } = {}) {
 }
 
 /** منتقي صنف بالبحث بالاسم أو الباركود */
-export function itemPicker({ onPick, warehouseId, placeholder = 'ابحث بالاسم أو امسح الباركود', autofocus, allowCreate, inStockOnly, emptyHint }) {
+export function itemPicker({ onPick, warehouseId, placeholder = 'ابحث بالاسم أو امسح الباركود', autofocus, allowCreate, inStockOnly, emptyHint, keepOpen }) {
   const input = inp({ class: 'search', placeholder, autocomplete: 'off', autofocus });
   const box = h('div', { class: 'results hidden' });
   let results = [], idx = 0, timer, empty = '';
@@ -368,7 +368,12 @@ export function itemPicker({ onPick, warehouseId, placeholder = 'ابحث بال
         h('span', { class: 'small' }, it.sellable_qty != null ? ['متاح ', Q(it.sellable_qty), ' ', it.base_unit, ' · '] : '', unit ? [unit.name, ' ', M(unit.sell_price)] : '')));
     });
   };
-  const pick = (i) => { const it = results[i]; if (!it) return; results = []; empty = ''; render(); input.value = ''; onPick(it); input.focus(); };
+  const pick = (i) => {
+    const it = results[i]; if (!it) return;
+    // keepOpen: تبقى القائمة ظاهرة لإضافة أصناف متتالية بالضغط (نافذة الاختيار في شاشة البيع)
+    if (keepOpen) { onPick(it); return; }
+    results = []; empty = ''; render(); input.value = ''; onPick(it); input.focus();
+  };
   const search = async (exact, browse) => {
     const q = input.value.trim();
     if (!q && !browse) { results = []; empty = ''; render(); return; }
@@ -391,7 +396,8 @@ export function itemPicker({ onPick, warehouseId, placeholder = 'ابحث بال
   input.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => search(false), 250); });
   // عند الضغط على الحقل وهو فارغ تظهر قائمة الأصناف للاختيار منها
   input.addEventListener('click', () => { if (!input.value.trim()) search(false, true); });
-  input.addEventListener('blur', () => setTimeout(() => { if (!box.contains(document.activeElement) && !input.value.trim()) { results = []; empty = ''; render(); } }, 200));
+  if (keepOpen) setTimeout(() => search(false, true), 0);
+  if (!keepOpen) input.addEventListener('blur', () => setTimeout(() => { if (!box.contains(document.activeElement) && !input.value.trim()) { results = []; empty = ''; render(); } }, 200));
   // إنشاء صنف سريع دون مغادرة الشاشة؛ يُضاف مباشرة بعد الحفظ
   const quickItem = (name) => {
     const isCode = /^\d{6,}$/.test(name);
