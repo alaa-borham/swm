@@ -195,6 +195,10 @@ tr.clickable { cursor: pointer; }
 .print-a4 h1 { font-size: 20px; margin: 0; }
 .print-a4 table { font-size: 13px; }
 .print-a4 th { background: #eee; }
+/* فواصل واضحة للأعمدة والصفوف في الفواتير المطبوعة A4 (البيع والشراء وغيرها) */
+.print-a4 table { border-collapse: collapse; width: 100%; border: 1px solid #444; }
+.print-a4 th, .print-a4 td { border: 1px solid #555 !important; padding: 5px 8px; color: #000; }
+.print-a4 th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 .print-a4 .head { display: flex; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 10px; }
 .print-thermal { font-size: 12px; margin: 0 auto; }
 .print-thermal table { font-size: 12px; }
