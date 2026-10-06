@@ -358,3 +358,17 @@ body.public-receipt .public-bar .small { color: #fff; flex-basis: auto; font-wei
   .home-hero { padding: 16px; }
   .home-greet { font-size: 19px; }
 }
+
+/* شاشة البيع على الجوال: بطاقات مضغوطة */
+@media (max-width: 760px) {
+  .pos-compact .card { padding: 10px 12px; margin-bottom: 10px; border-radius: 12px; }
+  .pos-compact .field { margin-bottom: 0; }
+  .pos-compact .field label { font-size: 12px; margin-bottom: 2px; }
+  .pos-compact input, .pos-compact select { min-height: 38px; padding: 6px 9px; }
+  .pos-compact .grid { gap: 8px; }
+  .pos-compact .pos-keys { display: none; }
+  .pos-compact .lines-table td.empty, .pos-compact .lines-table td[colspan] { padding: 8px 4px; font-size: 13px; }
+  .pos-compact .table-wrap:has(> table.lines-table) { margin-bottom: 10px; }
+  .pos-compact .lines-table tr:has(> td[colspan]) { padding: 4px 10px; box-shadow: none; }
+}
+@media (pointer: coarse) { .pos-keys { display: none; } }

@@ -333,12 +333,12 @@ async function posView({ el, q }) {
   };
   document.addEventListener('keydown', keys);
 
-  el.append(h('div', { class: 'pos' },
+  el.append(h('div', { class: 'pos pos-compact' },
     h('div', null,
       draftNote,
       // العميل أولًا ثم الأصناف
       h('div', { class: 'card pos-customer' }, h('div', { class: 'grid' }, field('العميل', custSel), (whSel.options.length > 1 ? field('المستودع', whSel) : null), can('settings.manage') ? field('التاريخ', dateIn) : null)),
-      h('div', { class: 'card' }, picker.el, h('div', { class: 'small muted', style: { marginTop: '6px' } },
+      h('div', { class: 'card' }, picker.el, h('div', { class: 'small muted pos-keys', style: { marginTop: '6px' } },
         h('span', { class: 'kbd' }, 'F2'), ' بحث · ', h('span', { class: 'kbd' }, 'Enter'), ' إضافة · ', h('span', { class: 'kbd' }, 'F4'), ' مسودة · ',
         h('span', { class: 'kbd' }, 'F9'), ' اعتماد · ', h('span', { class: 'kbd' }, 'F10'), ' اعتماد وطباعة')),
       h('div', { class: 'table-wrap' }, h('table', { class: 'lines-table' },
