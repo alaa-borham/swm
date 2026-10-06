@@ -336,6 +336,8 @@ async function posView({ el, q }) {
   el.append(h('div', { class: 'pos' },
     h('div', null,
       draftNote,
+      // العميل أولًا ثم الأصناف
+      h('div', { class: 'card pos-customer' }, h('div', { class: 'grid' }, field('العميل', custSel), (whSel.options.length > 1 ? field('المستودع', whSel) : null), can('settings.manage') ? field('التاريخ', dateIn) : null)),
       h('div', { class: 'card' }, picker.el, h('div', { class: 'small muted', style: { marginTop: '6px' } },
         h('span', { class: 'kbd' }, 'F2'), ' بحث · ', h('span', { class: 'kbd' }, 'Enter'), ' إضافة · ', h('span', { class: 'kbd' }, 'F4'), ' مسودة · ',
         h('span', { class: 'kbd' }, 'F9'), ' اعتماد · ', h('span', { class: 'kbd' }, 'F10'), ' اعتماد وطباعة')),
@@ -343,8 +345,7 @@ async function posView({ el, q }) {
         h('thead', null, h('tr', null, ['الصنف', 'الوحدة', 'الكمية', 'السعر', 'الخصم (قيمة)', 'الإجمالي', ''].map((x) => h('th', null, x)))), tbody))),
     h('div', null,
       h('div', { class: 'card' },
-        h('div', { class: 'grid' }, field('العميل', custSel), (whSel.options.length > 1 ? field('المستودع', whSel) : null), can('settings.manage') ? field('التاريخ', dateIn) : null),
-        invDiscAllowed ? h('div', { style: { marginTop: '8px' } }, field('خصم على إجمالي الفاتورة %', stepper(invDiscAmt, { step: 1, min: 0, onChange: onInvDisc })),
+        invDiscAllowed ? h('div', null, field('خصم على إجمالي الفاتورة %', stepper(invDiscAmt, { step: 1, min: 0, onChange: onInvDisc })),
           h('div', { class: 'small muted' }, 'نسبة من إجمالي الفاتورة، ويلغي خصومات الأصناف.', !isAdmin && s.invoice_discount_max_pct != null ? ` الحد الأقصى ${s.invoice_discount_max_pct}%.` : '')) : null,
         h('div', { style: { marginTop: '8px' } }, notes)),
       h('div', { class: 'card' }, totals),
