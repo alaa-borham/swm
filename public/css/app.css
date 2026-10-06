@@ -391,3 +391,15 @@ body.public-receipt .public-bar .small { color: #fff; flex-basis: auto; font-wei
   .pos-compact .table-wrap:has(> table.lines-table) { margin-bottom: 4px; }
 }
 @media (pointer: coarse) { .pos-keys { display: none; } }
+
+/* شاشة البيع: لون مميز لكل قسم (شريط جانبي + خلفية خفيفة + عنوان) */
+.pos-sec { border-inline-start: 5px solid var(--sc); background: color-mix(in srgb, var(--sc) 7%, var(--panel)); }
+.pos-sec-h { font-size: 12px; font-weight: 800; color: var(--sc); margin-bottom: 6px; letter-spacing: .2px; }
+.pos-sec input, .pos-sec select, .pos-sec .searchable input { border-color: color-mix(in srgb, var(--sc) 35%, var(--line)); }
+.pos-customer { --sc: #1f7ae0; }
+.pos-search { --sc: #12a06a; }
+.pos-extra { --sc: #e07a1f; }
+.pos-totals { --sc: #7a4fd6; }
+.pos-pay { --sc: #0f9bb3; }
+/* بطاقات الأصناف المضافة: لون الأصناف نفسه */
+.pos-compact .lines-table tbody tr:not(:has(> td[colspan])) { border-inline-start: 4px solid #12a06a; }
