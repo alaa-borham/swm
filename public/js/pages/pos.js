@@ -180,19 +180,19 @@ async function posView({ el, q }) {
     draw();
   }
 
-  // زر عائم لاختيار الأصناف: نافذة تبقى مفتوحة وكل ضغطة تضيف الصنف (أو تزيد كميته) دون الرجوع لأعلى الشاشة
+  // زر عائم لاختيار الأصناف دون الرجوع لأعلى الشاشة
   const fabCount = h('span', { class: 'pos-fab-n' });
   const fab = h('button', { type: 'button', class: 'pos-fab', title: 'إضافة أصناف', onclick: () => openPickModal() }, h('span', { class: 'pos-fab-plus' }, '+'), h('span', null, 'أصناف'), fabCount);
   const syncFab = () => { const n = cart.length; fabCount.textContent = n ? String(n) : ''; fabCount.classList.toggle('hidden', !n); };
   function openPickModal() {
-    const added = h('div', { class: 'pick-added small' }, 'اضغط على الصنف لإضافته؛ الضغط مرة أخرى يزيد الكمية.');
+    // الضغط على الصنف يضيفه مباشرة ويغلق النافذة (الضغط على نفس الصنف لاحقًا يزيد الكمية)
+    let m;
     const p2 = itemPicker({ keepOpen: true, inStockOnly: true, warehouseId: () => whSel.value, placeholder: 'ابحث عن صنف…', onPick: (it) => {
       addToCart(it);
-      const l = cart.find((x) => x.item.id === it.id && x.unit_id === it.selected_unit_id);
-      clear(added); added.append(h('b', null, '✓ ', it.name), ` — الكمية ${l ? num(l.qty) : 1} · بنود الفاتورة ${cart.length}`);
-      added.classList.remove('flash'); void added.offsetWidth; added.classList.add('flash');
+      m.close();
+      toast(`أُضيف ${it.name}`, 'ok');
     } });
-    modal('اختيار الأصناف', h('div', { class: 'pick-modal' }, p2.el, added), [{ label: 'تم', class: 'primary', onClick: () => true }]);
+    m = modal('اختيار صنف', h('div', { class: 'pick-modal' }, p2.el), []);
   }
 
   function calc() {
