@@ -414,6 +414,17 @@ async function posView({ el, q }) {
   wipReady = true;
   draw();
   custSel.addEventListener('change', saveWip);
+  // بعد اختيار العميل تصعد الشاشة حتى يصبح قسم الأصناف في الأعلى فتتسع المساحة لاختيار الأصناف
+  custSel.addEventListener('change', () => {
+    if (!custSel.value) return;
+    const sec = el.querySelector('.pos-search');
+    const top = document.querySelector('.top');
+    if (!sec) return;
+    setTimeout(() => {
+      const off = (top ? top.getBoundingClientRect().bottom : 0) + 8;
+      window.scrollTo({ top: window.scrollY + sec.getBoundingClientRect().top - off, behavior: 'smooth' });
+    }, 50);
+  });
   notes.addEventListener('input', saveWip);
   refreshDraftCount();
   if (q.draft) loadDraft(Number(q.draft));
