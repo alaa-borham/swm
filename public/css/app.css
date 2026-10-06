@@ -372,5 +372,22 @@ body.public-receipt .public-bar .small { color: #fff; flex-basis: auto; font-wei
   .pos-compact .lines-table td.empty, .pos-compact .lines-table td[colspan] { padding: 8px 4px; font-size: 13px; }
   .pos-compact .table-wrap:has(> table.lines-table) { margin-bottom: 10px; }
   .pos-compact .lines-table tr:has(> td[colspan]) { padding: 4px 10px; box-shadow: none; }
+  /* ارتفاع أقل لكل البطاقات والخانات */
+  .pos-compact .card { padding: 8px 10px; margin-bottom: 8px; }
+  .pos-compact input, .pos-compact select, .pos-compact .searchable input { min-height: 34px; padding: 4px 8px; font-size: 14px; }
+  .pos-compact .stepper .step, .pos-compact .lines-table td .stepper button { min-height: 32px; width: 30px; }
+  .pos-compact .lines-table td input:not([type=checkbox]), .pos-compact .lines-table td select, .pos-compact .lines-table td .stepper { min-height: 32px; }
+  .pos-compact .lines-table tr { padding: 6px 8px; margin-bottom: 6px; row-gap: 0; }
+  .pos-compact .lines-table td { padding: 1px 0; }
+  .pos-compact .lines-table td::before { font-size: 10px; }
+  .pos-compact .lines-table td:first-child { font-size: 14px; padding-bottom: 0; }
+  .pos-compact .lines-table td.n { font-size: 15px; padding-top: 2px; }
+  .pos-compact .lines-table td .small { font-size: 11px; }
+  .pos-compact .line { padding: 1px 0; font-size: 14px; }
+  .pos-compact .line.grand { font-size: 18px; padding: 4px 0; }
+  .pos-compact .actions .btn { min-height: 38px; padding: 6px 12px; }
+  .pos-compact .small.muted { font-size: 11px; }
+  .pos.pos-compact { gap: 0; }
+  .pos-compact .table-wrap:has(> table.lines-table) { margin-bottom: 4px; }
 }
 @media (pointer: coarse) { .pos-keys { display: none; } }
